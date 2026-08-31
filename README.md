@@ -1,31 +1,88 @@
 # Porvoz
 
-Customizable, intelligent voice transcription.
+Porvoz is a tray-first Electron desktop app for voice transcription and customizable instruction workflows. It records microphone audio, sends it to a configured OpenAI-compatible endpoint, and can type the resulting transcription or instruction response into the application that currently owns the cursor.
 
-Tray-first Electron app for transcribing microphone audio and applying instruction prefixes. API credentials stay in the local Electron app, and requests use the configured OpenAI-compatible endpoint.
+The API key stays in the operating system credential store. Porvoz does not start a web server or modify the system clipboard when it types a response.
 
-1. Install dependencies: `npm install`
-2. Run the desktop app: `npm start`
-3. Open **Settings**, enter the endpoint base URL and API key, then choose **Load models**. Select one loaded model for transcription and one for instruction requests.
+## Download and install
 
-On Linux, Porvoz requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. Linux development builds also require the X11 development headers used by the native hotkey module, including `libx11-dev`, `libxt-dev`, `libxtst-dev`, `libxrandr-dev`, `libxinerama-dev`, and `libxkbcommon-dev`. Porvoz uses the desktop's GNOME Keyring/libsecret service to protect the API key when available.
+The current release is [Porvoz v1.0.0](https://github.com/bgaeddert/porvoz/releases/tag/v1.0.0). Release packages are x64 builds.
 
-Porvoz starts hidden and adds a tray icon. Use **Open Porvoz** from the tray menu to open Settings; the app continues running in the tray when its windows are closed.
+### Windows
 
-Hold **Right Ctrl** anywhere to record by default. Release the capture key to send the audio through transcription and, when a registered instruction prefix is present, the instruction model. The final result is pasted into the application that currently owns the cursor. Use **Capture hotkey** in Settings to choose a different key or combination, such as **Ctrl + Shift + F12**; the change takes effect immediately.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.0.0/Porvoz-1.0.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
-The main window remains available for direct use. **Settings** contains connection details, model choices, the instruction prompt, instruction prefixes, and the capture key. Select **Add prefix**, then choose **Create a new prefix with your voice** to describe a new prefix aloud. Porvoz transcribes the description, asks the instruction model for a trigger and instruction using the current prompt and prefix registry, and shows an editable preview before anything is saved. Porvoz runs entirely as an Electron tray app and does not start a web server.
+### Linux
 
-Use **Start recording** to capture a complete microphone recording through the configured endpoint and display the raw transcription in the Transcript box. If the transcript starts with a registered instruction prefix, it is also sent with the main prompt and the full prefix registry to the selected instruction model; the model response appears in the separate Instruction response box.
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.0.0/Porvoz-1.0.0-linux-x86_64.AppImage), then make it executable and launch it:
 
-The **Load models** button queries the endpoint's `/v1/models` endpoint and stores the complete returned model catalog in the local settings. The selected transcription and instruction models are stored separately and used by **Start recording**. Changing the endpoint clears the loaded catalog so it can be populated from the new endpoint.
+```bash
+chmod +x Porvoz-1.0.0-linux-x86_64.AppImage
+./Porvoz-1.0.0-linux-x86_64.AppImage
+```
 
-**Logs** stores the 200 most recent transcript and instruction entries on this device. Older entries are removed automatically as new responses are saved, and **Clear all logs** removes the current archive without changing settings.
+The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to save the API key securely. On Ubuntu/Debian, install missing runtime services and libraries with:
 
-The Instructions prompt on **Settings** is sent as the model's editable instruction message. Instruction requests use the OpenAI SDK and Responses API. Built-in prefixes remain in the registry and can be reset to their packaged definitions; custom prefixes can be removed. Every prefix has an enabled switch plus separate Search access and Clipboard access switches. The built-in **search** and **clipboard** prefixes are disabled by default, with their corresponding access preconfigured; enable them before using them. Search access enables the hosted `web_search` tool and appends discovered sources to the result. Clipboard access reads the current text clipboard when the instruction runs and passes it to the model as explicitly labeled, untrusted reference context. For example, enabling the **clipboard** prefix and saying “clipboard summarize this” asks the instruction model to summarize the text currently on the clipboard. Transcripts without an enabled instruction prefix are returned without calling the instruction model. Response typing uses a cross-platform native keyboard automation provider and does not modify the system clipboard. macOS requires Accessibility permission; Linux support depends on the desktop session and is intended for X11-compatible environments.
+```bash
+sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6
+```
 
-The app stores non-secret user settings in the platform user-data directory as `settings.json`. The API key is encrypted in a separate credential file using the operating system's secure credential facility. The packaged `electron/defaults.json` file contains only first-run defaults and never contains an API key. **Verify certificate** is enabled by default and applies to every API request. It can be disabled for an endpoint using a trusted self-signed certificate; use that option only on a network you trust because it disables HTTPS server-certificate verification for this app's API transport.
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.0.0/SHA256SUMS.txt).
 
-Use **Reset to defaults** in Settings to remove the saved API key and all editable settings, then rebuild the user settings from the packaged defaults.
+There is no macOS package in the current release.
+
+## First-time setup
+
+Porvoz starts hidden and adds a tray icon. Choose **Open Porvoz** from the tray menu to open Settings; the app continues running in the tray when its windows are closed.
+
+1. Open **Settings**.
+2. Enter the endpoint's base URL and API key.
+3. Select **Load models**. Porvoz reads the endpoint's `/v1/models` catalog.
+4. Select one loaded model for transcription and one for instruction requests.
+
+The endpoint must provide the OpenAI-compatible audio transcription and Responses API operations used by the app. **Verify certificate** is enabled by default for every API request. Disable it only for a trusted self-signed endpoint on a network you control.
+
+## Using Porvoz
+
+Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe and type the result into the application that owns the cursor. Use **Capture hotkey** in Settings to choose another key or combination, such as **Ctrl + Shift + F12**; changes take effect immediately.
+
+The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. If a transcript begins with an enabled instruction prefix, Porvoz sends it with the editable instruction prompt and prefix registry to the selected instruction model. Transcripts without an enabled prefix bypass the instruction model.
+
+Built-in **search** and **clipboard** prefixes are disabled by default. Enable them before use. Search access enables the hosted `web_search` tool and appends discovered sources to the result. Clipboard access reads the current text clipboard as explicitly labeled, untrusted reference context; it does not replace the clipboard. Custom prefixes can be created, including by describing one aloud, edited, enabled or disabled, and removed. **Logs** stores the 200 most recent transcript and instruction entries on this device.
+
+When a typed response needs a line break, the instruction model can return the exact token `[enter]`; Porvoz converts it into a real Enter key press. macOS requires Accessibility permission. Linux typing uses X11 native keyboard automation.
+
+## Local data and security
+
+Non-secret settings are stored in the platform user-data directory as `settings.json`. The API key is encrypted in a separate credential file using the operating system's secure credential facility. The packaged `electron/defaults.json` contains only first-run defaults and never contains an API key.
+
+Use **Reset to defaults** in Settings to remove the saved API key and editable settings, then rebuild from the packaged defaults.
+
+## Development
+
+Requirements: Node.js 22.14.0 or a compatible Node.js 22 release. From the project directory:
+
+```bash
+npm install
+npm test
+npm start
+```
+
+To build locally, run the target command on its native operating system:
+
+```bash
+npm run package:win    # Windows x64 NSIS installer
+npm run package:linux  # Linux x64 AppImage
+```
+
+Linux development and packaging also require native build headers and Electron runtime libraries. On Ubuntu/Debian:
+
+```bash
+sudo apt install build-essential libasound2-dev libgbm-dev libgtk-3-dev libnss3-dev \
+  libx11-dev libxext-dev libxi-dev libxinerama-dev libxkbcommon-dev \
+  libxkbcommon-x11-dev libxrandr-dev libxt-dev libxtst-dev
+```
+
+GitHub Actions runs the test suite on Windows and Ubuntu. Pushing a tag beginning with `v` builds the Windows NSIS installer and Linux AppImage, then attaches both files and a checksum manifest to a GitHub Release.
 
 The capture feedback sounds are the CC0 **Recording Start.mp3** and **Recording Stop.mp3** clips by [AbdrTar on Freesound](https://freesound.org/people/AbdrTar/). The start clip is [sound 519985](https://freesound.org/people/AbdrTar/sounds/519985/), and the stop clip is [sound 519986](https://freesound.org/people/AbdrTar/sounds/519986/). Their shared playback volume defaults to 30% and can be adjusted under **Settings → Desktop capture → Recording cues**.
