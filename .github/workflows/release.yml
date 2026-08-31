@@ -95,10 +95,10 @@ jobs:
 
       - name: Create Linux checksum
         run: |
-          appimage=$(find release -maxdepth 1 -type f -name '*.AppImage' -print -quit)
+          appimage=$(find release -maxdepth 1 -type f -name '*.AppImage' -printf '%f\n' -quit)
           test -n "$appimage"
-          chmod +x "$appimage"
-          sha256sum "$appimage" > release/SHA256SUMS-linux.txt
+          chmod +x "release/$appimage"
+          (cd release && sha256sum "$appimage") > release/SHA256SUMS-linux.txt
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
