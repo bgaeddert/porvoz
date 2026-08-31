@@ -42,13 +42,42 @@ Porvoz starts hidden and adds a tray icon. Choose **Open Porvoz** from the tray 
 
 The endpoint must provide the OpenAI-compatible audio transcription and Responses API operations used by the app. **Verify certificate** is enabled by default for every API request. Disable it only for a trusted self-signed endpoint on a network you control.
 
+## Instruction prefixes
+
+Prefixes are reusable voice triggers. A transcript reaches the instruction model only when it begins with an enabled prefix; matching is case-insensitive. Porvoz can recognize a chain of consecutive prefixes from left to right, remove the matched trigger phrases, and apply every matched instruction in order. If no enabled prefix matches, the transcription is returned without calling the instruction model.
+
+![Porvoz Settings showing the instruction prefix registry](docs/images/instruction-prefix-registry.png)
+
+The **Instruction prefix registry** in Settings shows whether each entry is built in or custom, its trigger name, instruction, enabled state, and optional Search or Clipboard access.
+
+### Built-in prefixes
+
+Porvoz includes these five prefixes by default:
+
+- **digits** — Extracts every number from the transcript, converts number words to numerals when needed, concatenates the results, and returns digits only.
+- **one word** — Responds with exactly one word, without punctuation or explanation.
+- **letters** — Combines spoken letters into a compact string. It can also insert a space, dash, dot, or exclamation point when that is spoken explicitly.
+- **search** — Uses web search to find and verify an answer, then responds concisely. It is disabled by default and has Search access preconfigured.
+- **clipboard** — Applies the spoken request to the current text clipboard as reference context. It is disabled by default and has Clipboard access preconfigured; clipboard contents are treated as untrusted data and are not replaced.
+
+The **digits**, **one word**, and **letters** prefixes start enabled. **Search** and **clipboard** start disabled so they cannot access those capabilities until you opt in. Built-in names are locked, but their instructions and access settings can be changed. **Reset to default** restores one built-in prefix to its packaged behavior. **Reset to defaults** restores the entire registry.
+
+### Add your own prefix
+
+Select **Add prefix** in the registry and choose one of two paths:
+
+- **Add a prefix manually** creates a blank custom row. Enter a unique trigger name and the instruction the model should follow. New custom prefixes start enabled with Search and Clipboard access off. Changes save as you make them; custom names and instructions remain editable.
+- **Create a new prefix with your voice** lets you describe the trigger and desired result aloud. Select **Start listening**, speak the request, then select **Stop and create**. Porvoz sends the recording to the configured transcription and instruction models to draft a name and instruction using your prompt and existing registry. Review and edit the proposed prefix, then select **Add prefix** to save it; nothing is saved until you approve the preview.
+
+Prefix names must be unique, ignoring case. You can enable or disable any prefix and independently grant Search or Clipboard access from its row. Use **Remove prefix** to delete a custom prefix.
+
 ## Using Porvoz
 
 Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe and type the result into the application that owns the cursor. Use **Capture hotkey** in Settings to choose another key or combination, such as **Ctrl + Shift + F12**; changes take effect immediately.
 
 The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. If a transcript begins with an enabled instruction prefix, Porvoz sends it with the editable instruction prompt and prefix registry to the selected instruction model. Transcripts without an enabled prefix bypass the instruction model.
 
-Built-in **search** and **clipboard** prefixes are disabled by default. Enable them before use. Search access enables the hosted `web_search` tool and appends discovered sources to the result. Clipboard access reads the current text clipboard as explicitly labeled, untrusted reference context; it does not replace the clipboard. Custom prefixes can be created, including by describing one aloud, edited, enabled or disabled, and removed. **Logs** stores the 200 most recent transcript and instruction entries on this device.
+When Search access is granted to a matched prefix, Porvoz enables the hosted `web_search` tool and appends discovered sources to the result. **Logs** stores the 200 most recent transcript and instruction entries on this device.
 
 When a typed response needs a line break, the instruction model can return the exact token `[enter]`; Porvoz converts it into a real Enter key press. macOS requires Accessibility permission. Linux typing uses X11 native keyboard automation.
 
