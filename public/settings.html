@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0d1117" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'" />
+    <title>Porvoz · Settings</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="index.html">
+          <img class="brand-icon" src="../electron/assets/icon.png" alt="" aria-hidden="true" />
+          <span class="brand-name">Porvoz</span>
+        </a>
+        <nav class="main-nav" aria-label="Primary navigation">
+          <a class="nav-link" href="index.html">Transcribe</a>
+          <a class="nav-link" href="logs.html">Logs</a>
+          <a class="nav-link nav-link-active" href="settings.html" aria-current="page">Settings</a>
+        </nav>
+      </header>
+
+      <main class="page-main settings-main">
+        <aside id="setup-warning" class="setup-warning" hidden role="alert" aria-labelledby="setup-warning-label">
+          <span class="setup-warning-mark" aria-hidden="true">!</span>
+          <div class="setup-warning-copy">
+            <p id="setup-warning-label" class="panel-kicker">Configuration needed</p>
+            <p id="setup-warning-message" class="setup-warning-message">Open Settings to finish configuring Porvoz.</p>
+          </div>
+          <a class="setup-warning-link" href="settings.html">Open Settings</a>
+        </aside>
+        <div class="settings-stack">
+          <section class="settings-card connection-card" aria-labelledby="connection-heading">
+            <div class="settings-heading">
+              <div>
+                <p class="panel-kicker">API connection</p>
+                <h2 id="connection-heading">Where Porvoz sends requests</h2>
+              </div>
+            </div>
+            <form id="connection-form" class="connection-form">
+              <label class="field-label" for="base-url">
+                Base URL
+                <input id="base-url" type="url" inputmode="url" autocomplete="url" placeholder="https://openrouter.ai/api/v1" required />
+              </label>
+              <label class="field-label" for="api-key">
+                API key
+                <input id="api-key" type="password" autocomplete="new-password" placeholder="Loading…" />
+              </label>
+              <label class="field-label" for="verify-certificate">
+                Certificate verification
+                <span class="checkbox-line">
+                  <input id="verify-certificate" type="checkbox" checked />
+                  <span>Verify certificate</span>
+                </span>
+                <small>Keep enabled for normal HTTPS endpoints. Uncheck only when the endpoint uses a trusted self-signed certificate.</small>
+              </label>
+              <div class="form-actions">
+                <p id="connection-status" class="field-note" aria-live="polite">Loading connection settings…</p>
+                <button class="button-primary" type="submit">Save connection</button>
+              </div>
+            </form>
+            <p class="security-note">The key is stored by the local Electron app and is never returned to this page. Disabling certificate verification makes HTTPS vulnerable to interception.</p>
+          </section>
+
+          <section class="settings-card" aria-labelledby="models-heading">
+            <div class="settings-heading">
+              <div>
+                <p class="panel-kicker">Model routing</p>
+                <h2 id="models-heading">Choose the engines</h2>
+                <p class="section-description">Load the complete model catalog from the configured endpoint, then choose one model for each job.</p>
+              </div>
+            </div>
+            <div class="model-grid">
+              <label class="field-label" for="transcription-model">
+                Transcription model
+                <select id="transcription-model" required></select>
+              </label>
+              <label class="field-label" for="instruction-model">
+                Instruction model
+                <select id="instruction-model" aria-describedby="model-status" required></select>
+                <small>Used for instruction prefixes and web search.</small>
+              </label>
+              <div class="form-actions model-actions">
+                <p id="model-status" class="field-note" aria-live="polite">No models loaded yet.</p>
+                <button id="populate-models" class="button-secondary" type="button">Load models</button>
+              </div>
+            </div>
+            <p class="field-note">Model selections are saved immediately after you choose them.</p>
+          </section>
+
+          <section class="settings-card" aria-labelledby="hotkey-heading">
+            <div class="settings-heading">
+              <div>
+                <p class="panel-kicker">Desktop capture</p>
+                <h2 id="hotkey-heading">Choose the trigger</h2>
+                <p class="section-description">Hold this combination anywhere to record. You can also choose a single left or right Ctrl or Alt key.</p>
+              </div>
+            </div>
+            <div class="hotkey-setting">
+              <div class="hotkey-readout">
+                <span class="hotkey-caption">Current hotkey</span>
+                <kbd id="hotkey-display">Right Ctrl</kbd>
+              </div>
+              <div class="hotkey-actions">
+                <button id="capture-hotkey" class="button-secondary" type="button">Capture hotkey</button>
+                <button id="cancel-hotkey" class="button-secondary" type="button" hidden>Cancel</button>
+              </div>
+            </div>
+            <p id="hotkey-status" class="field-note" aria-live="polite">Click Capture hotkey, then press one Control/Alt key or a combination. Release to save; Escape cancels.</p>
+            <div class="sound-setting">
+              <div class="sound-setting-copy">
+                <span class="hotkey-caption">Recording cues</span>
+                <p>Set the playback volume for the start and stop sounds.</p>
+              </div>
+              <label class="sound-volume-control" for="sound-volume">
+                <span class="sound-volume-label">
+                  <span>Volume</span>
+                  <output id="sound-volume-value" for="sound-volume">30%</output>
+                </span>
+                <input id="sound-volume" type="range" min="0" max="100" step="1" value="30" />
+              </label>
+            </div>
+            <p id="sound-volume-status" class="field-note" aria-live="polite">Cue volume is saved automatically.</p>
+          </section>
+
+          <section class="settings-card" aria-labelledby="prompt-heading">
+            <div class="settings-heading settings-heading-actions">
+              <div>
+                <p class="panel-kicker">Instruction behavior</p>
+                <h2 id="prompt-heading">Main instruction prompt</h2>
+              </div>
+              <button id="reset-prompt" class="button-secondary" type="button">Reset prompt</button>
+            </div>
+            <label class="field-label" for="instruction-prompt">
+              Instructions prompt
+              <textarea id="instruction-prompt" rows="5" placeholder="Describe how the instruction model should respond."></textarea>
+            </label>
+            <p id="prompt-status" class="field-note" aria-live="polite">Changes save as you type.</p>
+          </section>
+
+          <section class="settings-card" aria-labelledby="prefixes-heading">
+            <div class="settings-heading settings-heading-actions">
+              <div>
+                <p class="panel-kicker">Instruction prefix registry</p>
+                <h2 id="prefixes-heading">Teach Porvoz your prefixes</h2>
+                <p class="section-description">A transcript must begin with an enabled prefix before it reaches the instruction model. Every row controls its own trigger state, Search access, and Clipboard access. Built-in prefixes stay in the registry; reset one to restore its packaged defaults.</p>
+              </div>
+              <button id="add-prefix" class="button-secondary" type="button">Add prefix</button>
+            </div>
+            <div id="prefix-list" class="prefix-list"></div>
+            <p id="prefix-empty" class="field-note" hidden>No instruction prefixes configured.</p>
+            <p id="prefix-status" class="field-note" aria-live="polite">Changes save as you make them.</p>
+          </section>
+
+          <section class="settings-card settings-card-reset" aria-labelledby="reset-heading">
+            <div class="settings-heading settings-heading-actions">
+              <div>
+                <p class="panel-kicker">Fresh start</p>
+                <h2 id="reset-heading">Reset all settings</h2>
+                <p class="section-description">Clear the connection, loaded models, prompt, prefixes, and capture key, then rebuild the page from the packaged defaults.</p>
+              </div>
+              <button id="reset-defaults" class="button-danger" type="button">Reset to defaults</button>
+            </div>
+            <p id="reset-status" class="field-note" aria-live="polite">Your current settings stay unchanged until you confirm the reset.</p>
+          </section>
+        </div>
+      </main>
+
+      <footer class="page-footer">
+        <span>Porvoz</span>
+        <span>Settings are local to this app</span>
+      </footer>
+    </div>
+    <dialog id="reset-dialog" class="reset-dialog" aria-labelledby="reset-dialog-heading">
+      <form method="dialog" class="reset-dialog-card">
+        <p class="panel-kicker">Confirm reset</p>
+        <h2 id="reset-dialog-heading">Start with a clean slate?</h2>
+        <p>This removes the saved API key and every editable setting. The packaged defaults will be loaded again.</p>
+        <div class="dialog-actions">
+          <button id="cancel-reset" class="button-secondary" value="cancel" type="submit">Keep settings</button>
+          <button id="confirm-reset" class="button-danger" value="confirm" type="button">Reset everything</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="prompt-reset-dialog" class="reset-dialog" aria-labelledby="prompt-reset-dialog-heading">
+      <form method="dialog" class="reset-dialog-card">
+        <p class="panel-kicker">Confirm prompt reset</p>
+        <h2 id="prompt-reset-dialog-heading">Restore the packaged prompt?</h2>
+        <p>Your current main instruction prompt will be replaced with Porvoz’s packaged default. The rest of your settings will stay unchanged.</p>
+        <div class="dialog-actions">
+          <button id="cancel-prompt-reset" class="button-secondary" value="cancel" type="submit">Keep prompt</button>
+          <button id="confirm-prompt-reset" class="button-danger" value="confirm" type="button">Reset prompt</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="prefix-dialog" class="prefix-dialog" aria-labelledby="prefix-dialog-heading">
+      <div class="prefix-dialog-card">
+        <div class="prefix-dialog-header">
+          <div>
+            <p class="panel-kicker">New instruction prefix</p>
+            <h2 id="prefix-dialog-heading">Add a prefix to your voice</h2>
+          </div>
+          <button id="close-prefix-dialog" class="dialog-close" type="button" aria-label="Close prefix dialog">×</button>
+        </div>
+
+        <section id="prefix-choice-view" class="prefix-dialog-view" aria-label="Choose how to add a prefix">
+          <p class="prefix-dialog-lede">Give Porvoz a phrase to listen for, and it will turn your idea into a reusable instruction.</p>
+          <div class="prefix-creation-options">
+            <button id="voice-prefix-option" class="prefix-voice-option" type="button">
+              <span class="prefix-option-mark" aria-hidden="true">✦</span>
+              <span class="prefix-option-copy">
+                <strong>Create a new prefix with your voice</strong>
+                <small>Describe what you want the prefix to do. AI will use your prompt and existing prefixes to draft the trigger and instruction.</small>
+              </span>
+              <span class="prefix-ai-badge">AI</span>
+            </button>
+            <button id="manual-prefix-option" class="prefix-manual-option" type="button">
+              <span class="prefix-option-mark" aria-hidden="true">＋</span>
+              <span class="prefix-option-copy">
+                <strong>Add a prefix manually</strong>
+                <small>Start with a blank row and write the name and instruction yourself.</small>
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <section id="prefix-record-view" class="prefix-dialog-view" aria-labelledby="prefix-record-heading" hidden>
+          <p class="panel-kicker">Voice brief</p>
+          <h3 id="prefix-record-heading">Tell Porvoz what this prefix should do</h3>
+          <p class="prefix-dialog-lede">Say the trigger phrase and explain the result you want. For example: “When I say tidy, rewrite the next message to be concise and professional.”</p>
+          <div id="prefix-record-orb" class="prefix-record-orb" data-state="idle" aria-hidden="true"><span></span></div>
+          <p id="prefix-record-status" class="prefix-record-status" aria-live="polite">Ready when you are.</p>
+          <div class="dialog-actions prefix-record-actions">
+            <button id="prefix-record-cancel" class="button-secondary" type="button">Back</button>
+            <button id="prefix-record-start" class="button-primary" type="button">Start listening</button>
+            <button id="prefix-record-stop" class="button-danger" type="button" hidden>Stop and create</button>
+          </div>
+          <p class="prefix-dialog-footnote">Your recording is sent to the configured transcription and instruction models. Nothing is saved until you approve the preview.</p>
+        </section>
+
+        <section id="prefix-preview-view" class="prefix-dialog-view" aria-labelledby="prefix-preview-heading" hidden>
+          <p class="panel-kicker">AI draft</p>
+          <h3 id="prefix-preview-heading">Review your new prefix</h3>
+          <p class="prefix-dialog-lede">Edit anything you like, then add it to the registry. It will start enabled with no extra Search or Clipboard access.</p>
+          <div class="prefix-preview-source">
+            <span>Heard from you</span>
+            <p id="prefix-preview-transcript"></p>
+          </div>
+          <label class="field-label" for="prefix-preview-name">
+            Prefix name
+            <input id="prefix-preview-name" type="text" placeholder="Example: tidy" />
+          </label>
+          <label class="field-label" for="prefix-preview-instruction">
+            Instruction
+            <textarea id="prefix-preview-instruction" rows="5" placeholder="What should the instruction model do?"></textarea>
+          </label>
+          <p id="prefix-preview-status" class="field-note" aria-live="polite"></p>
+          <div class="dialog-actions">
+            <button id="prefix-preview-cancel" class="button-secondary" type="button">Cancel</button>
+            <button id="prefix-preview-add" class="button-primary" type="button">Add prefix</button>
+          </div>
+        </section>
+      </div>
+    </dialog>
+    <script type="module" src="./setup-warning.js"></script>
+    <script type="module" src="./settings.js"></script>
+  </body>
+</html>

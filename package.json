@@ -1,0 +1,31 @@
+{
+  "name": "porvoz",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "productName": "Porvoz",
+  "desktopName": "porvoz",
+  "description": "Voice-to-text productivity assistant for the desktop",
+  "author": "Porvoz contributors",
+  "main": "electron/main.js",
+  "scripts": {
+    "postinstall": "electron-rebuild",
+    "start": "electron .",
+    "desktop": "electron .",
+    "test": "node --test",
+    "package:win": "electron-builder --win nsis --x64 --publish never",
+    "package:linux": "electron-builder --linux AppImage --x64 --publish never",
+    "package:dir": "electron-builder --dir --publish never"
+  },
+  "dependencies": {
+    "koffi": "^3.1.6",
+    "openai": "^7.8.0",
+    "uiohook-napi": "^1.5.5",
+    "undici": "^7.29.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3"
+  }
+}

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0d1117" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'" />
+    <title>Porvoz · Transcribe</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="index.html">
+          <img class="brand-icon" src="../electron/assets/icon.png" alt="" aria-hidden="true" />
+          <span class="brand-name">Porvoz</span>
+        </a>
+        <nav class="main-nav" aria-label="Primary navigation">
+          <a class="nav-link nav-link-active" href="index.html" aria-current="page">Transcribe</a>
+          <a class="nav-link" href="logs.html">Logs</a>
+          <a class="nav-link" href="settings.html">Settings</a>
+        </nav>
+      </header>
+
+      <main class="page-main transcribe-main">
+        <aside id="setup-warning" class="setup-warning" hidden role="alert" aria-labelledby="setup-warning-label">
+          <span class="setup-warning-mark" aria-hidden="true">!</span>
+          <div class="setup-warning-copy">
+            <p id="setup-warning-label" class="panel-kicker">Configuration needed</p>
+            <p id="setup-warning-message" class="setup-warning-message">Open Settings to finish configuring Porvoz.</p>
+          </div>
+          <a class="setup-warning-link" href="settings.html">Open Settings</a>
+        </aside>
+        <section class="capture-panel" aria-labelledby="capture-heading">
+          <div class="capture-header">
+            <div>
+              <p id="capture-heading" class="panel-kicker">Capture deck</p>
+            </div>
+            <span id="capture-signal" class="signal-dot" aria-label="System ready"></span>
+          </div>
+          <div class="capture-controls">
+            <button id="transcribe" class="button-primary" type="button" aria-pressed="false">Start recording</button>
+            <button id="clear" class="button-secondary" type="button">Clear</button>
+          </div>
+          <p id="hotkey-hint" class="hotkey-hint" hidden>Hold Right Ctrl to record.</p>
+          <p id="status" class="status-line" data-state="idle" aria-live="polite">Ready to record.</p>
+        </section>
+
+        <section class="response-grid" aria-label="Transcription responses">
+          <article class="response-card response-card-raw">
+            <div class="response-heading">
+              <div>
+                <p class="panel-kicker">Raw signal</p>
+                <h2>Transcript</h2>
+              </div>
+              <span class="response-tag">source</span>
+            </div>
+            <textarea id="transcript" rows="7" readonly aria-label="Transcript" placeholder="Your transcription will appear here."></textarea>
+          </article>
+
+          <article class="response-card response-card-result">
+            <div class="response-heading">
+              <div>
+                <p class="panel-kicker">Routed output</p>
+                <h2>Instruction response</h2>
+              </div>
+              <span class="response-tag">result</span>
+            </div>
+            <textarea id="instruction-response" rows="7" readonly aria-label="Instruction response" placeholder="An instruction prefix response will appear here."></textarea>
+          </article>
+        </section>
+      </main>
+
+      <footer class="page-footer">
+        <span>Porvoz</span>
+        <span>Local voice workstation</span>
+      </footer>
+    </div>
+    <script type="module" src="./setup-warning.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

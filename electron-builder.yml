@@ -1,0 +1,39 @@
+appId: com.porvoz.desktop
+productName: Porvoz
+
+directories:
+  output: release
+
+files:
+  - "**/*"
+  - "!test{,/**/*}"
+  - "!release{,/**/*}"
+  - "!dist{,/**/*}"
+
+asar: true
+asarUnpack:
+  - "**/*.node"
+npmRebuild: true
+artifactName: Porvoz-${version}-${os}-${arch}.${ext}
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: electron/assets/icon.png
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  runAfterFinish: false
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Utility
+  icon: electron/assets/icon.png
