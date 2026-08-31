@@ -11,11 +11,12 @@ import {
 } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { uIOhook, UiohookKey } from "uiohook-napi";
 import { createAppService } from "./app-service.js";
 import { createLogStore } from "./log-store.js";
 import { createSettingsStore } from "./settings-store.js";
-import { typeText } from "./text-input.js";
+import { captureTextInputTarget, disposeTextInput, typeText } from "./text-input.js";
 
 if (process.platform === "linux") {
   // Electron may otherwise select an unavailable wallet when launched from
@@ -62,6 +63,7 @@ const SINGLE_MODIFIER_HOTKEY_CODES = new Set([
   "AltLeft",
   "AltRight"
 ]);
+const CAPTURE_ATTEMPT_MAX_AGE_MS = 120_000;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
@@ -79,6 +81,7 @@ let currentHotkey;
 let suppressedHotkeyKeyCode;
 let hotkeyCaptureTimer;
 let textTypingQueue = Promise.resolve();
+const captureAttempts = new Map();
 const pressedKeys = new Set();
 const capturePressedCodes = new Set();
 const captureSeenCodes = new Set();
@@ -361,7 +364,12 @@ function handleGlobalKeyDown(event) {
     && !isHotkeyRecording) {
     isHotkeyRecording = true;
     const setupStatus = appService.getSetupStatus();
-    sendHotkeyAction(setupStatus.ready ? "start" : "configuration-needed", setupStatus.hotkeyMessage);
+    if (setupStatus.ready) {
+      const attempt = beginCaptureAttempt();
+      sendHotkeyAction("start", { captureId: attempt.id });
+    } else {
+      sendHotkeyAction("configuration-needed", { message: setupStatus.hotkeyMessage });
+    }
   }
 }
 
@@ -376,6 +384,9 @@ function handleGlobalKeyUp(event) {
   const modifierKeyCodes = currentHotkey.modifiers.flatMap((modifier) => MODIFIER_KEYCODES[modifier] || []);
   if (isHotkeyRecording && (event.keycode === hotkeyKeyCode || modifierKeyCodes.includes(event.keycode))) {
     isHotkeyRecording = false;
+    for (const attempt of captureAttempts.values()) {
+      if (attempt.state === "recording") attempt.state = "processing";
+    }
     sendHotkeyAction("stop");
   }
 }
@@ -517,8 +528,9 @@ function registerIpcHandlers() {
     return soundVolume;
   });
   ipcMain.handle("porvoz:type-text", async (_event, value) => {
-    if (typeof value !== "string" || !value) return false;
-    await typeTextAtCursor(value);
+    const request = normalizeTypingRequest(value);
+    if (!request.text) return false;
+    await typeTextAtCursor(request);
     return true;
   });
   ipcMain.on("porvoz:open-settings", () => {
@@ -606,20 +618,71 @@ function notifyHotkeyCaptureStatus(state, message) {
 }
 
 async function typeTextAtCursor(value) {
-  if (typeof value !== "string") {
+  const request = normalizeTypingRequest(value);
+  if (!request.text) return;
+  if (typeof request.text !== "string") {
     throw new Error("The response text must be a string.");
   }
-  const textToType = sanitizeText(value);
+  const textToType = sanitizeText(request.text);
   if (!textToType) return;
 
-  // Queue text injection so concurrent responses cannot interleave. The
-  // platform adapter emits literal text events, never keyboard-layout events.
+  const attempt = request.purpose === "transcription"
+    ? getCaptureAttempt(request.captureId)
+    : undefined;
+
+  // Queue text injection so concurrent responses cannot interleave. Every
+  // platform uses the same clipboard transaction followed by simulated paste.
   const typeOperation = textTypingQueue.then(async () => {
+    if (request.purpose === "transcription") {
+      if (!attempt || attempt.state !== "processing") {
+        throw new Error("The typing request is no longer associated with an active capture.");
+      }
+      if (Date.now() - attempt.createdAt > CAPTURE_ATTEMPT_MAX_AGE_MS) {
+        throw new Error("The typing request expired before the response was ready.");
+      }
+    }
     await waitForRecordingHotkeyRelease();
-    await typeText(textToType);
+    if (attempt) attempt.state = "typing";
+    await typeText(textToType, { target: attempt?.targetWindow || null });
+    if (attempt) attempt.state = "complete";
   });
   textTypingQueue = typeOperation.catch(() => {});
-  await typeOperation;
+  try {
+    await typeOperation;
+  } finally {
+    if (attempt) captureAttempts.delete(attempt.id);
+  }
+}
+
+function normalizeTypingRequest(value) {
+  if (!value || typeof value !== "object") {
+    return { text: "", captureId: "", purpose: "transcription" };
+  }
+  return {
+    text: typeof value.text === "string" ? value.text : "",
+    captureId: typeof value.captureId === "string" ? value.captureId : "",
+    purpose: value.purpose === "configuration-warning" ? "configuration-warning" : "transcription"
+  };
+}
+
+function beginCaptureAttempt() {
+  const attempt = {
+    id: randomUUID(),
+    createdAt: Date.now(),
+    state: "recording",
+    targetWindow: captureTextInputTarget()
+  };
+  captureAttempts.set(attempt.id, attempt);
+  const cleanupTimer = setTimeout(() => {
+    if (captureAttempts.get(attempt.id)?.state !== "typing") captureAttempts.delete(attempt.id);
+  }, CAPTURE_ATTEMPT_MAX_AGE_MS);
+  cleanupTimer.unref?.();
+  return attempt;
+}
+
+function getCaptureAttempt(captureId) {
+  if (!captureId) return undefined;
+  return captureAttempts.get(captureId);
 }
 
 async function waitForRecordingHotkeyRelease() {
@@ -676,6 +739,8 @@ function shutdownApplication() {
     uIOhook.stop();
     hookStarted = false;
   }
+  disposeTextInput();
+  captureAttempts.clear();
 }
 
 function handleWindowError(error) {

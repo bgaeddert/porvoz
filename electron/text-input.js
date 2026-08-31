@@ -1,10 +1,15 @@
+import { ClipboardItem, clipboard } from "electron";
 import koffi from "koffi";
 import { parseTextCommands } from "./text-command-parser.js";
+import { createClipboardTextTransaction } from "./clipboard-text-transaction.js";
 
-const TEXT_TYPING_DELAY_MS = 20;
 const INPUT_KEYBOARD = 1;
 const KEYEVENTF_KEYUP = 0x0002;
-const KEYEVENTF_UNICODE = 0x0004;
+const WINDOWS_INPUT_EXTRA_INFO = 0x5056;
+const TEXT_TARGET_FOCUS_DELAY_MS = 100;
+const MODIFIER_POLL_INTERVAL_MS = 25;
+const MAX_MODIFIER_RELEASE_CHECKS = 32;
+const MAX_MODIFIER_RELEASE_CHECKS_AFTER_NORMALIZATION = 8;
 
 let textInputForPlatform;
 
@@ -12,20 +17,35 @@ if (process.platform === "win32") {
   textInputForPlatform = createWindowsTextInput();
 } else if (process.platform === "linux") {
   textInputForPlatform = createLinuxTextInput();
-} else if (process.platform === "darwin") {
-  textInputForPlatform = createMacTextInput();
+} else {
+  textInputForPlatform = createUnsupportedTextInput();
 }
 
-export async function typeText(text) {
+const clipboardTextTransaction = createClipboardTextTransaction({
+  clipboard,
+  ClipboardItem
+});
+
+export function captureTextInputTarget() {
+  return textInputForPlatform.captureTarget();
+}
+
+export function disposeTextInput() {
+  textInputForPlatform.dispose();
+}
+
+export async function typeText(text, { target = null } = {}) {
   if (typeof text !== "string" || !text) return;
-  if (!textInputForPlatform) {
-    throw new Error(`Literal text input is not available on ${process.platform}.`);
-  }
+  await textInputForPlatform.prepareTarget(target);
+
   for (const command of parseTextCommands(text)) {
     if (command.type === "enter") {
       await textInputForPlatform.pressEnter();
     } else if (command.value) {
-      await textInputForPlatform.typeText(command.value);
+      await clipboardTextTransaction.pasteText(
+        command.value,
+        () => textInputForPlatform.sendPaste()
+      );
     }
   }
 }
@@ -60,107 +80,161 @@ function createWindowsTextInput() {
       hi: HARDWAREINPUT
     })
   });
+
+  const GetForegroundWindow = user32.func(
+    "void * __stdcall GetForegroundWindow()"
+  );
+  const SetForegroundWindow = user32.func(
+    "int __stdcall SetForegroundWindow(void *hWnd)"
+  );
+  const GetAncestor = user32.func(
+    "void * __stdcall GetAncestor(void *hWnd, uint32_t gaFlags)"
+  );
+  const GetWindowThreadProcessId = user32.func(
+    "uint32_t __stdcall GetWindowThreadProcessId(void *hWnd, _Out_ uint32_t *lpdwProcessId)"
+  );
+  const GetAsyncKeyState = user32.func(
+    "int16_t __stdcall GetAsyncKeyState(int32_t vKey)"
+  );
   const SendInput = user32.func(
     "unsigned int __stdcall SendInput(unsigned int cInputs, PorvozInput *pInputs, int cbSize)"
   );
 
+  const ModifierKeys = [
+    0x10, // VK_SHIFT
+    0xa0, // VK_LSHIFT
+    0xa1, // VK_RSHIFT
+    0x11, // VK_CONTROL
+    0xa2, // VK_LCONTROL
+    0xa3, // VK_RCONTROL
+    0x12, // VK_MENU
+    0xa4, // VK_LMENU
+    0xa5, // VK_RMENU
+    0x5b, // VK_LWIN
+    0x5c // VK_RWIN
+  ];
+  const ModifierReleaseKeys = [
+    0xa0,
+    0xa1,
+    0x10,
+    0xa2,
+    0xa3,
+    0x11,
+    0xa4,
+    0xa5,
+    0x12,
+    0x5b,
+    0x5c
+  ];
+
   return {
-    typeText: async (text) => {
-    for (let index = 0; index < text.length; index += 1) {
-      const codeUnit = text.charCodeAt(index);
-      const inputs = [
-        createWindowsUnicodeInput(INPUT_KEYBOARD, codeUnit, KEYEVENTF_UNICODE),
-        createWindowsUnicodeInput(INPUT_KEYBOARD, codeUnit, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP)
-      ];
-      sendWindowsInput(SendInput, INPUT, inputs);
-      await wait(TEXT_TYPING_DELAY_MS);
-    }
+    captureTarget() {
+      const foregroundWindow = GetForegroundWindow();
+      if (!foregroundWindow) return null;
+      const processId = [0];
+      if (!GetWindowThreadProcessId(foregroundWindow, processId)) return null;
+      return processId[0] === process.pid ? null : foregroundWindow;
     },
-    pressEnter: async () => {
-      const inputs = [
-        createWindowsKeyInput(INPUT_KEYBOARD, 0x0d, 0, 0),
-        createWindowsKeyInput(INPUT_KEYBOARD, 0x0d, 0, KEYEVENTF_KEYUP)
-      ];
-      sendWindowsInput(SendInput, INPUT, inputs);
-      await wait(TEXT_TYPING_DELAY_MS);
-    }
-  };
-}
-
-function createWindowsUnicodeInput(type, codeUnit, flags) {
-  return createWindowsKeyInput(type, 0, codeUnit, flags);
-}
-
-function createWindowsKeyInput(type, virtualKey, scanCode, flags) {
-  return {
-    type,
-    u: {
-      ki: {
-        wVk: virtualKey,
-        wScan: scanCode,
-        dwFlags: flags,
-        time: 0,
-        dwExtraInfo: 0
+    async prepareTarget(target) {
+      await waitForModifierKeysReleased();
+      if (!target) {
+        await wait(TEXT_TARGET_FOCUS_DELAY_MS);
+        return;
       }
-    }
-  };
-}
 
-function sendWindowsInput(SendInput, INPUT, inputs) {
-  const sent = SendInput(inputs.length, inputs, koffi.sizeof(INPUT));
-  if (sent !== inputs.length) {
-    throw new Error("Windows rejected the requested text input.");
-  }
-}
+      if (isTargetForeground(target)) {
+        await wait(TEXT_TARGET_FOCUS_DELAY_MS);
+        return;
+      }
 
-function createMacTextInput() {
-  const coreGraphics = koffi.load(
-    "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
-  );
-  const coreFoundation = koffi.load(
-    "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
-  );
-  const CGEventCreateKeyboardEvent = coreGraphics.func(
-    "void * CGEventCreateKeyboardEvent(void *source, uint16_t virtualKey, bool keyDown)"
-  );
-  const CGEventKeyboardSetUnicodeString = coreGraphics.func(
-    "void CGEventKeyboardSetUnicodeString(void *event, size_t length, const uint16_t *string)"
-  );
-  const CGEventPost = coreGraphics.func(
-    "void CGEventPost(uint32_t tap, void *event)"
-  );
-  const CFRelease = coreFoundation.func("void CFRelease(void *cf)");
-  const HID_EVENT_TAP = 0;
+      SetForegroundWindow(target);
+      await wait(TEXT_TARGET_FOCUS_DELAY_MS);
+      if (isTargetForeground(target)) return;
 
-  return {
-    typeText: async (text) => {
-    for (const character of text) {
-      const keyDown = CGEventCreateKeyboardEvent(null, 0, true);
-      if (!keyDown) throw new Error("macOS rejected literal text input.");
-      CGEventKeyboardSetUnicodeString(keyDown, character.length, character);
-      CGEventPost(HID_EVENT_TAP, keyDown);
-      CFRelease(keyDown);
-
-      const keyUp = CGEventCreateKeyboardEvent(null, 0, false);
-      if (!keyUp) throw new Error("macOS rejected literal text input.");
-      CGEventPost(HID_EVENT_TAP, keyUp);
-      CFRelease(keyUp);
-      await wait(TEXT_TYPING_DELAY_MS);
-    }
+      sendInput([
+        createWindowsKeyInput(0x12, 0, 0),
+        createWindowsKeyInput(0x12, 0, KEYEVENTF_KEYUP)
+      ]);
+      await wait(MODIFIER_POLL_INTERVAL_MS);
+      SetForegroundWindow(target);
+      await wait(TEXT_TARGET_FOCUS_DELAY_MS);
+      if (!isTargetForeground(target)) {
+        throw new Error("Windows could not refocus the application that started recording.");
+      }
     },
-    pressEnter: async () => {
-      const keyDown = CGEventCreateKeyboardEvent(null, 36, true);
-      if (!keyDown) throw new Error("macOS rejected the Enter key press.");
-      CGEventPost(HID_EVENT_TAP, keyDown);
-      CFRelease(keyDown);
-
-      const keyUp = CGEventCreateKeyboardEvent(null, 36, false);
-      if (!keyUp) throw new Error("macOS rejected the Enter key press.");
-      CGEventPost(HID_EVENT_TAP, keyUp);
-      CFRelease(keyUp);
-      await wait(TEXT_TYPING_DELAY_MS);
-    }
+    sendPaste() {
+      sendInput([
+        createWindowsKeyInput(0x11, 0, 0),
+        createWindowsKeyInput(0x56, 0, 0),
+        createWindowsKeyInput(0x56, 0, KEYEVENTF_KEYUP),
+        createWindowsKeyInput(0x11, 0, KEYEVENTF_KEYUP)
+      ]);
+    },
+    async pressEnter() {
+      sendInput([
+        createWindowsKeyInput(0x0d, 0, 0),
+        createWindowsKeyInput(0x0d, 0, KEYEVENTF_KEYUP)
+      ]);
+      await wait(MODIFIER_POLL_INTERVAL_MS);
+    },
+    dispose() {}
   };
+
+  function isTargetForeground(target) {
+    const foregroundWindow = GetForegroundWindow();
+    if (!foregroundWindow || !target) return false;
+    if (foregroundWindow === target) return true;
+    const targetRoot = GetAncestor(target, 2);
+    const foregroundRoot = GetAncestor(foregroundWindow, 2);
+    return Boolean(targetRoot && foregroundRoot && targetRoot === foregroundRoot);
+  }
+
+  async function waitForModifierKeysReleased() {
+    if (await pollModifierRelease(MAX_MODIFIER_RELEASE_CHECKS)) return;
+
+    const stuckKeys = ModifierReleaseKeys.filter(isKeyDown);
+    if (stuckKeys.length) {
+      sendInput(stuckKeys.map((key) => createWindowsKeyInput(key, 0, KEYEVENTF_KEYUP)));
+      await wait(MODIFIER_POLL_INTERVAL_MS);
+      if (await pollModifierRelease(MAX_MODIFIER_RELEASE_CHECKS_AFTER_NORMALIZATION)) return;
+    }
+
+    throw new Error("Release the keyboard modifiers before pasting the response.");
+  }
+
+  async function pollModifierRelease(maxChecks) {
+    for (let attempt = 0; attempt < maxChecks; attempt += 1) {
+      if (!ModifierKeys.some(isKeyDown)) return true;
+      await wait(MODIFIER_POLL_INTERVAL_MS);
+    }
+    return !ModifierKeys.some(isKeyDown);
+  }
+
+  function isKeyDown(key) {
+    return (GetAsyncKeyState(key) & 0x8000) !== 0;
+  }
+
+  function sendInput(inputs) {
+    const sent = SendInput(inputs.length, inputs, koffi.sizeof(INPUT));
+    if (sent !== inputs.length) {
+      throw new Error("Windows rejected the requested paste input.");
+    }
+  }
+
+  function createWindowsKeyInput(virtualKey, scanCode, flags) {
+    return {
+      type: INPUT_KEYBOARD,
+      u: {
+        ki: {
+          wVk: virtualKey,
+          wScan: scanCode,
+          dwFlags: flags,
+          time: 0,
+          dwExtraInfo: WINDOWS_INPUT_EXTRA_INFO
+        }
+      }
+    };
+  }
 }
 
 function createLinuxTextInput() {
@@ -172,35 +246,46 @@ function createLinuxTextInput() {
   const XStringToKeysym = x11.func("uint64_t XStringToKeysym(const char *string)");
   const XKeysymToKeycode = x11.func("uint8_t XKeysymToKeycode(void *display, uint64_t keysym)");
   const XTestFakeKeyEvent = xtst.func(
-    "int XTestFakeKeyEvent(void *display, uint8_t keycode, int is_press, uint64_t delay"
-      + ")"
+    "int XTestFakeKeyEvent(void *display, uint8_t keycode, int is_press, uint64_t delay)"
   );
   const keycodes = new Map();
   let display;
 
   return {
-    typeText: async (text) => {
-      for (const character of text) {
-        if (character === "\\n" || character === "\\r") {
-          sendEnter();
-        } else {
-          sendUnicode(character);
-        }
-        await wait(TEXT_TYPING_DELAY_MS);
+    captureTarget() {
+      return null;
+    },
+    async prepareTarget() {
+      getDisplay();
+      await wait(TEXT_TARGET_FOCUS_DELAY_MS);
+    },
+    sendPaste() {
+      const control = getKeycode("Control_L");
+      const paste = getKeycode("v");
+      sendKey(control, true);
+      try {
+        sendKey(paste, true);
+        sendKey(paste, false);
+      } finally {
+        sendKey(control, false);
       }
     },
-    pressEnter: async () => {
-      sendEnter();
-      await wait(TEXT_TYPING_DELAY_MS);
+    async pressEnter() {
+      sendKey(getKeycode("Return"), true);
+      sendKey(getKeycode("Return"), false);
+      await wait(MODIFIER_POLL_INTERVAL_MS);
+    },
+    dispose() {
+      if (!display) return;
+      XCloseDisplay(display);
+      display = undefined;
     }
   };
 
   function getDisplay() {
     if (display) return display;
     display = XOpenDisplay(null);
-    if (!display) {
-      throw new Error("Linux text input requires an available X11 display.");
-    }
+    if (!display) throw new Error("Linux clipboard paste requires an available X11 display.");
     return display;
   }
 
@@ -215,45 +300,30 @@ function createLinuxTextInput() {
     return keycode;
   }
 
-  function sendKey(name, isPressed) {
-    const currentDisplay = getDisplay();
-    if (!XTestFakeKeyEvent(currentDisplay, getKeycode(name), isPressed ? 1 : 0, 0)) {
-      throw new Error("Linux rejected the requested text input.");
+  function sendKey(keycode, isPressed) {
+    if (!XTestFakeKeyEvent(getDisplay(), keycode, isPressed ? 1 : 0, 0)) {
+      throw new Error("Linux rejected the requested paste input.");
     }
-    XFlush(currentDisplay);
+    XFlush(getDisplay());
   }
+}
 
-  function sendEnter() {
-    sendKey("Return", true);
-    sendKey("Return", false);
-  }
-
-  function sendUnicode(character) {
-    const codePoint = character.codePointAt(0);
-    const hex = codePoint.toString(16);
-    sendKey("Control_L", true);
-    sendKey("Shift_L", true);
-    try {
-      sendKey("u", true);
-      sendKey("u", false);
-      sendKey("Control_L", false);
-      sendKey("Shift_L", false);
-      for (const digit of hex) {
-        sendKey(digit, true);
-        sendKey(digit, false);
-      }
-      sendEnter();
-    } finally {
-      sendKey("Control_L", false);
-      sendKey("Shift_L", false);
-    }
-  }
-
-  function closeDisplay() {
-    if (!display) return;
-    XCloseDisplay(display);
-    display = undefined;
-  }
+function createUnsupportedTextInput() {
+  return {
+    captureTarget() {
+      return null;
+    },
+    async prepareTarget() {
+      throw new Error(`Clipboard paste input is not available on ${process.platform}.`);
+    },
+    sendPaste() {
+      throw new Error(`Clipboard paste input is not available on ${process.platform}.`);
+    },
+    async pressEnter() {
+      throw new Error(`Clipboard paste input is not available on ${process.platform}.`);
+    },
+    dispose() {}
+  };
 }
 
 function wait(milliseconds) {

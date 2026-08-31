@@ -2,23 +2,27 @@
 
 Porvoz is a tray-first Electron desktop app for voice transcription and customizable instruction workflows. It records microphone audio, sends it to a configured OpenAI-compatible endpoint, and can type the resulting transcription or instruction response into the application that currently owns the cursor.
 
-The API key stays in the operating system credential store. Porvoz does not start a web server or modify the system clipboard when it types a response.
+The API key stays in the operating system credential store. Porvoz does not start a web server. When it types a response, it temporarily places the text on the system clipboard for a simulated paste and restores the previous clipboard contents when they have not changed externally.
 
 ## Download and install
 
-The current release is [Porvoz v1.0.0](https://github.com/bgaeddert/porvoz/releases/tag/v1.0.0). Release packages are x64 builds.
+The current release is [Porvoz v1.1.0](https://github.com/bgaeddert/porvoz/releases/tag/v1.1.0). Release packages are x64 builds.
+
+### What's new in v1.1.0
+
+Windows and Linux now use a TypeWhisper-style temporary clipboard transaction for text insertion. Porvoz snapshots the existing clipboard, pastes the response through the target application, and restores the original clipboard when it has not changed externally. The release also adds a failure cue when text placement cannot be completed and removes the previous platform-specific literal typing and strict Windows control eligibility paths.
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.0.0/Porvoz-1.0.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.1.0/Porvoz-1.1.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.0.0/Porvoz-1.0.0-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.1.0/Porvoz-1.1.0-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-1.0.0-linux-x86_64.AppImage
-./Porvoz-1.0.0-linux-x86_64.AppImage
+chmod +x Porvoz-1.1.0-linux-x86_64.AppImage
+./Porvoz-1.1.0-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to save the API key securely. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -27,7 +31,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.0.0/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.1.0/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -79,7 +83,9 @@ The main window also provides **Start recording**, which displays the raw transc
 
 When Search access is granted to a matched prefix, Porvoz enables the hosted `web_search` tool and appends discovered sources to the result. **Logs** stores the 200 most recent transcript and instruction entries on this device.
 
-When a typed response needs a line break, the instruction model can return the exact token `[enter]`; Porvoz converts it into a real Enter key press. macOS requires Accessibility permission. Linux typing uses X11 native keyboard automation.
+When a typed response needs a line break, the instruction model can return the exact token `[enter]`; Porvoz converts it into a real Enter key press. macOS requires Accessibility permission. Linux typing uses X11 for the global hotkey and simulated paste input.
+
+Windows and Linux use one clipboard transaction: Porvoz snapshots the clipboard, writes the response as text, simulates `Ctrl+V` into the target application, waits briefly for the paste to be consumed, and restores the original clipboard contents unless another process changed them during the transaction. Windows captures the top-level foreground window when recording starts and refocuses it before pasting; Linux pastes into the current X11 focus. There is no preflight editability probe, software-KVM block, or per-character typing path.
 
 ## Local data and security
 
@@ -114,4 +120,4 @@ sudo apt install build-essential libasound2-dev libgbm-dev libgtk-3-dev libnss3-
 
 GitHub Actions runs the test suite on Windows and Ubuntu. Pushing a tag beginning with `v` builds the Windows NSIS installer and Linux AppImage, then attaches both files and a checksum manifest to a GitHub Release.
 
-The capture feedback sounds are the CC0 **Recording Start.mp3** and **Recording Stop.mp3** clips by [AbdrTar on Freesound](https://freesound.org/people/AbdrTar/). The start clip is [sound 519985](https://freesound.org/people/AbdrTar/sounds/519985/), and the stop clip is [sound 519986](https://freesound.org/people/AbdrTar/sounds/519986/). Their shared playback volume defaults to 30% and can be adjusted under **Settings → Desktop capture → Recording cues**.
+The capture feedback sounds are the CC0 **Recording Start.mp3** and **Recording Stop.mp3** clips by [AbdrTar on Freesound](https://freesound.org/people/AbdrTar/). The start clip is [sound 519985](https://freesound.org/people/AbdrTar/sounds/519985/), and the stop clip is [sound 519986](https://freesound.org/people/AbdrTar/sounds/519986/). Failed text placement uses the CC0 [Wrong Choice](https://freesound.org/people/unadamlar/sounds/476177/) clip by unadamlar. Their shared playback volume defaults to 30% and can be adjusted under **Settings → Desktop capture → Recording cues**.

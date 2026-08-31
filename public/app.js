@@ -19,6 +19,7 @@ let isTranscribing = false;
 let isTranscriptionProcessing = false;
 let stopRequested = false;
 let shouldTypeFinalResponse = false;
+let captureIntentId = "";
 let discardRecording = false;
 let recordingStartedAt = 0;
 let mediaRecorder;
@@ -26,7 +27,8 @@ let transcriptionStream;
 let recordedChunks = [];
 const hotkeySounds = {
   start: createHotkeySound("./assets/recording-start.mp3"),
-  stop: createHotkeySound("./assets/recording-stop.mp3")
+  stop: createHotkeySound("./assets/recording-stop.mp3"),
+  failure: createHotkeySound("./assets/text-input-failure.mp3")
 };
 
 transcribeButton.addEventListener("click", () => {
@@ -45,12 +47,16 @@ if (desktopBridge?.isElectron) {
     event.preventDefault();
     desktopBridge.openSettings();
   });
-  desktopBridge.onHotkey((action, message) => {
+  desktopBridge.onHotkey((action, payload) => {
     if (action === "start" && !isTranscribing && !isTranscriptionProcessing) {
-      startTranscription({ typeResultAtCursor: true, playStartCue: true });
+      startTranscription({
+        typeResultAtCursor: true,
+        captureId: payload?.captureId,
+        playStartCue: true
+      });
     }
     if (action === "configuration-needed" && !isTranscribing && !isTranscriptionProcessing) {
-      void typeConfigurationWarning(message);
+      void typeConfigurationWarning(payload?.message || payload);
     }
     if (action === "stop" && isTranscribing && !stopRequested) {
       void playHotkeySound(action);
@@ -70,7 +76,11 @@ autoResizeTextarea(transcript);
 autoResizeTextarea(instructionResponse);
 updateActionButtons();
 
-async function startTranscription({ typeResultAtCursor = false, playStartCue = false } = {}) {
+async function startTranscription({
+  typeResultAtCursor = false,
+  captureId = "",
+  playStartCue = false
+} = {}) {
   if (!window.MediaRecorder) {
     setStatus("This Electron build does not support audio recording.", "error");
     return;
@@ -79,6 +89,7 @@ async function startTranscription({ typeResultAtCursor = false, playStartCue = f
   isTranscribing = true;
   stopRequested = false;
   shouldTypeFinalResponse = typeResultAtCursor;
+  captureIntentId = typeof captureId === "string" ? captureId : "";
   discardRecording = false;
   recordingStartedAt = 0;
   updateTranscribeButtonLabel();
@@ -179,6 +190,7 @@ function handleRecordingFailure(error) {
 
 async function processTranscription() {
   const typeResultAtCursor = shouldTypeFinalResponse;
+  const captureId = captureIntentId;
   const audioType = mediaRecorder?.mimeType || "audio/webm";
   const audio = new File(recordedChunks, getAudioFileName(audioType), { type: audioType });
   releaseRecordingResources();
@@ -192,6 +204,7 @@ async function processTranscription() {
   if (!audio.size) {
     isTranscriptionProcessing = false;
     shouldTypeFinalResponse = false;
+    captureIntentId = "";
     recordedChunks = [];
     updateActionButtons();
     setStatus("No audio was captured. Hold the hotkey and try again.", "error");
@@ -212,19 +225,20 @@ async function processTranscription() {
     const instructionResult = await requestInstruction(result.transcript, result.logGroupId);
     if (!instructionResult.instructionApplied) {
       setStatus("Transcription complete; no instruction prefix detected.", "success");
-      if (typeResultAtCursor) await typeFinalResponse(result.transcript);
+      if (typeResultAtCursor) await typeFinalResponse(result.transcript, captureId);
       return;
     }
     instructionResponse.value = instructionResult.transcript;
     autoResizeTextarea(instructionResponse);
     setStatus("Transcription complete.", "success");
-    if (typeResultAtCursor) await typeFinalResponse(instructionResponse.value);
+    if (typeResultAtCursor) await typeFinalResponse(instructionResponse.value, captureId);
   } catch (error) {
     console.error(error);
     setStatus(error.message || "Could not transcribe the audio.", "error");
   } finally {
     isTranscriptionProcessing = false;
     shouldTypeFinalResponse = false;
+    captureIntentId = "";
     recordedChunks = [];
     updateActionButtons();
   }
@@ -263,6 +277,7 @@ function resetTranscriptionState({ stopRecorder = true } = {}) {
   isTranscribing = false;
   stopRequested = false;
   shouldTypeFinalResponse = false;
+  captureIntentId = "";
   updateTranscribeButtonLabel();
   updateActionButtons();
 }
@@ -327,13 +342,14 @@ async function initializeDesktopHotkeyHint() {
   }
 }
 
-async function typeFinalResponse(text) {
+async function typeFinalResponse(text, captureId = "", purpose = "transcription") {
   if (!desktopBridge?.isElectron || !text) return;
   try {
-    await desktopBridge.typeText(text);
+    await desktopBridge.typeText({ text, captureId, purpose });
   } catch (error) {
     console.error(error);
-    setStatus("Response ready; could not type into the active app.", "error");
+    await playHotkeySound("failure");
+    setStatus(error.message || "Response ready; could not type into the active app.", "error");
   }
 }
 
@@ -342,7 +358,7 @@ async function typeConfigurationWarning(message) {
     ? message
     : "Open Porvoz Settings and finish setup before using the hotkey.";
   setStatus(warningMessage, "error");
-  await typeFinalResponse(warningMessage);
+  await typeFinalResponse(warningMessage, "", "configuration-warning");
 }
 
 function updateActionButtons() {
