@@ -6,7 +6,11 @@ The API key stays in the operating system credential store. Porvoz does not star
 
 ## Download and install
 
-The current release is [Porvoz v1.1.0](https://github.com/bgaeddert/porvoz/releases/tag/v1.1.0). Release packages are x64 builds.
+The current release is [Porvoz v1.1.1](https://github.com/bgaeddert/porvoz/releases/tag/v1.1.1). Release packages are x64 builds.
+
+### What's new in v1.1.1
+
+The Settings model-routing section now includes an instruction reasoning dropdown with `low`, `medium`, and `high` options. It defaults to `low` and applies only to instruction-model requests; transcription requests are unchanged. Existing installations migrate to the new default automatically.
 
 ### What's new in v1.1.0
 
@@ -14,15 +18,15 @@ Windows and Linux now use a TypeWhisper-style temporary clipboard transaction fo
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.1.0/Porvoz-1.1.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.1.1/Porvoz-1.1.1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.1.0/Porvoz-1.1.0-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.1.1/Porvoz-1.1.1-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-1.1.0-linux-x86_64.AppImage
-./Porvoz-1.1.0-linux-x86_64.AppImage
+chmod +x Porvoz-1.1.1-linux-x86_64.AppImage
+./Porvoz-1.1.1-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to save the API key securely. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -31,7 +35,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.1.0/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.1.1/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -42,7 +46,7 @@ Porvoz starts hidden and adds a tray icon. Choose **Open Porvoz** from the tray 
 1. Open **Settings**.
 2. Enter the endpoint's base URL and API key.
 3. Select **Load models**. Porvoz reads the endpoint's `/v1/models` catalog.
-4. Select one loaded model for transcription and one for instruction requests.
+4. Select one loaded model for transcription and one for instruction requests. Choose the instruction reasoning level (`low`, `medium`, or `high`); it defaults to `low` and applies only to instruction-model requests.
 
 The endpoint must provide the OpenAI-compatible audio transcription and Responses API operations used by the app. **Verify certificate** is enabled by default for every API request. Disable it only for a trusted self-signed endpoint on a network you control.
 
@@ -79,7 +83,7 @@ Prefix names must be unique, ignoring case. You can enable or disable any prefix
 
 Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe and type the result into the application that owns the cursor. Use **Capture hotkey** in Settings to choose another key or combination, such as **Ctrl + Shift + F12**; changes take effect immediately.
 
-The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. If a transcript begins with an enabled instruction prefix, Porvoz sends it with the editable instruction prompt and prefix registry to the selected instruction model. Transcripts without an enabled prefix bypass the instruction model.
+The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. If a transcript begins with an enabled instruction prefix, Porvoz sends it with the editable instruction prompt and prefix registry to the selected instruction model using the configured reasoning level. Transcripts without an enabled prefix bypass the instruction model.
 
 When Search access is granted to a matched prefix, Porvoz enables the hosted `web_search` tool and appends discovered sources to the result. **Logs** stores the 200 most recent transcript and instruction entries on this device.
 

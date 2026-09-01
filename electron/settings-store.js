@@ -17,10 +17,16 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
       builtInDefaults
     );
     const normalizedSoundVolume = normalizeSoundVolume(settings.soundVolume, defaults.soundVolume);
+    const normalizedInstructionReasoning = normalizeInstructionReasoning(
+      settings.models.instructionReasoning,
+      defaults.models?.instructionReasoning
+    );
     if (JSON.stringify(normalizedPrefixes) !== JSON.stringify(settings.prefixes)
-      || settings.soundVolume !== normalizedSoundVolume) {
+      || settings.soundVolume !== normalizedSoundVolume
+      || settings.models.instructionReasoning !== normalizedInstructionReasoning) {
       settings.prefixes = normalizedPrefixes;
       settings.soundVolume = normalizedSoundVolume;
+      settings.models.instructionReasoning = normalizedInstructionReasoning;
       saveSettingsFile();
     }
   } else {
@@ -80,7 +86,7 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     return available;
   }
 
-  function saveModelSelections({ transcription, instruction } = {}) {
+  function saveModelSelections({ transcription, instruction, instructionReasoning } = {}) {
     if (transcription !== undefined) {
       const nextTranscription = normalizeModel(transcription);
       if (nextTranscription && !settings.models.available.includes(nextTranscription)) {
@@ -94,6 +100,13 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
         throw new Error("Choose an instruction model from the loaded models.");
       }
       settings.models.instruction = nextInstruction;
+    }
+    if (instructionReasoning !== undefined) {
+      const nextInstructionReasoning = normalizeInstructionReasoning(instructionReasoning, "");
+      if (!nextInstructionReasoning) {
+        throw new Error("Choose low, medium, or high reasoning for the instruction model.");
+      }
+      settings.models.instructionReasoning = nextInstructionReasoning;
     }
     saveSettingsFile();
   }
@@ -190,7 +203,11 @@ function createInitialSettings(defaults, builtInDefaults = normalizeBuiltInEntri
     models: {
       available: [],
       transcription: "",
-      instruction: ""
+      instruction: "",
+      instructionReasoning: normalizeInstructionReasoning(
+        defaults.models?.instructionReasoning,
+        "low"
+      )
     },
     prompt: defaults.prompt,
     prefixes: normalizePrefixEntries(defaults.prefixes, defaults.limits.maxPrefixes, builtInDefaults),
@@ -292,6 +309,13 @@ function normalizeId(value) {
 
 function normalizeModel(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeInstructionReasoning(value, fallback = "low") {
+  const normalizedValue = typeof value === "string" ? value.trim().toLocaleLowerCase() : "";
+  if (["low", "medium", "high"].includes(normalizedValue)) return normalizedValue;
+  const normalizedFallback = typeof fallback === "string" ? fallback.trim().toLocaleLowerCase() : "";
+  return ["low", "medium", "high"].includes(normalizedFallback) ? normalizedFallback : "low";
 }
 
 function normalizeSoundVolume(value, fallback = 0.3) {

@@ -128,7 +128,7 @@ test("chained prefixes are detected together and combine access permissions", as
     });
     const address = server.address();
     service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret" });
-    service.saveModelSelections({ instruction: "instruction-model" });
+    service.saveModelSelections({ instruction: "instruction-model", instructionReasoning: "high" });
 
     const result = await service.instruct(
       { transcript: "search clipboard summarize this", logGroupId: "chain-1" },
@@ -139,6 +139,7 @@ test("chained prefixes are detected together and combine access permissions", as
     assert.match(requestBody.instructions, /chain of consecutive enabled registered instruction prefixes/);
     assert.match(requestBody.instructions, /apply every matched prefix instruction in left-to-right order/);
     assert.match(requestBody.input, /reference text/);
+    assert.deepEqual(requestBody.reasoning, { effort: "high" });
     assert.deepEqual(requestBody.tools, [{ type: "web_search" }]);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -195,6 +196,7 @@ test("voice prefix creation transcribes the brief and returns an editable propos
       allowClipboard: false
     });
     assert.match(responsesRequestBody, /Keep answers concise\./);
+    assert.match(responsesRequestBody, /"reasoning":\{"effort":"low"\}/);
     assert.match(responsesRequestBody, /Prefix name: digits/);
     assert.match(responsesRequestBody, /Porvoz supports the exact output token \[enter\]/);
     assert.match(responsesRequestBody, /Do not mention the prefix, trigger phrase, command/);
@@ -220,7 +222,12 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
   let apiKey = "";
   let settings = {
     connection: { baseUrl: "", verifyCertificate: true },
-    models: { available: availableModels, transcription: "", instruction: "" },
+    models: {
+      available: availableModels,
+      transcription: "",
+      instruction: "",
+      instructionReasoning: "low"
+    },
     prompt: "Keep answers concise.",
     prefixes,
     hotkey: { key: "ControlRight", modifiers: [], label: "Right Ctrl" },

@@ -453,6 +453,7 @@ function sendHotkeyAction(action, value) {
 }
 
 function registerIpcHandlers() {
+  ipcMain.handle("porvoz:get-app-version", () => app.getVersion());
   ipcMain.handle("porvoz:get-runtime-config", () => appService.getRuntimeConfig());
   ipcMain.handle("porvoz:get-connection-settings", () => appService.getConnectionSettings());
   ipcMain.handle("porvoz:get-setup-status", () => appService.getSetupStatus());

@@ -44,7 +44,8 @@ export function createAppService(settingsStore, logStore) {
         available: settings.models.available,
         selected: {
           transcription: settings.models.transcription,
-          instruction: settings.models.instruction
+          instruction: settings.models.instruction,
+          instructionReasoning: normalizeInstructionReasoning(settings.models.instructionReasoning)
         }
       },
       prompt: settings.prompt,
@@ -241,6 +242,7 @@ export function createAppService(settingsStore, logStore) {
         inputs.model,
         inputs.prefixes,
         inputs.activePrefixes,
+        inputs.reasoning,
         clipboardText,
         logGroupId
       ),
@@ -311,6 +313,7 @@ export function createAppService(settingsStore, logStore) {
     try {
       response = await getOpenAIClient().responses.create({
         model: settings.models.instruction,
+        reasoning: { effort: normalizeInstructionReasoning(settings.models.instructionReasoning) },
         instructions,
         input
       });
@@ -372,7 +375,7 @@ export function createAppService(settingsStore, logStore) {
     };
   }
 
-  async function instructWithModel(transcript, prompt, model, prefixes, activePrefixes, clipboardText, logGroupId) {
+  async function instructWithModel(transcript, prompt, model, prefixes, activePrefixes, reasoning, clipboardText, logGroupId) {
     const searchRequested = activePrefixes.some((prefix) => prefix.allowSearch === true);
     const clipboardRequested = activePrefixes.some((prefix) => prefix.allowClipboard === true);
     const activePrefixLabel = activePrefixes.map(({ name }) => name).join(" + ");
@@ -416,6 +419,7 @@ export function createAppService(settingsStore, logStore) {
     ].join("\n\n");
     const requestBody = {
       model,
+      reasoning: { effort: reasoning },
       instructions,
       input
     };
@@ -507,9 +511,15 @@ export function createAppService(settingsStore, logStore) {
       transcript: valueTranscript,
       prompt,
       model: settings.models.instruction,
+      reasoning: normalizeInstructionReasoning(settings.models.instructionReasoning),
       prefixes,
       activePrefixes
     };
+  }
+
+  function normalizeInstructionReasoning(value) {
+    const normalized = typeof value === "string" ? value.trim().toLocaleLowerCase() : "";
+    return ["low", "medium", "high"].includes(normalized) ? normalized : "low";
   }
 
   function normalizePrefixes(value) {

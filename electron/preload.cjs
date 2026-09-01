@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("porvozDesktop", {
   isElectron: true,
+  getAppVersion() {
+    return ipcRenderer.invoke("porvoz:get-app-version");
+  },
   getRuntimeConfig() {
     return ipcRenderer.invoke("porvoz:get-runtime-config");
   },

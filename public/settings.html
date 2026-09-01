@@ -82,6 +82,15 @@
                 <select id="instruction-model" aria-describedby="model-status" required></select>
                 <small>Used for instruction prefixes and web search.</small>
               </label>
+              <label class="field-label instruction-reasoning-field" for="instruction-reasoning">
+                Instruction reasoning
+                <select id="instruction-reasoning" aria-describedby="model-status">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+                <small>Controls reasoning effort for instruction-model requests.</small>
+              </label>
               <div class="form-actions model-actions">
                 <p id="model-status" class="field-note" aria-live="polite">No models loaded yet.</p>
                 <button id="populate-models" class="button-secondary" type="button">Load models</button>
@@ -170,7 +179,7 @@
 
       <footer class="page-footer">
         <span>Porvoz</span>
-        <span>Settings are local to this app</span>
+        <span>Settings are local to this app · <span data-app-version>Version unavailable</span></span>
       </footer>
     </div>
     <dialog id="reset-dialog" class="reset-dialog" aria-labelledby="reset-dialog-heading">
@@ -264,6 +273,7 @@
         </section>
       </div>
     </dialog>
+    <script type="module" src="./app-version.js"></script>
     <script type="module" src="./setup-warning.js"></script>
     <script type="module" src="./settings.js"></script>
   </body>

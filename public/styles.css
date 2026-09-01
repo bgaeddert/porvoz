@@ -954,6 +954,10 @@ input::placeholder {
   align-items: start;
 }
 
+.instruction-reasoning-field {
+  grid-column: 2;
+}
+
 .hotkey-setting {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
@@ -1782,6 +1786,10 @@ select {
   .sound-setting,
   .logs-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .instruction-reasoning-field {
+    grid-column: auto;
   }
 
   .logs-toolbar-actions {

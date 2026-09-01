@@ -8,6 +8,7 @@ const connectionForm = document.querySelector("#connection-form");
 const connectionStatus = document.querySelector("#connection-status");
 const transcriptionModel = document.querySelector("#transcription-model");
 const instructionModel = document.querySelector("#instruction-model");
+const instructionReasoning = document.querySelector("#instruction-reasoning");
 const populateModelsButton = document.querySelector("#populate-models");
 const modelStatus = document.querySelector("#model-status");
 const instructionPrompt = document.querySelector("#instruction-prompt");
@@ -81,6 +82,7 @@ connectionForm.addEventListener("submit", saveConnection);
 populateModelsButton.addEventListener("click", populateModels);
 transcriptionModel.addEventListener("change", saveModelSelections);
 instructionModel.addEventListener("change", saveModelSelections);
+instructionReasoning.addEventListener("change", saveModelSelections);
 instructionPrompt.addEventListener("input", handlePromptInput);
 resetPromptButton.addEventListener("click", () => promptResetDialog.showModal());
 addPrefixButton.addEventListener("click", openPrefixDialog);
@@ -161,6 +163,9 @@ function renderModels() {
   const models = runtimeConfig.models.available;
   renderModelSelect(transcriptionModel, models, runtimeConfig.models.selected.transcription, "Choose a transcription model");
   renderModelSelect(instructionModel, models, runtimeConfig.models.selected.instruction, "Choose an instruction model");
+  instructionReasoning.value = ["low", "medium", "high"].includes(runtimeConfig.models.selected.instructionReasoning)
+    ? runtimeConfig.models.selected.instructionReasoning
+    : "low";
   const hasModels = models.length > 0;
   transcriptionModel.disabled = !hasModels;
   instructionModel.disabled = !hasModels;
@@ -199,7 +204,8 @@ async function populateModels() {
 function saveModelSelections() {
   const selections = {
     transcription: transcriptionModel.value,
-    instruction: instructionModel.value
+    instruction: instructionModel.value,
+    instructionReasoning: instructionReasoning.value
   };
   const previousStatus = modelStatus.textContent;
   modelStatus.textContent = "Saving model selections…";

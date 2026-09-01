@@ -7,6 +7,7 @@ export async function loadRuntimeConfig() {
   if (!result?.models
     || !Array.isArray(result.models.available)
     || !result.models.selected
+    || !["low", "medium", "high"].includes(result.models.selected.instructionReasoning)
     || !result.limits
     || !Number.isFinite(result.limits.maxInstructionPromptCharacters)
     || !Number.isFinite(result.limits.maxPrefixes)
