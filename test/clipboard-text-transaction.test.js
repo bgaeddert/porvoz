@@ -33,6 +33,16 @@ class FakeClipboardItem {
   }
 }
 
+class UnreadableTransportClipboardItem extends FakeClipboardItem {
+  async getType(type) {
+    if (type.toLowerCase().startsWith("electron application/osclipboard;")
+      || type.toLowerCase() === "text/plain;charset=utf-8") {
+      throw new Error(`Transport type '${type}' should not be read.`);
+    }
+    return super.getType(type);
+  }
+}
+
 class FakeClipboard {
   constructor(items) {
     this.items = items;
@@ -51,12 +61,13 @@ class FakeClipboard {
   }
 }
 
-function createTransaction(clipboard) {
+function createTransaction(clipboard, { platform } = {}) {
   return createClipboardTextTransaction({
     clipboard,
     ClipboardItem: FakeClipboardItem,
     Blob: FakeBlob,
-    delay: async () => {}
+    delay: async () => {},
+    platform
   });
 }
 
@@ -89,6 +100,29 @@ test("clipboard text transaction restores every original format after paste", as
   });
 
   assert.deepEqual(result, { clipboardChanged: false });
+  assert.deepEqual(await describeClipboard(clipboard), [[
+    ["text/plain", "original text"],
+    ["text/html", "<p>original text</p>"]
+  ]]);
+});
+
+test("clipboard text transaction ignores unreadable Linux transport types", async () => {
+  const clipboard = new FakeClipboard([
+    new UnreadableTransportClipboardItem({
+      "text/plain": "original text",
+      "text/html": "<p>original text</p>",
+      "electron application/osclipboard;format=TARGETS": "transport metadata",
+      "text/plain;charset=utf-8": "duplicate text"
+    })
+  ]);
+  const transaction = createTransaction(clipboard, { platform: "linux" });
+
+  await transaction.pasteText("transcribed text", async () => {
+    assert.deepEqual(await describeClipboard(clipboard), [[
+      ["text/plain", "transcribed text"]
+    ]]);
+  });
+
   assert.deepEqual(await describeClipboard(clipboard), [[
     ["text/plain", "original text"],
     ["text/html", "<p>original text</p>"]

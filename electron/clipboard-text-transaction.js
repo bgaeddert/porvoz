@@ -2,12 +2,15 @@ import { createHash } from "node:crypto";
 
 const CLIPBOARD_SETTLE_DELAY_MS = 500;
 const BOOKMARK_MIME_TYPE = "electron application/bookmark";
+const ELECTRON_OS_CLIPBOARD_TYPE_PREFIX = "electron application/osclipboard;";
+const LINUX_DUPLICATE_PLAIN_TEXT_TYPE = "text/plain;charset=utf-8";
 
 export function createClipboardTextTransaction({
   clipboard,
   ClipboardItem,
   Blob: BlobImplementation = globalThis.Blob,
-  delay = wait
+  delay = wait,
+  platform = process.platform
 } = {}) {
   if (!clipboard || typeof clipboard.read !== "function" || typeof clipboard.write !== "function") {
     throw new TypeError("An asynchronous Electron clipboard implementation is required.");
@@ -67,7 +70,7 @@ export function createClipboardTextTransaction({
     const snapshotItems = [];
     for (const item of Array.isArray(items) ? items : []) {
       const payloads = [];
-      for (const type of Array.isArray(item?.types) ? item.types : []) {
+      for (const type of Array.isArray(item?.types) ? item.types.filter(isSnapshotType) : []) {
         payloads.push({
           type,
           payload: await readClipboardPayload(item, type)
@@ -79,6 +82,21 @@ export function createClipboardTextTransaction({
       items: snapshotItems,
       fingerprint: fingerprint(snapshotItems)
     };
+  }
+
+  function isSnapshotType(type) {
+    if (typeof type !== "string" || !type.trim()) return false;
+    if (platform !== "linux") return true;
+    const normalizedType = type.trim().toLowerCase();
+    // Electron exposes X11 selection-management targets as readable types,
+    // but asking getType() for them can block on Linux. They are transport
+    // metadata, not user clipboard content, and must not be restored.
+    if (normalizedType.startsWith(ELECTRON_OS_CLIPBOARD_TYPE_PREFIX)) return false;
+    // Electron's Linux backend also exposes this duplicate target. The
+    // canonical text/plain value contains the same user content and is the
+    // portable format used by the paste transaction.
+    if (normalizedType === LINUX_DUPLICATE_PLAIN_TEXT_TYPE) return false;
+    return true;
   }
 
   async function readClipboardPayload(item, type) {
