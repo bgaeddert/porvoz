@@ -331,6 +331,7 @@ function setStatus(message, state = "idle") {
       : state === "error"
         ? "Action needs attention"
         : "System ready");
+  desktopBridge?.setStatus?.({ message, state });
 }
 
 async function initializeDesktopHotkeyHint() {

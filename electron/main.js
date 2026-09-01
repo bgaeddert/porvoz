@@ -16,6 +16,7 @@ import { uIOhook, UiohookKey } from "uiohook-napi";
 import { createAppService } from "./app-service.js";
 import { createLogStore } from "./log-store.js";
 import { createSettingsStore } from "./settings-store.js";
+import { createStatusOverlay } from "./status-overlay.js";
 import { captureTextInputTarget, disposeTextInput, typeText } from "./text-input.js";
 
 if (process.platform === "linux") {
@@ -28,7 +29,8 @@ const appIconPath = fileURLToPath(new URL("./assets/icon.png", import.meta.url))
 const allowedRendererPaths = new Set([
   "index.html",
   "logs.html",
-  "settings.html"
+  "settings.html",
+  "status-overlay.html"
 ].map((page) => fileURLToPath(new URL(`../public/${page}`, import.meta.url))));
 
 const MODIFIER_KEYCODES = {
@@ -70,6 +72,7 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let appService;
 let mainWindow;
 let settingsWindow;
+let statusOverlay;
 let tray;
 let isQuitting = false;
 let isHotkeyRecording = false;
@@ -122,6 +125,11 @@ async function startApplication() {
   registerIpcHandlers();
   createTray();
   await createMainWindow();
+  statusOverlay = await createStatusOverlay({
+    overlayPath: fileURLToPath(new URL("../public/status-overlay.html", import.meta.url)),
+    preloadPath: fileURLToPath(new URL("./status-overlay-preload.cjs", import.meta.url)),
+    secureWindow: secureRendererWindow
+  });
   registerGlobalHotkey();
 }
 
@@ -447,9 +455,20 @@ function formatHotkeyLabel(key, modifiers) {
 }
 
 function sendHotkeyAction(action, value) {
+  if (action === "start") {
+    setOverlayStatus({ message: "Recording…", state: "recording" });
+  } else if (action === "stop") {
+    setOverlayStatus({ message: "Finishing recording…", state: "processing" });
+  } else if (action === "configuration-needed") {
+    setOverlayStatus({ message: value?.message || "Setup is required before recording.", state: "error" });
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("porvoz:hotkey", action, value);
   }
+}
+
+function setOverlayStatus(value) {
+  statusOverlay?.setStatus(value);
 }
 
 function registerIpcHandlers() {
@@ -493,16 +512,28 @@ function registerIpcHandlers() {
     return runtimeConfig;
   });
   ipcMain.handle("porvoz:transcribe", async (_event, value) => {
-    const result = await appService.transcribe(value);
-    notifyLogsUpdated();
-    return result;
+    setOverlayStatus({ message: "Transcribing…", state: "transcribing" });
+    try {
+      const result = await appService.transcribe(value);
+      notifyLogsUpdated();
+      return result;
+    } catch (error) {
+      setOverlayStatus({ message: error.message || "Could not transcribe the audio.", state: "error" });
+      throw error;
+    }
   });
   ipcMain.handle("porvoz:instruct", async (_event, value) => {
-    const result = await appService.instruct(value, {
-      readClipboard: () => clipboard.readText()
-    });
-    notifyLogsUpdated();
-    return result;
+    setOverlayStatus({ message: "Applying instructions…", state: "processing" });
+    try {
+      const result = await appService.instruct(value, {
+        readClipboard: () => clipboard.readText()
+      });
+      notifyLogsUpdated();
+      return result;
+    } catch (error) {
+      setOverlayStatus({ message: error.message || "Could not apply the instructions.", state: "error" });
+      throw error;
+    }
   });
   ipcMain.handle("porvoz:create-prefix-from-voice", (_event, value) => appService.createPrefixFromVoice(value));
   ipcMain.handle("porvoz:get-hotkey", () => currentHotkey);
@@ -528,11 +559,22 @@ function registerIpcHandlers() {
     notifySoundVolumeUpdated(soundVolume);
     return soundVolume;
   });
+  ipcMain.on("porvoz:status", (_event, value) => {
+    if (!value || typeof value !== "object") return;
+    setOverlayStatus(value);
+  });
   ipcMain.handle("porvoz:type-text", async (_event, value) => {
     const request = normalizeTypingRequest(value);
     if (!request.text) return false;
-    await typeTextAtCursor(request);
-    return true;
+    setOverlayStatus({ message: "Placing text…", state: "typing" });
+    try {
+      await typeTextAtCursor(request);
+      setOverlayStatus({ message: "Text placed.", state: "success" });
+      return true;
+    } catch (error) {
+      setOverlayStatus({ message: error.message || "Could not place the text.", state: "error" });
+      throw error;
+    }
   });
   ipcMain.on("porvoz:open-settings", () => {
     openSettingsWindow().catch(handleWindowError);
@@ -742,6 +784,8 @@ function shutdownApplication() {
   }
   disposeTextInput();
   captureAttempts.clear();
+  statusOverlay?.destroy();
+  statusOverlay = undefined;
 }
 
 function handleWindowError(error) {

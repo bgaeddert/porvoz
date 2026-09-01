@@ -6,7 +6,11 @@ The API key stays in the operating system credential store. Porvoz does not star
 
 ## Download and install
 
-The current release is [Porvoz v1.1.2](https://github.com/bgaeddert/porvoz/releases/tag/v1.1.2). Release packages are x64 builds.
+The current release is [Porvoz v1.2.0](https://github.com/bgaeddert/porvoz/releases/tag/v1.2.0). Release packages are x64 builds.
+
+### What's new in v1.2.0
+
+Porvoz now shows a compact, click-through status pill at the bottom of the active display while it records, transcribes, applies instructions, and places text. It confirms successful placement briefly and keeps concise categorized error feedback visible when an operation fails. The overlay is available while Porvoz is hidden to the system tray and does not take focus away from the application receiving the text.
 
 ### What's new in v1.1.2
 
@@ -22,15 +26,15 @@ Windows and Linux now use a TypeWhisper-style temporary clipboard transaction fo
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.1.2/Porvoz-1.1.2-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.2.0/Porvoz-1.2.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.1.2/Porvoz-1.1.2-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.2.0/Porvoz-1.2.0-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-1.1.2-linux-x86_64.AppImage
-./Porvoz-1.1.2-linux-x86_64.AppImage
+chmod +x Porvoz-1.2.0-linux-x86_64.AppImage
+./Porvoz-1.2.0-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to save the API key securely. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -39,7 +43,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.1.2/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.2.0/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -86,6 +90,8 @@ Prefix names must be unique, ignoring case. You can enable or disable any prefix
 ## Using Porvoz
 
 Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe and type the result into the application that owns the cursor. Use **Capture hotkey** in Settings to choose another key or combination, such as **Ctrl + Shift + F12**; changes take effect immediately.
+
+While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. The pill is visual-only: it ignores mouse input and does not become the active typing window.
 
 The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. If a transcript begins with an enabled instruction prefix, Porvoz sends it with the editable instruction prompt and prefix registry to the selected instruction model using the configured reasoning level. Transcripts without an enabled prefix bypass the instruction model.
 

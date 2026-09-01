@@ -1,0 +1,159 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", Inter, system-ui, sans-serif;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 12px 8px;
+}
+
+.status-pill {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: max-content;
+  min-width: 190px;
+  max-width: 476px;
+  min-height: 46px;
+  padding: 10px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 24px;
+  background: rgba(17, 22, 29, 0.95);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34), 0 2px 8px rgba(0, 0, 0, 0.24);
+  color: rgba(245, 248, 252, 0.96);
+  opacity: 0;
+  transform: translateY(8px) scale(0.97);
+  transition: opacity 140ms ease, transform 160ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.status-pill.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.status-pill[data-state="recording"] {
+  border-color: rgba(255, 115, 115, 0.52);
+}
+
+.status-pill[data-state="transcribing"],
+.status-pill[data-state="processing"] {
+  border-color: rgba(123, 173, 255, 0.5);
+}
+
+.status-pill[data-state="typing"] {
+  border-color: rgba(143, 220, 184, 0.52);
+}
+
+.status-pill[data-state="success"] {
+  border-color: rgba(102, 227, 162, 0.58);
+}
+
+.status-pill[data-state="error"] {
+  border-color: rgba(255, 112, 112, 0.68);
+  background: rgba(35, 20, 25, 0.96);
+}
+
+.status-indicator {
+  position: relative;
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #9ca9ba;
+}
+
+.status-indicator::before,
+.status-indicator::after {
+  position: absolute;
+  inset: -4px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  content: "";
+  opacity: 0;
+}
+
+.status-pill[data-state="recording"] .status-indicator {
+  background: #ff7777;
+  color: rgba(255, 119, 119, 0.7);
+  animation: indicator-pulse 1.25s ease-in-out infinite;
+}
+
+.status-pill[data-state="recording"] .status-indicator::before {
+  animation: indicator-ring 1.25s ease-out infinite;
+}
+
+.status-pill[data-state="transcribing"] .status-indicator,
+.status-pill[data-state="processing"] .status-indicator {
+  background: #7badff;
+  color: rgba(123, 173, 255, 0.68);
+  animation: indicator-spin 1s linear infinite;
+}
+
+.status-pill[data-state="transcribing"] .status-indicator::before,
+.status-pill[data-state="processing"] .status-indicator::before {
+  border-radius: 3px;
+  border-top-color: transparent;
+  animation: indicator-spin 800ms linear infinite reverse;
+}
+
+.status-pill[data-state="typing"] .status-indicator,
+.status-pill[data-state="success"] .status-indicator {
+  background: #66e3a2;
+}
+
+.status-pill[data-state="error"] .status-indicator {
+  background: #ff7777;
+}
+
+.status-message {
+  overflow: hidden;
+  max-width: 414px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes indicator-pulse {
+  0%,
+  100% {
+    transform: scale(0.82);
+  }
+  50% {
+    transform: scale(1);
+  }
+}
+
+@keyframes indicator-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+@keyframes indicator-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

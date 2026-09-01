@@ -68,6 +68,9 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   saveSoundVolume(value) {
     return ipcRenderer.invoke("porvoz:save-sound-volume", value);
   },
+  setStatus(value) {
+    ipcRenderer.send("porvoz:status", value);
+  },
   onHotkeyUpdated(callback) {
     if (typeof callback !== "function") return () => {};
     const listener = (_event, value) => callback(value);
