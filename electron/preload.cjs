@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   getLogs() {
     return ipcRenderer.invoke("porvoz:get-logs");
   },
+  logError(value) {
+    return ipcRenderer.invoke("porvoz:log-error", value);
+  },
   clearLogs() {
     return ipcRenderer.invoke("porvoz:clear-logs");
   },

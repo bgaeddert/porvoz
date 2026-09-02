@@ -11,6 +11,18 @@ const instructionModel = document.querySelector("#instruction-model");
 const instructionReasoning = document.querySelector("#instruction-reasoning");
 const populateModelsButton = document.querySelector("#populate-models");
 const modelStatus = document.querySelector("#model-status");
+const openTranscriptionModelPickerButton = document.querySelector("#open-transcription-model-picker");
+const openInstructionModelPickerButton = document.querySelector("#open-instruction-model-picker");
+const modelPickerDialog = document.querySelector("#model-picker-dialog");
+const modelPickerHeading = document.querySelector("#model-picker-heading");
+const modelPickerDescription = document.querySelector("#model-picker-description");
+const modelPickerInput = document.querySelector("#model-picker-input");
+const modelPickerToggleButton = document.querySelector("#toggle-model-picker");
+const modelPickerMenu = document.querySelector("#model-picker-menu");
+const modelPickerStatus = document.querySelector("#model-picker-status");
+const closeModelPickerButton = document.querySelector("#close-model-picker");
+const cancelModelPickerButton = document.querySelector("#cancel-model-picker");
+const saveModelPickerButton = document.querySelector("#save-model-picker");
 const instructionPrompt = document.querySelector("#instruction-prompt");
 const promptStatus = document.querySelector("#prompt-status");
 const resetPromptButton = document.querySelector("#reset-prompt");
@@ -59,6 +71,7 @@ let promptSaveTimer;
 let prefixSaveTimer;
 let prefixSaveQueue = Promise.resolve();
 let modelSaveQueue = Promise.resolve();
+let modelSaveTimer;
 let soundVolumeSaveTimer;
 let prefixRecorder;
 let prefixRecordingStream;
@@ -66,6 +79,8 @@ let prefixRecordedChunks = [];
 let prefixRecordingStartedAt = 0;
 let prefixRecordingDiscarded = false;
 let prefixFlowToken = 0;
+let modelPickerTarget = "";
+let modelPickerSelection = "";
 
 baseUrlInput.maxLength = 2048;
 apiKeyInput.maxLength = 4096;
@@ -80,9 +95,28 @@ await initializeHotkey();
 
 connectionForm.addEventListener("submit", saveConnection);
 populateModelsButton.addEventListener("click", populateModels);
-transcriptionModel.addEventListener("change", saveModelSelections);
-instructionModel.addEventListener("change", saveModelSelections);
+transcriptionModel.addEventListener("input", handleModelInput);
+instructionModel.addEventListener("input", handleModelInput);
 instructionReasoning.addEventListener("change", saveModelSelections);
+openTranscriptionModelPickerButton.addEventListener("click", () => openModelPicker("transcription"));
+openInstructionModelPickerButton.addEventListener("click", () => openModelPicker("instruction"));
+modelPickerInput.addEventListener("click", () => setModelPickerMenuOpen(true));
+modelPickerInput.addEventListener("input", () => {
+  modelPickerSelection = "";
+  renderModelPickerOptions();
+  setModelPickerMenuOpen(true);
+});
+modelPickerInput.addEventListener("keydown", handleModelPickerInputKeydown);
+modelPickerToggleButton.addEventListener("click", () => {
+  const shouldOpen = modelPickerMenu.hidden;
+  setModelPickerMenuOpen(shouldOpen);
+  if (shouldOpen) modelPickerInput.focus();
+});
+modelPickerMenu.addEventListener("keydown", handleModelPickerOptionKeydown);
+closeModelPickerButton.addEventListener("click", () => modelPickerDialog.close());
+cancelModelPickerButton.addEventListener("click", () => modelPickerDialog.close());
+saveModelPickerButton.addEventListener("click", saveModelPickerSelection);
+modelPickerDialog.addEventListener("close", resetModelPicker);
 instructionPrompt.addEventListener("input", handlePromptInput);
 resetPromptButton.addEventListener("click", () => promptResetDialog.showModal());
 addPrefixButton.addEventListener("click", openPrefixDialog);
@@ -160,28 +194,25 @@ async function saveConnection(event) {
 }
 
 function renderModels() {
-  const models = runtimeConfig.models.available;
-  renderModelSelect(transcriptionModel, models, runtimeConfig.models.selected.transcription, "Choose a transcription model");
-  renderModelSelect(instructionModel, models, runtimeConfig.models.selected.instruction, "Choose an instruction model");
+  const models = Array.isArray(runtimeConfig.models.available) ? runtimeConfig.models.available : [];
+  transcriptionModel.value = runtimeConfig.models.selected.transcription || "";
+  instructionModel.value = runtimeConfig.models.selected.instruction || "";
   instructionReasoning.value = ["low", "medium", "high"].includes(runtimeConfig.models.selected.instructionReasoning)
     ? runtimeConfig.models.selected.instructionReasoning
     : "low";
   const hasModels = models.length > 0;
-  transcriptionModel.disabled = !hasModels;
-  instructionModel.disabled = !hasModels;
+  openTranscriptionModelPickerButton.disabled = !hasModels;
+  openInstructionModelPickerButton.disabled = !hasModels;
+  openTranscriptionModelPickerButton.title = hasModels
+    ? "Browse transcription models"
+    : "Load models to browse the catalog";
+  openInstructionModelPickerButton.title = hasModels
+    ? "Browse instruction models"
+    : "Load models to browse the catalog";
   modelStatus.textContent = hasModels
-    ? `${models.length} models loaded from the configured endpoint.`
-    : "No models loaded yet. Save the connection, then load models.";
+    ? `${models.length} models loaded. Type a model ID or browse the catalog.`
+    : "No models loaded yet. You can type a model ID or load the catalog.";
   modelStatus.dataset.state = hasModels ? "success" : "idle";
-}
-
-function renderModelSelect(select, models, selectedModel, placeholderText) {
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = placeholderText;
-  placeholder.disabled = true;
-  select.replaceChildren(placeholder, ...createModelGroups(models));
-  select.value = selectedModel || "";
 }
 
 async function populateModels() {
@@ -203,18 +234,22 @@ async function populateModels() {
 
 function saveModelSelections() {
   const selections = {
-    transcription: transcriptionModel.value,
-    instruction: instructionModel.value,
+    transcription: transcriptionModel.value.trim(),
+    instruction: instructionModel.value.trim(),
     instructionReasoning: instructionReasoning.value
   };
   const previousStatus = modelStatus.textContent;
   modelStatus.textContent = "Saving model selections…";
   modelStatus.dataset.state = "saving";
-  modelSaveQueue = modelSaveQueue.catch(() => {}).then(async () => {
+  const saveOperation = modelSaveQueue.catch(() => {}).then(async () => {
     try {
       runtimeConfig = await desktopBridge.saveModelSelections(selections);
+      transcriptionModel.value = runtimeConfig.models.selected.transcription || "";
+      instructionModel.value = runtimeConfig.models.selected.instruction || "";
+      instructionReasoning.value = runtimeConfig.models.selected.instructionReasoning || "low";
       modelStatus.textContent = `${runtimeConfig.models.available.length} models loaded. Selections saved.`;
       modelStatus.dataset.state = "success";
+      return true;
     } catch (error) {
       try {
         runtimeConfig = await desktopBridge.getRuntimeConfig();
@@ -224,12 +259,96 @@ function saveModelSelections() {
       }
       modelStatus.textContent = error.message || previousStatus;
       modelStatus.dataset.state = "error";
+      return false;
     }
   });
-  return modelSaveQueue;
+  modelSaveQueue = saveOperation.catch(() => {});
+  return saveOperation;
 }
 
-function createModelGroups(models) {
+function handleModelInput() {
+  clearTimeout(modelSaveTimer);
+  modelStatus.textContent = "Saving model selections…";
+  modelStatus.dataset.state = "saving";
+  modelSaveTimer = setTimeout(() => {
+    void saveModelSelections();
+  }, 250);
+}
+
+function openModelPicker(target) {
+  modelPickerTarget = target;
+  modelPickerSelection = "";
+  document.documentElement.classList.add("model-picker-open");
+  document.body.classList.add("model-picker-open");
+  modelPickerHeading.textContent = `Browse ${target} models`;
+  modelPickerDescription.textContent = `Type to filter the loaded catalog, choose a ${target} model, then save it into the ${target} model field.`;
+  modelPickerInput.value = "";
+  renderModelPickerOptions();
+  modelPickerDialog.showModal();
+  modelPickerInput.focus();
+  setModelPickerMenuOpen(true);
+}
+
+function renderModelPickerOptions() {
+  const models = Array.isArray(runtimeConfig.models.available) ? runtimeConfig.models.available : [];
+  const query = modelPickerInput.value.trim().toLocaleLowerCase();
+  const filteredModels = models.filter((model) => model.toLocaleLowerCase().includes(query));
+  modelPickerMenu.replaceChildren(...createModelMenuOptions(filteredModels));
+  saveModelPickerButton.disabled = !modelPickerSelection;
+
+  if (!models.length) {
+    modelPickerStatus.textContent = "No models loaded. Close this dialog and select Load models first.";
+    modelPickerStatus.dataset.state = "error";
+  } else if (!filteredModels.length) {
+    modelPickerStatus.textContent = `No models match “${modelPickerInput.value}”.`;
+    modelPickerStatus.dataset.state = "error";
+  } else {
+    modelPickerStatus.textContent = query
+      ? `${filteredModels.length} of ${models.length} models match.`
+      : `${models.length} models available.`;
+    modelPickerStatus.dataset.state = "success";
+  }
+}
+
+async function saveModelPickerSelection() {
+  const selectedModel = modelPickerSelection.trim();
+  const input = getModelInput(modelPickerTarget);
+  if (!selectedModel || !input) return;
+
+  modelPickerSelection = selectedModel;
+  input.value = selectedModel;
+  saveModelPickerButton.disabled = true;
+  cancelModelPickerButton.disabled = true;
+  const saved = await saveModelSelections();
+  saveModelPickerButton.disabled = false;
+  cancelModelPickerButton.disabled = false;
+  if (saved) modelPickerDialog.close();
+}
+
+function getModelInput(target) {
+  return target === "transcription" ? transcriptionModel : target === "instruction" ? instructionModel : null;
+}
+
+function resetModelPicker() {
+  modelPickerTarget = "";
+  modelPickerSelection = "";
+  document.documentElement.classList.remove("model-picker-open");
+  document.body.classList.remove("model-picker-open");
+  modelPickerInput.value = "";
+  modelPickerMenu.replaceChildren();
+  setModelPickerMenuOpen(false);
+  modelPickerStatus.textContent = "No models loaded yet.";
+  modelPickerStatus.dataset.state = "idle";
+}
+
+function setModelPickerMenuOpen(isOpen) {
+  modelPickerMenu.hidden = !isOpen;
+  modelPickerMenu.closest(".model-combobox")?.setAttribute("data-open", String(isOpen));
+  modelPickerInput.setAttribute("aria-expanded", String(isOpen));
+  modelPickerToggleButton.setAttribute("aria-expanded", String(isOpen));
+}
+
+function createModelMenuOptions(models) {
   const groups = new Map([
     ["OpenAI / Codex", []],
     ["Anthropic / Claude", []],
@@ -246,18 +365,90 @@ function createModelGroups(models) {
     groups.get(group).push(model);
   }
 
-  return Array.from(groups, ([label, groupModels]) => {
-    if (!groupModels.length) return null;
-    const optgroup = document.createElement("optgroup");
-    optgroup.label = label;
+  const options = [];
+  for (const [label, groupModels] of groups) {
+    if (!groupModels.length) continue;
+    const groupLabel = document.createElement("div");
+    groupLabel.className = "model-picker-group-label";
+    groupLabel.textContent = label;
+    options.push(groupLabel);
     for (const model of groupModels) {
-      const option = document.createElement("option");
-      option.value = model;
+      const option = document.createElement("button");
+      option.type = "button";
+      option.className = "model-picker-option";
+      option.setAttribute("role", "option");
+      option.setAttribute("aria-selected", String(model === modelPickerSelection));
+      option.dataset.model = model;
       option.textContent = model;
-      optgroup.append(option);
+      option.addEventListener("click", () => selectModelFromPicker(model));
+      options.push(option);
     }
-    return optgroup;
-  }).filter(Boolean);
+  }
+
+  if (!options.length) {
+    const emptyState = document.createElement("div");
+    emptyState.className = "model-picker-empty";
+    emptyState.textContent = "No matching models.";
+    options.push(emptyState);
+  }
+
+  return options;
+}
+
+function handleModelPickerInputKeydown(event) {
+  const options = getModelPickerOptions();
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    setModelPickerMenuOpen(true);
+    options[0]?.focus();
+  } else if (event.key === "Enter" && !modelPickerMenu.hidden && options.length === 1) {
+    event.preventDefault();
+    selectModelFromPicker(options[0].dataset.model);
+  } else if (event.key === "Escape" && !modelPickerMenu.hidden) {
+    event.preventDefault();
+    setModelPickerMenuOpen(false);
+  }
+}
+
+function handleModelPickerOptionKeydown(event) {
+  const options = getModelPickerOptions();
+  const currentIndex = options.indexOf(event.target);
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    options[Math.min(currentIndex + 1, options.length - 1)]?.focus();
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    if (currentIndex <= 0) {
+      modelPickerInput.focus();
+    } else {
+      options[currentIndex - 1]?.focus();
+    }
+  } else if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    selectModelFromPicker(event.target.dataset.model);
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    setModelPickerMenuOpen(false);
+    modelPickerInput.focus();
+  }
+}
+
+function selectModelFromPicker(model) {
+  if (!model) return;
+  modelPickerSelection = model;
+  modelPickerInput.value = model;
+  modelPickerMenu.querySelectorAll("[role=option]").forEach((option) => {
+    option.setAttribute("aria-selected", String(option.dataset.model === model));
+  });
+  saveModelPickerButton.disabled = false;
+  modelPickerStatus.textContent = `${model} selected. Click Save model to apply it.`;
+  modelPickerStatus.dataset.state = "success";
+  setModelPickerMenuOpen(false);
+  modelPickerInput.focus();
+}
+
+function getModelPickerOptions() {
+  return Array.from(modelPickerMenu.querySelectorAll("[role=option]"));
 }
 
 function initializeInstructionPrompt() {

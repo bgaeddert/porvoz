@@ -54,7 +54,7 @@ function renderLogs(entries) {
   const orderedLogs = [...entries].sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt));
   const count = orderedLogs.length;
   logCount.textContent = count.toLocaleString();
-  logCountLabel.textContent = count === 1 ? "response stored" : "responses stored";
+  logCountLabel.textContent = count === 1 ? "event stored" : "events stored";
   logList.replaceChildren(...buildLogGroups(orderedLogs).map(createLogGroup));
   logsEmpty.hidden = count > 0;
 }
@@ -98,8 +98,9 @@ function isLinkedPair(first, second) {
 
 function createLogGroup(group) {
   const entries = [...group].sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt));
+  const hasError = entries.some((entry) => entry.type === "error");
   const session = document.createElement("article");
-  session.className = `log-session ${entries.length > 1 ? "log-session-linked" : "log-session-single"}`;
+  session.className = `log-session ${entries.length > 1 ? "log-session-linked" : "log-session-single"}${hasError ? " log-session-error" : ""}`;
 
   const header = document.createElement("header");
   header.className = "log-session-header";
@@ -108,10 +109,15 @@ function createLogGroup(group) {
   heading.className = "log-session-heading";
   const label = document.createElement("span");
   label.className = "log-session-label";
-  label.textContent = entries.length > 1 ? "Transcript → instruction" : "Single response";
+  const error = entries.find((entry) => entry.type === "error");
+  label.textContent = error
+    ? `${formatStage(error.stage)} failure`
+    : entries.length > 1 ? "Transcript → instruction" : "Single response";
   const count = document.createElement("span");
   count.className = "log-session-count";
-  count.textContent = entries.length > 1 ? `${entries.length} stages` : entries[0].type;
+  count.textContent = entries.length > 1
+    ? `${entries.length} ${error ? "events" : "stages"}`
+    : error ? "error" : entries[0].type;
   heading.append(label, count);
 
   const time = document.createElement("time");
@@ -135,7 +141,9 @@ function createStageConnector(log) {
   const connector = document.createElement("div");
   connector.className = "log-stage-connector";
   const label = document.createElement("span");
-  label.textContent = log.prefix ? `Prefix applied · ${log.prefix}` : "Instruction applied";
+  label.textContent = log.type === "error"
+    ? `${formatStage(log.stage)} failure`
+    : log.prefix ? `Prefix applied · ${log.prefix}` : "Instruction applied";
   const arrow = document.createElement("span");
   arrow.className = "log-stage-arrow";
   arrow.setAttribute("aria-hidden", "true");
@@ -153,7 +161,9 @@ function createLogStage(log) {
 
   const type = document.createElement("span");
   type.className = "log-stage-type";
-  type.textContent = log.type === "transcript" ? "Transcript" : "Instruction";
+  type.textContent = log.type === "error"
+    ? `${formatStage(log.stage)} error`
+    : log.type === "transcript" ? "Transcript" : "Instruction";
 
   const time = document.createElement("time");
   time.className = "log-stage-time";
@@ -161,7 +171,12 @@ function createLogStage(log) {
   time.textContent = formatTimestamp(log.createdAt);
 
   meta.append(type, time);
+  if (log.stage) meta.append(createMetaChip(`Stage · ${formatStage(log.stage)}`));
+  if (log.status !== null) meta.append(createMetaChip(`HTTP ${log.status}`));
+  if (log.errorCode) meta.append(createMetaChip(`Code · ${log.errorCode}`));
   if (log.model) meta.append(createMetaChip(log.model));
+  if (log.mimeType) meta.append(createMetaChip(log.mimeType));
+  if (log.bytes !== null) meta.append(createMetaChip(`${log.bytes.toLocaleString()} bytes`));
   if (log.prefix) meta.append(createMetaChip(`Prefix · ${log.prefix}`));
   if (log.searchEnabled || log.clipboardEnabled) {
     const access = document.createElement("div");
@@ -175,7 +190,9 @@ function createLogStage(log) {
   content.className = "log-stage-content";
   const label = document.createElement("p");
   label.className = "log-stage-label";
-  label.textContent = log.type === "transcript" ? "Captured voice" : "Routed output";
+  label.textContent = log.type === "error"
+    ? "Failure details"
+    : log.type === "transcript" ? "Captured voice" : "Routed output";
   const response = document.createElement("p");
   response.className = "log-stage-response";
   response.textContent = log.text;
@@ -238,7 +255,7 @@ async function clearAllLogs() {
 
 function normalizeLog(log) {
   if (!log || typeof log !== "object") return null;
-  if (!["transcript", "instruction"].includes(log.type) || typeof log.text !== "string" || !log.text.trim()) return null;
+  if (!["transcript", "instruction", "error"].includes(log.type) || typeof log.text !== "string" || !log.text.trim()) return null;
   const text = log.type === "instruction" ? log.text : log.text.trim();
   return {
     type: log.type,
@@ -252,8 +269,22 @@ function normalizeLog(log) {
     instructions: typeof log.instructions === "string" ? log.instructions : "",
     input: typeof log.input === "string" ? log.input : "",
     searchEnabled: log.searchEnabled === true,
-    clipboardEnabled: log.clipboardEnabled === true
+    clipboardEnabled: log.clipboardEnabled === true,
+    stage: typeof log.stage === "string" ? log.stage.trim() : "",
+    status: Number.isInteger(Number(log.status)) && Number(log.status) >= 100 && Number(log.status) <= 599
+      ? Number(log.status)
+      : null,
+    errorCode: typeof log.errorCode === "string" ? log.errorCode.trim() : "",
+    mimeType: typeof log.mimeType === "string" ? log.mimeType.trim() : "",
+    bytes: Number.isSafeInteger(Number(log.bytes)) && Number(log.bytes) >= 0 && log.bytes !== null
+      ? Number(log.bytes)
+      : null
   };
+}
+
+function formatStage(value) {
+  const stage = typeof value === "string" ? value.trim() : "application";
+  return stage ? stage[0].toLocaleUpperCase() + stage.slice(1) : "Application";
 }
 
 function formatTimestamp(value) {

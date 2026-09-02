@@ -36,3 +36,38 @@ test("the log store prunes an oversized existing archive on startup", (context) 
   assert.deepEqual(store.getLogs().map((entry) => entry.text), ["entry-0", "entry-1"]);
   assert.equal(JSON.parse(readFileSync(logsPath, "utf8")).length, 2);
 });
+
+test("the log store preserves actionable error metadata", (context) => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "porvoz-logs-"));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  const store = createLogStore({ logsPath: path.join(directory, "logs.json") });
+
+  store.appendLog({
+    type: "error",
+    text: "No endpoints available matching your data policy.",
+    stage: "transcription",
+    status: 404,
+    model: "openai/gpt-transcribe",
+    mimeType: "audio/webm;codecs=opus",
+    bytes: 42
+  });
+
+  assert.deepEqual(store.getLogs()[0], {
+    id: store.getLogs()[0].id,
+    type: "error",
+    text: "No endpoints available matching your data policy.",
+    createdAt: store.getLogs()[0].createdAt,
+    groupId: "",
+    model: "openai/gpt-transcribe",
+    prefix: "",
+    instructions: "",
+    input: "",
+    searchEnabled: false,
+    clipboardEnabled: false,
+    stage: "transcription",
+    status: 404,
+    errorCode: "",
+    mimeType: "audio/webm;codecs=opus",
+    bytes: 42
+  });
+});

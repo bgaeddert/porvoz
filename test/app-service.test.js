@@ -31,6 +31,16 @@ test("connection URLs are normalized before being saved", () => {
   assert.equal(service.getConnectionSettings().apiKeyConfigured, true);
 });
 
+test("saving a connection with an empty API key preserves the existing key", () => {
+  const { service, settingsStore } = createService();
+
+  service.saveConnection({ baseUrl: "https://example.com/v1", apiKey: "secret" });
+  service.saveConnection({ baseUrl: "https://example.com/v1", apiKey: "" });
+
+  assert.equal(settingsStore.getApiKey(), "secret");
+  assert.equal(service.getConnectionSettings().apiKeyConfigured, true);
+});
+
 test("prefix saves reject incomplete and duplicate definitions", () => {
   const { service } = createService();
 
@@ -103,6 +113,52 @@ test("a transcript without a prefix bypasses the instruction endpoint", async ()
   const result = await service.instruct({ transcript: "ordinary dictated text" });
 
   assert.deepEqual(result, { transcript: "ordinary dictated text", instructionApplied: false });
+});
+
+test("transcription failures retain the provider error in the error log", async () => {
+  const server = createServer((request, response) => {
+    request.resume();
+    request.on("end", () => {
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        error: { message: "No endpoints available matching your data policy.", code: 404 }
+      }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const { service, logs } = createService({ availableModels: ["transcription-model"] });
+    const address = server.address();
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret" });
+    service.saveModelSelections({ transcription: "transcription-model" });
+
+    await assert.rejects(
+      service.transcribe({ audio: new Uint8Array([1, 2, 3]), mimeType: "audio/webm" }),
+      /transcription endpoint could not process/
+    );
+
+    assert.equal(logs[0].type, "error");
+    assert.equal(logs[0].stage, "transcription");
+    assert.equal(logs[0].status, 404);
+    assert.equal(logs[0].model, "transcription-model");
+    assert.match(logs[0].text, /No endpoints available matching your data policy/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("invalid transcription input returns its validation error and logs it", async () => {
+  const { service, logs } = createService();
+
+  await assert.rejects(
+    service.transcribe(),
+    /Enter the base URL and API key in Settings/
+  );
+
+  assert.equal(logs[0].type, "error");
+  assert.equal(logs[0].stage, "transcription");
+  assert.equal(logs[0].bytes, 0);
 });
 
 test("chained prefixes are detected together and combine access permissions", async () => {
@@ -220,6 +276,7 @@ function prefix(name, instruction, options = {}) {
 
 function createService({ prefixes = [], availableModels = [] } = {}) {
   let apiKey = "";
+  const logs = [];
   let settings = {
     connection: { baseUrl: "", verifyCertificate: true },
     models: {
@@ -271,8 +328,21 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
     }
   };
 
+  const logStore = {
+    getLogs: () => structuredClone(logs),
+    appendLog(entry) {
+      logs.unshift(structuredClone(entry));
+      return entry;
+    },
+    clearLogs() {
+      logs.length = 0;
+      return [];
+    }
+  };
+
   return {
     settingsStore,
-    service: createAppService(settingsStore)
+    logs,
+    service: createAppService(settingsStore, logStore)
   };
 }

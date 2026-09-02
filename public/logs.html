@@ -39,7 +39,7 @@
           <div class="logs-toolbar-actions">
             <div class="log-counter" aria-live="polite">
               <strong id="log-count">0</strong>
-              <span id="log-count-label">responses stored</span>
+              <span id="log-count-label">events stored</span>
             </div>
             <button id="clear-logs" class="button-danger logs-clear-button" type="button">Clear all logs</button>
           </div>
@@ -49,7 +49,7 @@
           <div class="logs-section-heading">
             <div>
               <p class="panel-kicker">Signal ledger</p>
-              <h2 id="ledger-heading">Recent responses</h2>
+              <h2 id="ledger-heading">Recent activity</h2>
             </div>
             <span id="logs-status" class="logs-status" aria-live="polite">Stored locally</span>
           </div>
@@ -58,7 +58,7 @@
             <span class="logs-empty-mark" aria-hidden="true">∅</span>
             <div>
               <h2>The archive is quiet.</h2>
-              <p>Start a transcription to place the first response here. Successful transcripts and instruction outputs are saved automatically.</p>
+              <p>Start a transcription to place the first event here. Successful responses and operational errors are saved automatically.</p>
             </div>
           </div>
         </section>
@@ -74,7 +74,7 @@
       <form method="dialog" class="reset-dialog-card">
         <p class="panel-kicker">Confirm clear</p>
         <h2 id="clear-logs-heading">Erase the response trail?</h2>
-        <p>This permanently removes every transcript and instruction response saved in Porvoz. Your settings and API connection will stay untouched.</p>
+        <p>This permanently removes every transcript, instruction response, and error saved in Porvoz. Your settings and API connection will stay untouched.</p>
         <div class="dialog-actions">
           <button id="cancel-clear-logs" class="button-secondary" value="cancel" type="submit">Keep logs</button>
           <button id="confirm-clear-logs" class="button-danger" value="confirm" type="button">Clear all logs</button>

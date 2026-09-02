@@ -101,7 +101,8 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
       ? value.state
       : "idle";
     const sourceMessage = typeof value.message === "string" ? value.message.trim() : "";
-    const message = compactStatusMessage(state, sourceMessage);
+    const stage = typeof value.stage === "string" ? value.stage.trim().toLocaleLowerCase() : "";
+    const message = compactStatusMessage(state, sourceMessage, stage);
     currentStatus = { state, message };
 
     if (state === "idle" || !message) {
@@ -144,7 +145,7 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
   };
 }
 
-function compactStatusMessage(state, sourceMessage) {
+function compactStatusMessage(state, sourceMessage, stage) {
   if (!sourceMessage) return "";
   if (state === "recording") return "Recording…";
   if (state === "transcribing") return "Transcribing…";
@@ -153,13 +154,19 @@ function compactStatusMessage(state, sourceMessage) {
   }
   if (state === "typing") return "Placing text…";
   if (state === "success") return "Done.";
-  if (state === "error") return compactErrorMessage(sourceMessage);
+  if (state === "error") return compactErrorMessage(sourceMessage, stage);
   return sourceMessage;
 }
 
-function compactErrorMessage(sourceMessage) {
-  if (/microphone|record|audio/i.test(sourceMessage)) return "Recording failed.";
+function compactErrorMessage(sourceMessage, stage) {
+  if (stage === "recording") return "Recording failed.";
+  if (stage === "transcription") return "Transcription failed.";
+  if (stage === "instruction") return "Instruction failed.";
+  if (stage === "typing") return "Could not place text.";
+  if (stage === "models") return "Could not load models.";
+  if (stage === "configuration") return "Setup needs attention.";
   if (/transcrib/i.test(sourceMessage)) return "Transcription failed.";
+  if (/microphone|record|audio/i.test(sourceMessage)) return "Recording failed.";
   if (/instruction|model|prefix/i.test(sourceMessage)) return "Instruction failed.";
   if (/type|place|target|clipboard|hotkey/i.test(sourceMessage)) return "Could not place text.";
   return "Action failed.";

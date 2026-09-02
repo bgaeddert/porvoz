@@ -73,15 +73,31 @@
               </div>
             </div>
             <div class="model-grid">
-              <label class="field-label" for="transcription-model">
-                Transcription model
-                <select id="transcription-model" required></select>
-              </label>
-              <label class="field-label" for="instruction-model">
-                Instruction model
-                <select id="instruction-model" aria-describedby="model-status" required></select>
+              <div class="model-field">
+                <label class="field-label" for="transcription-model">Transcription model</label>
+                <div class="model-input-row">
+                  <input id="transcription-model" type="text" autocomplete="off" spellcheck="false" placeholder="Example: openai/whisper-1" required />
+                  <button id="open-transcription-model-picker" class="button-secondary model-picker-button" type="button" aria-haspopup="dialog" aria-controls="model-picker-dialog" aria-label="Browse transcription models" title="Load models to browse the catalog" disabled>
+                    <svg class="model-picker-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <circle cx="10.8" cy="10.8" r="5.8"></circle>
+                      <path d="m15.2 15.2 4.4 4.4"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="model-field">
+                <label class="field-label" for="instruction-model">Instruction model</label>
+                <div class="model-input-row">
+                  <input id="instruction-model" type="text" autocomplete="off" spellcheck="false" placeholder="Example: openai/gpt-4o-mini" aria-describedby="model-status" required />
+                  <button id="open-instruction-model-picker" class="button-secondary model-picker-button" type="button" aria-haspopup="dialog" aria-controls="model-picker-dialog" aria-label="Browse instruction models" title="Load models to browse the catalog" disabled>
+                    <svg class="model-picker-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <circle cx="10.8" cy="10.8" r="5.8"></circle>
+                      <path d="m15.2 15.2 4.4 4.4"></path>
+                    </svg>
+                  </button>
+                </div>
                 <small>Used for instruction prefixes and web search.</small>
-              </label>
+              </div>
               <label class="field-label instruction-reasoning-field" for="instruction-reasoning">
                 Instruction reasoning
                 <select id="instruction-reasoning" aria-describedby="model-status">
@@ -96,7 +112,7 @@
                 <button id="populate-models" class="button-secondary" type="button">Load models</button>
               </div>
             </div>
-            <p class="field-note">Model selections are saved immediately after you choose them.</p>
+            <p class="field-note">Type or paste a model ID to save it directly, or browse the loaded catalog and apply a selection.</p>
           </section>
 
           <section class="settings-card" aria-labelledby="hotkey-heading">
@@ -271,6 +287,37 @@
             <button id="prefix-preview-add" class="button-primary" type="button">Add prefix</button>
           </div>
         </section>
+      </div>
+    </dialog>
+    <dialog id="model-picker-dialog" class="model-picker-dialog" aria-labelledby="model-picker-heading" aria-describedby="model-picker-description">
+      <div class="model-picker-card">
+        <div class="model-picker-header">
+          <div>
+            <p class="panel-kicker">Loaded catalog</p>
+            <h2 id="model-picker-heading">Browse models</h2>
+          </div>
+          <button id="close-model-picker" class="dialog-close" type="button" aria-label="Close model picker">×</button>
+        </div>
+        <p id="model-picker-description" class="model-picker-lede">Type to filter the loaded catalog, choose a model, then save it into the field.</p>
+        <div class="model-picker-combobox">
+          <label class="field-label" for="model-picker-input">Search and choose a model</label>
+          <div class="model-combobox">
+            <div class="model-combobox-input-row">
+              <input id="model-picker-input" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="model-picker-menu" placeholder="Type to filter model IDs" />
+              <button id="toggle-model-picker" class="button-secondary model-picker-toggle" type="button" aria-label="Show model catalog" aria-expanded="false" aria-controls="model-picker-menu" title="Show model catalog">
+                <svg class="model-picker-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="m6 9 6 6 6-6"></path>
+                </svg>
+              </button>
+            </div>
+            <div id="model-picker-menu" class="model-picker-menu" role="listbox" aria-label="Available models" hidden></div>
+          </div>
+        </div>
+        <p id="model-picker-status" class="field-note" aria-live="polite">No models loaded yet.</p>
+        <div class="dialog-actions">
+          <button id="cancel-model-picker" class="button-secondary" type="button">Cancel</button>
+          <button id="save-model-picker" class="button-primary" type="button" disabled>Save model</button>
+        </div>
       </div>
     </dialog>
     <script type="module" src="./app-version.js"></script>

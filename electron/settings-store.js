@@ -80,8 +80,6 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     }
     const available = uniqueStrings(models);
     settings.models.available = available;
-    if (!available.includes(settings.models.transcription)) settings.models.transcription = "";
-    if (!available.includes(settings.models.instruction)) settings.models.instruction = "";
     saveSettingsFile();
     return available;
   }
@@ -89,16 +87,10 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
   function saveModelSelections({ transcription, instruction, instructionReasoning } = {}) {
     if (transcription !== undefined) {
       const nextTranscription = normalizeModel(transcription);
-      if (nextTranscription && !settings.models.available.includes(nextTranscription)) {
-        throw new Error("Choose a transcription model from the loaded models.");
-      }
       settings.models.transcription = nextTranscription;
     }
     if (instruction !== undefined) {
       const nextInstruction = normalizeModel(instruction);
-      if (nextInstruction && !settings.models.available.includes(nextInstruction)) {
-        throw new Error("Choose an instruction model from the loaded models.");
-      }
       settings.models.instruction = nextInstruction;
     }
     if (instructionReasoning !== undefined) {

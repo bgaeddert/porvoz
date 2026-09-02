@@ -82,7 +82,9 @@ async function startTranscription({
   playStartCue = false
 } = {}) {
   if (!window.MediaRecorder) {
-    setStatus("This Electron build does not support audio recording.", "error");
+    const error = new Error("This Electron build does not support audio recording.");
+    logClientError("recording", error);
+    setStatus(error.message, "error", "recording");
     return;
   }
 
@@ -94,7 +96,7 @@ async function startTranscription({
   recordingStartedAt = 0;
   updateTranscribeButtonLabel();
   updateActionButtons();
-  setStatus("Requesting microphone access…", "processing");
+  setStatus("Requesting microphone access…", "processing", "recording");
 
   try {
     transcriptionStream = await getMicrophoneStream();
@@ -104,7 +106,7 @@ async function startTranscription({
       return;
     }
     if (playStartCue) {
-      setStatus("Microphone ready…", "processing");
+      setStatus("Microphone ready…", "processing", "recording");
       await playHotkeySound("start");
       if (stopRequested) {
         resetTranscriptionState({ stopRecorder: false });
@@ -121,11 +123,12 @@ async function startTranscription({
     mediaRecorder.addEventListener("error", handleRecorderError, { once: true });
     mediaRecorder.start();
     recordingStartedAt = performance.now();
-    setStatus("Recording… Release the hotkey or select Stop recording.", "recording");
+    setStatus("Recording… Release the hotkey or select Stop recording.", "recording", "recording");
   } catch (error) {
     console.error(error);
     resetTranscriptionState();
-    setStatus(error.message || "Could not start recording.", "error");
+    logClientError("recording", error);
+    setStatus(error.message || "Could not start recording.", "error", "recording");
   }
 }
 
@@ -158,7 +161,7 @@ function stopTranscription() {
     return;
   }
   discardRecording = isRecordingTooShort(recordingStartedAt, performance.now());
-  setStatus("Finishing recording…", "processing");
+  setStatus("Finishing recording…", "processing", "recording");
   try {
     mediaRecorder.stop();
   } catch (error) {
@@ -185,7 +188,8 @@ function handleRecorderError(event) {
 function handleRecordingFailure(error) {
   console.error(error);
   resetTranscriptionState();
-  setStatus(error?.message || "Could not finish the recording.", "error");
+  logClientError("recording", error);
+  setStatus(error?.message || "Could not finish the recording.", "error", "recording");
 }
 
 async function processTranscription() {
@@ -207,11 +211,14 @@ async function processTranscription() {
     captureIntentId = "";
     recordedChunks = [];
     updateActionButtons();
-    setStatus("No audio was captured. Hold the hotkey and try again.", "error");
+    const error = new Error("No audio was captured. Hold the hotkey and try again.");
+    logClientError("recording", error);
+    setStatus(error.message, "error", "recording");
     return;
   }
-  setStatus("Sending audio for transcription…", "processing");
+  setStatus("Sending audio for transcription…", "processing", "transcription");
 
+  let processStage = "transcription";
   try {
     if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
     const result = await desktopBridge.transcribe({
@@ -221,20 +228,21 @@ async function processTranscription() {
     if (!result?.transcript) throw new Error("Could not transcribe the audio.");
 
     replaceTranscript(result.transcript);
-    setStatus("Applying instructions…", "processing");
+    processStage = "instruction";
+    setStatus("Applying instructions…", "processing", "instruction");
     const instructionResult = await requestInstruction(result.transcript, result.logGroupId);
     if (!instructionResult.instructionApplied) {
-      setStatus("Transcription complete; no instruction prefix detected.", "success");
+      setStatus("Transcription complete; no instruction prefix detected.", "success", "transcription");
       if (typeResultAtCursor) await typeFinalResponse(result.transcript, captureId);
       return;
     }
     instructionResponse.value = instructionResult.transcript;
     autoResizeTextarea(instructionResponse);
-    setStatus("Transcription complete.", "success");
+    setStatus("Transcription complete.", "success", "instruction");
     if (typeResultAtCursor) await typeFinalResponse(instructionResponse.value, captureId);
   } catch (error) {
     console.error(error);
-    setStatus(error.message || "Could not transcribe the audio.", "error");
+    setStatus(error.message || "Could not transcribe the audio.", "error", processStage);
   } finally {
     isTranscriptionProcessing = false;
     shouldTypeFinalResponse = false;
@@ -320,7 +328,7 @@ function clearTranscript() {
   setStatus("Ready to record.", "idle");
 }
 
-function setStatus(message, state = "idle") {
+function setStatus(message, state = "idle", stage = "") {
   status.textContent = message;
   status.dataset.state = state;
   captureSignal.dataset.state = state;
@@ -331,7 +339,17 @@ function setStatus(message, state = "idle") {
       : state === "error"
         ? "Action needs attention"
         : "System ready");
-  desktopBridge?.setStatus?.({ message, state });
+  desktopBridge?.setStatus?.({ message, state, stage });
+}
+
+function logClientError(stage, error, metadata = {}) {
+  if (!desktopBridge?.isElectron || typeof desktopBridge.logError !== "function") return;
+  const message = typeof error?.message === "string" && error.message.trim()
+    ? error.message
+    : String(error || "Unknown error.");
+  void desktopBridge.logError({ stage, message, ...metadata }).catch((logError) => {
+    console.warn("Could not save client error log:", logError);
+  });
 }
 
 async function initializeDesktopHotkeyHint() {
@@ -350,7 +368,7 @@ async function typeFinalResponse(text, captureId = "", purpose = "transcription"
   } catch (error) {
     console.error(error);
     await playHotkeySound("failure");
-    setStatus(error.message || "Response ready; could not type into the active app.", "error");
+    setStatus(error.message || "Response ready; could not type into the active app.", "error", "typing");
   }
 }
 

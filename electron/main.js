@@ -456,11 +456,15 @@ function formatHotkeyLabel(key, modifiers) {
 
 function sendHotkeyAction(action, value) {
   if (action === "start") {
-    setOverlayStatus({ message: "Recording…", state: "recording" });
+    setOverlayStatus({ message: "Recording…", state: "recording", stage: "recording" });
   } else if (action === "stop") {
-    setOverlayStatus({ message: "Finishing recording…", state: "processing" });
+    setOverlayStatus({ message: "Finishing recording…", state: "processing", stage: "recording" });
   } else if (action === "configuration-needed") {
-    setOverlayStatus({ message: value?.message || "Setup is required before recording.", state: "error" });
+    setOverlayStatus({
+      message: value?.message || "Setup is required before recording.",
+      state: "error",
+      stage: "configuration"
+    });
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("porvoz:hotkey", action, value);
@@ -482,9 +486,14 @@ function registerIpcHandlers() {
     return result;
   });
   ipcMain.handle("porvoz:populate-models", async () => {
-    const result = await appService.populateModels();
-    notifySetupUpdated();
-    return result;
+    try {
+      const result = await appService.populateModels();
+      notifySetupUpdated();
+      return result;
+    } catch (error) {
+      notifyLogsUpdated();
+      throw error;
+    }
   });
   ipcMain.handle("porvoz:save-model-selections", (_event, value) => {
     const result = appService.saveModelSelections(value);
@@ -496,6 +505,11 @@ function registerIpcHandlers() {
   ipcMain.handle("porvoz:save-prefixes", (_event, value) => appService.savePrefixes(value));
   ipcMain.handle("porvoz:reset-prefix", (_event, id) => appService.resetPrefix(id));
   ipcMain.handle("porvoz:get-logs", () => appService.getLogs());
+  ipcMain.handle("porvoz:log-error", (_event, value) => {
+    const result = appService.logError(value);
+    notifyLogsUpdated();
+    return result;
+  });
   ipcMain.handle("porvoz:clear-logs", () => {
     const logs = appService.clearLogs();
     notifyLogsUpdated(logs);
@@ -512,18 +526,23 @@ function registerIpcHandlers() {
     return runtimeConfig;
   });
   ipcMain.handle("porvoz:transcribe", async (_event, value) => {
-    setOverlayStatus({ message: "Transcribing…", state: "transcribing" });
+    setOverlayStatus({ message: "Transcribing…", state: "transcribing", stage: "transcription" });
     try {
       const result = await appService.transcribe(value);
       notifyLogsUpdated();
       return result;
     } catch (error) {
-      setOverlayStatus({ message: error.message || "Could not transcribe the audio.", state: "error" });
+      notifyLogsUpdated();
+      setOverlayStatus({
+        message: error.message || "Could not transcribe the audio.",
+        state: "error",
+        stage: "transcription"
+      });
       throw error;
     }
   });
   ipcMain.handle("porvoz:instruct", async (_event, value) => {
-    setOverlayStatus({ message: "Applying instructions…", state: "processing" });
+    setOverlayStatus({ message: "Applying instructions…", state: "processing", stage: "instruction" });
     try {
       const result = await appService.instruct(value, {
         readClipboard: () => clipboard.readText()
@@ -531,7 +550,12 @@ function registerIpcHandlers() {
       notifyLogsUpdated();
       return result;
     } catch (error) {
-      setOverlayStatus({ message: error.message || "Could not apply the instructions.", state: "error" });
+      notifyLogsUpdated();
+      setOverlayStatus({
+        message: error.message || "Could not apply the instructions.",
+        state: "error",
+        stage: "instruction"
+      });
       throw error;
     }
   });
@@ -566,13 +590,19 @@ function registerIpcHandlers() {
   ipcMain.handle("porvoz:type-text", async (_event, value) => {
     const request = normalizeTypingRequest(value);
     if (!request.text) return false;
-    setOverlayStatus({ message: "Placing text…", state: "typing" });
+    setOverlayStatus({ message: "Placing text…", state: "typing", stage: "typing" });
     try {
       await typeTextAtCursor(request);
-      setOverlayStatus({ message: "Text placed.", state: "success" });
+      setOverlayStatus({ message: "Text placed.", state: "success", stage: "typing" });
       return true;
     } catch (error) {
-      setOverlayStatus({ message: error.message || "Could not place the text.", state: "error" });
+      appService.logError({ stage: "typing", error });
+      notifyLogsUpdated();
+      setOverlayStatus({
+        message: error.message || "Could not place the text.",
+        state: "error",
+        stage: "typing"
+      });
       throw error;
     }
   });

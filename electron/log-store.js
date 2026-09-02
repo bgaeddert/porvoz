@@ -51,7 +51,7 @@ function readLogsFile(filePath) {
 
 function normalizeLog(entry) {
   if (!entry || typeof entry !== "object") return null;
-  const type = entry.type === "transcript" || entry.type === "instruction"
+  const type = entry.type === "transcript" || entry.type === "instruction" || entry.type === "error"
     ? entry.type
     : "";
   const rawText = typeof entry.text === "string" ? entry.text : "";
@@ -69,8 +69,30 @@ function normalizeLog(entry) {
     instructions: typeof entry.instructions === "string" ? entry.instructions : "",
     input: typeof entry.input === "string" ? entry.input : "",
     searchEnabled: entry.searchEnabled === true,
-    clipboardEnabled: entry.clipboardEnabled === true
+    clipboardEnabled: entry.clipboardEnabled === true,
+    stage: type === "error" ? normalizeErrorStage(entry.stage) : "",
+    status: type === "error" ? normalizeStatus(entry.status) : null,
+    errorCode: type === "error" && typeof entry.errorCode === "string" ? entry.errorCode.trim() : "",
+    mimeType: type === "error" && typeof entry.mimeType === "string" ? entry.mimeType.trim() : "",
+    bytes: type === "error" ? normalizeBytes(entry.bytes) : null
   };
+}
+
+function normalizeErrorStage(value) {
+  const stage = typeof value === "string" ? value.trim().toLocaleLowerCase() : "";
+  return ["recording", "transcription", "instruction", "typing", "models", "configuration", "application"].includes(stage)
+    ? stage
+    : "application";
+}
+
+function normalizeStatus(value) {
+  const status = Number(value);
+  return Number.isInteger(status) && status >= 100 && status <= 599 ? status : null;
+}
+
+function normalizeBytes(value) {
+  const bytes = Number(value);
+  return Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : null;
 }
 
 function isValidDate(value) {

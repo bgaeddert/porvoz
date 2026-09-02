@@ -31,6 +31,7 @@ export function createAppService(settingsStore, logStore) {
     resetToDefaults,
     getLogs,
     clearLogs,
+    logError,
     transcribe,
     instruct,
     createPrefixFromVoice
@@ -93,7 +94,9 @@ export function createAppService(settingsStore, logStore) {
       throw new Error("Enter a valid HTTP or HTTPS base URL.");
     }
 
-    settingsStore.saveConnection({ baseUrl: nextBaseUrl, apiKey, verifyCertificate });
+    const connection = { baseUrl: nextBaseUrl, verifyCertificate };
+    if (typeof apiKey === "string" && apiKey.trim()) connection.apiKey = apiKey;
+    settingsStore.saveConnection(connection);
     resetOpenAIClient();
     return getConnectionSettings();
   }
@@ -102,7 +105,10 @@ export function createAppService(settingsStore, logStore) {
     if (!hasApiConfig()) throw new Error("Enter the base URL and API key before loading models.");
 
     try {
-      const response = await getOpenAIClient().models.list();
+      const modelListOptions = isOpenRouterEndpoint(getConnectionSettings().baseUrl)
+        ? { query: { output_modalities: "all" } }
+        : undefined;
+      const response = await getOpenAIClient().models.list(modelListOptions);
       const models = Array.isArray(response.data)
         ? [...new Set(response.data
           .map((model) => typeof model?.id === "string" ? model.id.trim() : "")
@@ -112,6 +118,7 @@ export function createAppService(settingsStore, logStore) {
       settingsStore.saveModelCatalog(models);
       return getRuntimeConfig();
     } catch (error) {
+      logError({ stage: "models", error });
       console.error("Could not load models:", error.message);
       if (error?.message === "The model endpoint returned no models.") throw error;
       if (error?.status === 401 || error?.status === 403) {
@@ -166,25 +173,25 @@ export function createAppService(settingsStore, logStore) {
   }
 
   async function transcribe({ audio, mimeType } = {}) {
-    if (!hasApiConfig()) throw new Error("Enter the base URL and API key in Settings.");
     const normalizedMimeType = typeof mimeType === "string" ? mimeType.toLowerCase() : "";
     const audioBuffer = toBuffer(audio);
-    if (!audioBuffer || !audioBuffer.length) {
-      throw new Error("Provide audio before sending it for transcription.");
-    }
-    if (!(normalizedMimeType.startsWith("audio/") || normalizedMimeType === "video/webm")) {
-      throw new Error("Provide audio before sending it for transcription.");
-    }
-    if (audioBuffer.length > maxUploadBytes) {
-      throw new Error("The audio file is too large. Limit it to 25 MB.");
-    }
-
     const selectedModel = settingsStore.getSettings().models.transcription;
-    if (!selectedModel) {
-      throw new Error("Choose a transcription model in Settings after loading models.");
-    }
 
     try {
+      if (!hasApiConfig()) throw new Error("Enter the base URL and API key in Settings.");
+      if (!audioBuffer || !audioBuffer.length) {
+        throw new Error("Provide audio before sending it for transcription.");
+      }
+      if (!(normalizedMimeType.startsWith("audio/") || normalizedMimeType === "video/webm")) {
+        throw new Error("Provide audio before sending it for transcription.");
+      }
+      if (audioBuffer.length > maxUploadBytes) {
+        throw new Error("The audio file is too large. Limit it to 25 MB.");
+      }
+      if (!selectedModel) {
+        throw new Error("Choose a transcription model in Settings after loading models.");
+      }
+
       const result = await getOpenAIClient().audio.transcriptions.create({
         file: await toFile(
           audioBuffer,
@@ -207,11 +214,18 @@ export function createAppService(settingsStore, logStore) {
       });
       return { transcript, logGroupId };
     } catch (error) {
+      logError({
+        stage: "transcription",
+        error,
+        model: selectedModel,
+        mimeType: normalizedMimeType,
+        bytes: audioBuffer?.length || 0
+      });
       console.error("Could not process transcript:", {
         status: error?.status,
         model: selectedModel,
         mimeType: normalizedMimeType,
-        bytes: audioBuffer.length,
+        bytes: audioBuffer?.length || 0,
         message: error?.message
       });
       if (error?.status === 504) {
@@ -227,27 +241,32 @@ export function createAppService(settingsStore, logStore) {
   async function instruct({ transcript, logGroupId } = {}, { readClipboard = () => "" } = {}) {
     const settings = settingsStore.getSettings();
     const inputs = getInstructionInputs(transcript, settings);
-    if (inputs.error) throw new Error(inputs.error);
-    if (!inputs.activePrefixes.length) return { transcript: inputs.transcript, instructionApplied: false };
-    if (!hasApiConfig()) throw new Error("Enter the base URL and API key in Settings.");
-    if (!inputs.model) throw new Error("Choose an instruction model in Settings after loading models.");
-    const clipboardRequested = inputs.activePrefixes.some((prefix) => prefix.allowClipboard === true);
-    const clipboardText = clipboardRequested
-      ? limitClipboardContext(await readClipboard())
-      : "";
-    return {
-      transcript: await instructWithModel(
-        inputs.transcript,
-        inputs.prompt,
-        inputs.model,
-        inputs.prefixes,
-        inputs.activePrefixes,
-        inputs.reasoning,
-        clipboardText,
-        logGroupId
-      ),
-      instructionApplied: true
-    };
+    try {
+      if (inputs.error) throw new Error(inputs.error);
+      if (!inputs.activePrefixes.length) return { transcript: inputs.transcript, instructionApplied: false };
+      if (!hasApiConfig()) throw new Error("Enter the base URL and API key in Settings.");
+      if (!inputs.model) throw new Error("Choose an instruction model in Settings after loading models.");
+      const clipboardRequested = inputs.activePrefixes.some((prefix) => prefix.allowClipboard === true);
+      const clipboardText = clipboardRequested
+        ? limitClipboardContext(await readClipboard())
+        : "";
+      return {
+        transcript: await instructWithModel(
+          inputs.transcript,
+          inputs.prompt,
+          inputs.model,
+          inputs.prefixes,
+          inputs.activePrefixes,
+          inputs.reasoning,
+          clipboardText,
+          logGroupId
+        ),
+        instructionApplied: true
+      };
+    } catch (error) {
+      logError({ stage: "instruction", error, model: inputs.model, groupId: logGroupId });
+      throw error;
+    }
   }
 
   async function createPrefixFromVoice({ audio, mimeType } = {}) {
@@ -318,6 +337,7 @@ export function createAppService(settingsStore, logStore) {
         input
       });
     } catch (error) {
+      logError({ stage: "instruction", error, model: settings.models.instruction });
       console.error("Prefix generation model error:", {
         status: error?.status,
         model: settings.models.instruction,
@@ -457,9 +477,13 @@ export function createAppService(settingsStore, logStore) {
         searchRequested,
         message: error?.message
       });
-      throw new Error(error?.status === 504
+      const wrappedError = new Error(error?.status === 504
         ? "The instruction model timed out while responding. Please try again."
         : "The instruction model could not respond. Please try again.");
+      wrappedError.status = error?.status;
+      wrappedError.code = error?.code;
+      wrappedError.providerMessage = error?.message;
+      throw wrappedError;
     }
   }
 
@@ -582,6 +606,21 @@ export function createAppService(settingsStore, logStore) {
     return responseLogStore.getLogs();
   }
 
+  function logError({ stage, error, message, model, groupId, mimeType, bytes, status, errorCode } = {}) {
+    const errorMessage = getErrorMessage(error, message);
+    return recordLog({
+      type: "error",
+      text: errorMessage,
+      stage,
+      status: error?.status ?? status,
+      errorCode: error?.code ?? errorCode,
+      model,
+      groupId,
+      mimeType,
+      bytes
+    });
+  }
+
   function clearLogs() {
     return responseLogStore.clearLogs();
   }
@@ -630,11 +669,30 @@ export function createAppService(settingsStore, logStore) {
     return `${values.slice(0, -1).join(", ")}, and ${values[values.length - 1]}`;
   }
 
+  function getErrorMessage(error, fallback) {
+    const candidate = typeof error?.providerMessage === "string"
+      ? error.providerMessage
+      : typeof error?.message === "string"
+        ? error.message
+        : typeof fallback === "string"
+          ? fallback
+          : "Unknown error.";
+    return candidate.trim().slice(0, 4_000) || "Unknown error.";
+  }
+
   function getOpenAIBaseUrl(baseUrl) {
     const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
     return normalizedBaseUrl.endsWith("/v1")
       ? normalizedBaseUrl
       : `${normalizedBaseUrl}/v1`;
+  }
+
+  function isOpenRouterEndpoint(baseUrl) {
+    try {
+      return new URL(baseUrl).hostname.toLocaleLowerCase() === "openrouter.ai";
+    } catch {
+      return false;
+    }
   }
 
   function isValidBaseUrl(value) {
