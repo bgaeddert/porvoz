@@ -31,8 +31,11 @@ const prefixList = document.querySelector("#prefix-list");
 const prefixEmpty = document.querySelector("#prefix-empty");
 const prefixStatus = document.querySelector("#prefix-status");
 const prefixDialog = document.querySelector("#prefix-dialog");
+const prefixDialogKicker = document.querySelector("#prefix-dialog-kicker");
+const prefixDialogHeading = document.querySelector("#prefix-dialog-heading");
 const closePrefixDialogButton = document.querySelector("#close-prefix-dialog");
 const prefixChoiceView = document.querySelector("#prefix-choice-view");
+const prefixEditView = document.querySelector("#prefix-edit-view");
 const prefixRecordView = document.querySelector("#prefix-record-view");
 const prefixPreviewView = document.querySelector("#prefix-preview-view");
 const voicePrefixOption = document.querySelector("#voice-prefix-option");
@@ -45,9 +48,19 @@ const prefixRecordStopButton = document.querySelector("#prefix-record-stop");
 const prefixPreviewTranscript = document.querySelector("#prefix-preview-transcript");
 const prefixPreviewName = document.querySelector("#prefix-preview-name");
 const prefixPreviewInstruction = document.querySelector("#prefix-preview-instruction");
+const prefixPreviewSearch = document.querySelector("#prefix-preview-search");
+const prefixPreviewClipboard = document.querySelector("#prefix-preview-clipboard");
 const prefixPreviewStatus = document.querySelector("#prefix-preview-status");
 const prefixPreviewCancelButton = document.querySelector("#prefix-preview-cancel");
 const prefixPreviewAddButton = document.querySelector("#prefix-preview-add");
+const prefixEditName = document.querySelector("#prefix-edit-name");
+const prefixEditInstruction = document.querySelector("#prefix-edit-instruction");
+const prefixEditSearch = document.querySelector("#prefix-edit-search");
+const prefixEditClipboard = document.querySelector("#prefix-edit-clipboard");
+const prefixEditStatus = document.querySelector("#prefix-edit-status");
+const prefixEditRemoveButton = document.querySelector("#prefix-edit-remove");
+const prefixEditCancelButton = document.querySelector("#prefix-edit-cancel");
+const prefixEditSaveButton = document.querySelector("#prefix-edit-save");
 const resetDefaultsButton = document.querySelector("#reset-defaults");
 const resetDialog = document.querySelector("#reset-dialog");
 const confirmResetButton = document.querySelector("#confirm-reset");
@@ -79,12 +92,17 @@ let prefixRecordedChunks = [];
 let prefixRecordingStartedAt = 0;
 let prefixRecordingDiscarded = false;
 let prefixFlowToken = 0;
+let editingPrefixIndex = -1;
 let modelPickerTarget = "";
 let modelPickerSelection = "";
 
 baseUrlInput.maxLength = 2048;
 apiKeyInput.maxLength = 4096;
 instructionPrompt.maxLength = runtimeConfig.limits.maxInstructionPromptCharacters;
+prefixEditName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
+prefixEditInstruction.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
+prefixPreviewName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
+prefixPreviewInstruction.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
 
 loadConnectionSettings();
 renderModels();
@@ -128,6 +146,10 @@ prefixRecordStartButton.addEventListener("click", startPrefixRecording);
 prefixRecordStopButton.addEventListener("click", stopPrefixRecording);
 prefixPreviewCancelButton.addEventListener("click", () => prefixDialog.close());
 prefixPreviewAddButton.addEventListener("click", addPreviewPrefix);
+prefixEditInstruction.addEventListener("input", () => autoResizeTextarea(prefixEditInstruction));
+prefixEditCancelButton.addEventListener("click", () => prefixDialog.close());
+prefixEditSaveButton.addEventListener("click", savePrefixEdit);
+prefixEditRemoveButton.addEventListener("click", removeEditingPrefix);
 prefixDialog.addEventListener("close", resetPrefixDialog);
 resetDefaultsButton.addEventListener("click", () => resetDialog.showModal());
 confirmResetButton.addEventListener("click", resetToDefaults);
@@ -142,6 +164,29 @@ if (desktopBridge?.isElectron) {
   desktopBridge.onHotkeyUpdated(handleHotkeyUpdated);
   desktopBridge.onHotkeyCaptureStatus(handleHotkeyCaptureStatus);
   desktopBridge.onSoundVolumeUpdated(handleSoundVolumeUpdated);
+  desktopBridge.onActivityCanceled(handleActivityCanceled);
+}
+
+function handleActivityCanceled() {
+  const prefixActive = prefixDialog.open && ["recording", "processing"].includes(prefixRecordStatus.dataset.state);
+  const modelsActive = modelStatus.dataset.state === "loading";
+  if (!prefixActive && !modelsActive) return;
+
+  if (prefixActive) {
+    prefixFlowToken += 1;
+    abortPrefixRecording();
+    prefixRecordStatus.textContent = "Canceled.";
+    prefixRecordStatus.dataset.state = "idle";
+    prefixRecordOrb.dataset.state = "idle";
+    prefixRecordStartButton.disabled = false;
+    prefixRecordStopButton.disabled = false;
+    prefixRecordStopButton.hidden = true;
+    desktopBridge.setStatus({ state: "idle" });
+  }
+  if (modelsActive) {
+    modelStatus.textContent = "Model loading canceled.";
+    modelStatus.dataset.state = "idle";
+  }
 }
 
 async function loadConnectionSettings() {
@@ -224,6 +269,11 @@ async function populateModels() {
     runtimeConfig = await desktopBridge.populateModels();
     renderModels();
   } catch (error) {
+    if (isCancellationError(error)) {
+      modelStatus.textContent = "Model loading canceled.";
+      modelStatus.dataset.state = "idle";
+      return;
+    }
     console.error("Could not load models:", error);
     modelStatus.textContent = error.message || "Could not load models.";
     modelStatus.dataset.state = "error";
@@ -498,115 +548,32 @@ function renderPrefixes() {
   prefixList.replaceChildren();
   prefixConfig.forEach((prefix, index) => {
     const row = document.createElement("article");
-    row.className = `prefix-row ${prefix.builtIn ? "prefix-row-built-in" : "prefix-row-custom"}`;
+    row.className = "prefix-row";
 
-    const identity = document.createElement("div");
-    identity.className = "prefix-identity";
+    const name = document.createElement("strong");
+    name.className = "prefix-row-name";
+    name.textContent = prefix.name;
+    name.title = prefix.name;
 
-    const identityHeader = document.createElement("div");
-    identityHeader.className = "prefix-identity-header";
-    const typeBadge = document.createElement("span");
-    typeBadge.className = `prefix-type-badge ${prefix.builtIn ? "prefix-type-built-in" : "prefix-type-custom"}`;
-    typeBadge.textContent = prefix.builtIn ? "Built in" : "Custom";
-    identityHeader.append(typeBadge);
+    const instruction = document.createElement("input");
+    instruction.type = "text";
+    instruction.readOnly = true;
+    instruction.className = "prefix-row-instruction";
+    instruction.value = prefix.instruction;
+    instruction.setAttribute("aria-label", `Instruction for ${prefix.name} prefix`);
+    instruction.title = prefix.instruction;
 
-    const nameLabel = document.createElement("label");
-    nameLabel.className = "prefix-name-field";
-    nameLabel.textContent = "Prefix name";
-    const nameInput = document.createElement("input");
-    nameInput.type = "text";
-    nameInput.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
-    nameInput.value = prefix.name;
-    nameInput.placeholder = "Example: digits";
-    nameInput.readOnly = prefix.builtIn;
-    nameInput.setAttribute("aria-readonly", String(prefix.builtIn));
-    if (prefix.builtIn) nameInput.title = "Built-in prefix names cannot be changed.";
-    nameInput.addEventListener("input", () => {
-      prefixConfig[index].name = nameInput.value;
-      queuePrefixSave();
-    });
-    nameLabel.append(nameInput);
-
-    const identityNote = document.createElement("p");
-    identityNote.className = "prefix-identity-note";
-    identityNote.textContent = prefix.builtIn
-      ? "Packaged behavior · name locked"
-      : "Your prefix · name editable";
-    identity.append(identityHeader, nameLabel, identityNote);
-
-    const instructionLabel = document.createElement("label");
-    instructionLabel.className = "prefix-instruction-field";
-    instructionLabel.textContent = "Instruction";
-    const instructionInput = document.createElement("textarea");
-    instructionInput.rows = 3;
-    instructionInput.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
-    instructionInput.value = prefix.instruction;
-    instructionInput.placeholder = "What should the instruction model do?";
-    instructionInput.addEventListener("input", () => {
-      prefixConfig[index].instruction = instructionInput.value;
-      queuePrefixSave();
-      autoResizeTextarea(instructionInput);
-    });
-    instructionLabel.append(instructionInput);
-
-    const controls = document.createElement("div");
-    controls.className = "prefix-controls";
-
-    const enabledGroup = document.createElement("div");
-    enabledGroup.className = "prefix-enabled-group";
-    enabledGroup.append(createPrefixToggle(prefix, index, "enabled", "Enabled"));
-
-    const accessGroup = document.createElement("div");
-    accessGroup.className = "prefix-access-group";
-    const accessLabel = document.createElement("span");
-    accessLabel.className = "prefix-control-caption";
-    accessLabel.textContent = "Access";
-    const accessToggles = document.createElement("div");
-    accessToggles.className = "prefix-toggle-list";
-    accessToggles.append(
-      createPrefixToggle(prefix, index, "allowSearch", "Search access"),
-      createPrefixToggle(prefix, index, "allowClipboard", "Clipboard access")
-    );
-    accessGroup.append(accessLabel, accessToggles);
-
-    const rowActions = document.createElement("div");
-    rowActions.className = "prefix-row-actions";
     const actionButton = document.createElement("button");
     actionButton.type = "button";
-    actionButton.className = prefix.builtIn ? "button-secondary" : "button-danger";
-    actionButton.textContent = prefix.builtIn ? "Reset to default" : "Remove prefix";
-    actionButton.addEventListener("click", () => {
-      if (prefix.builtIn) {
-        resetBuiltInPrefix(index, actionButton);
-      } else {
-        removePrefix(index);
-      }
-    });
-    rowActions.append(actionButton);
+    actionButton.className = "button-secondary prefix-edit-button";
+    actionButton.textContent = "Edit";
+    actionButton.setAttribute("aria-label", `Edit ${prefix.name} prefix`);
+    actionButton.addEventListener("click", () => openPrefixEditor(index));
 
-    controls.append(enabledGroup, accessGroup, rowActions);
-    row.append(identity, instructionLabel, controls);
+    row.append(name, instruction, actionButton);
     prefixList.append(row);
-    autoResizeTextarea(instructionInput);
   });
   prefixEmpty.hidden = prefixConfig.length > 0;
-}
-
-function createPrefixToggle(prefix, index, property, labelText) {
-  const label = document.createElement("label");
-  label.className = "prefix-toggle";
-  const input = document.createElement("input");
-  input.type = "checkbox";
-  input.checked = property === "enabled" ? prefix.enabled !== false : prefix[property] === true;
-  input.setAttribute("aria-label", labelText);
-  input.addEventListener("change", () => {
-    prefixConfig[index][property] = input.checked;
-    queuePrefixSave({ immediate: true });
-  });
-  const face = document.createElement("span");
-  face.textContent = labelText;
-  label.append(input, face);
-  return label;
 }
 
 function queuePrefixSave({ immediate = false } = {}) {
@@ -635,8 +602,10 @@ function persistPrefixes() {
   prefixSaveQueue = prefixSaveQueue.catch(() => {}).then(async () => {
     try {
       const nextPrefixes = prefixConfig.map((prefix) => ({ ...prefix }));
-      await desktopBridge.savePrefixes(nextPrefixes);
-      prefixStatus.textContent = "Prefix changes saved.";
+      await desktopBridge.savePrefixSettings({
+        prefixes: nextPrefixes
+      });
+      prefixStatus.textContent = "Prefix settings saved.";
       prefixStatus.dataset.state = "success";
     } catch (error) {
       console.error("Could not save instruction prefixes:", error);
@@ -653,25 +622,81 @@ function openPrefixDialog() {
     prefixStatus.dataset.state = "error";
     return;
   }
-  resetPrefixDialog();
+  preparePrefixDialog("add", -1);
   prefixDialog.showModal();
   voicePrefixOption.focus();
 }
 
 function addPrefixManually() {
-  prefixConfig.push({
-    id: "",
-    builtIn: false,
-    name: "",
-    instruction: "",
-    enabled: true,
-    allowSearch: false,
-    allowClipboard: false
-  });
+  editingPrefixIndex = -1;
+  prefixDialogKicker.textContent = "New instruction prefix";
+  prefixDialogHeading.textContent = "Add a prefix";
+  prefixEditName.value = "";
+  prefixEditInstruction.value = "";
+  prefixEditSearch.checked = false;
+  prefixEditClipboard.checked = false;
+  prefixEditStatus.textContent = "";
+  prefixEditStatus.dataset.state = "idle";
+  prefixEditRemoveButton.hidden = true;
+  prefixEditSaveButton.textContent = "Add prefix";
+  showPrefixDialogView(prefixEditView);
+  prefixEditName.focus();
+}
+
+function openPrefixEditor(index) {
+  const prefix = prefixConfig[index];
+  if (!prefix) return;
+  editingPrefixIndex = index;
+  prefixDialogKicker.textContent = "Prefix settings";
+  prefixDialogHeading.textContent = "Edit prefix";
+  prefixEditName.value = prefix.name;
+  prefixEditInstruction.value = prefix.instruction;
+  prefixEditSearch.checked = prefix.allowSearch === true;
+  prefixEditClipboard.checked = prefix.allowClipboard === true;
+  prefixEditStatus.textContent = "";
+  prefixEditStatus.dataset.state = "idle";
+  prefixEditRemoveButton.hidden = false;
+  prefixEditSaveButton.textContent = "Save changes";
+  showPrefixDialogView(prefixEditView);
+  prefixDialog.showModal();
+  prefixEditName.focus();
+  prefixEditName.select();
+  autoResizeTextarea(prefixEditInstruction);
+}
+
+function savePrefixEdit() {
+  const nextPrefix = {
+    id: editingPrefixIndex >= 0 ? prefixConfig[editingPrefixIndex]?.id || "" : "",
+    name: prefixEditName.value,
+    instruction: prefixEditInstruction.value,
+    allowSearch: prefixEditSearch.checked,
+    allowClipboard: prefixEditClipboard.checked
+  };
+  const nextPrefixes = prefixConfig.map((prefix, index) =>
+    index === editingPrefixIndex ? nextPrefix : prefix);
+  if (editingPrefixIndex < 0) nextPrefixes.push(nextPrefix);
+
+  const validationError = getPrefixValidationError(nextPrefixes);
+  if (validationError) {
+    prefixEditStatus.textContent = validationError;
+    prefixEditStatus.dataset.state = "error";
+    return;
+  }
+
+  const savedIndex = editingPrefixIndex >= 0 ? editingPrefixIndex : prefixConfig.length;
+  prefixConfig = nextPrefixes;
   renderPrefixes();
-  queuePrefixSave();
   prefixDialog.close();
-  prefixList.lastElementChild?.querySelector("input")?.focus();
+  queuePrefixSave({ immediate: true });
+  requestAnimationFrame(() => {
+    prefixList.children[savedIndex]?.querySelector("button")?.focus();
+  });
+}
+
+function removeEditingPrefix() {
+  if (editingPrefixIndex < 0) return;
+  removePrefix(editingPrefixIndex);
+  prefixDialog.close();
 }
 
 function showVoicePrefixRecorder() {
@@ -681,6 +706,7 @@ function showVoicePrefixRecorder() {
   prefixRecordOrb.dataset.state = "idle";
   prefixRecordStartButton.disabled = false;
   prefixRecordStopButton.hidden = true;
+  desktopBridge?.setStatus?.({ state: "idle" });
   prefixRecordStartButton.focus();
 }
 
@@ -688,6 +714,7 @@ function returnToPrefixChoices() {
   prefixFlowToken += 1;
   abortPrefixRecording();
   showPrefixDialogView(prefixChoiceView);
+  desktopBridge?.setStatus?.({ state: "idle" });
   voicePrefixOption.focus();
 }
 
@@ -709,6 +736,7 @@ async function startPrefixRecording() {
   prefixRecordStatus.textContent = "Requesting microphone access…";
   prefixRecordStatus.dataset.state = "processing";
   prefixRecordOrb.dataset.state = "processing";
+  desktopBridge.setStatus({ message: "Preparing prefix recording…", state: "processing", stage: "recording" });
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -733,7 +761,9 @@ async function startPrefixRecording() {
     prefixRecordStatus.textContent = "Listening… Describe the trigger and the result you want.";
     prefixRecordStatus.dataset.state = "recording";
     prefixRecordOrb.dataset.state = "recording";
+    desktopBridge.setStatus({ message: "Recording…", state: "recording", stage: "recording" });
   } catch (error) {
+    if (flowToken !== prefixFlowToken) return;
     console.error("Could not start prefix recording:", error);
     releasePrefixRecording();
     setPrefixRecordError(error.message || "Could not access the microphone.");
@@ -750,6 +780,7 @@ function stopPrefixRecording() {
     : "Transcribing and drafting your prefix…";
   prefixRecordStatus.dataset.state = "processing";
   prefixRecordOrb.dataset.state = "processing";
+  desktopBridge.setStatus({ message: "Creating prefix…", state: "processing", stage: "instruction" });
   try {
     prefixRecorder.stop();
   } catch (error) {
@@ -787,8 +818,6 @@ async function createPrefixFromVoice(audio, flowToken) {
     prefixPreviewTranscript.textContent = result.transcript;
     prefixPreviewName.value = result.prefix.name;
     prefixPreviewInstruction.value = result.prefix.instruction;
-    prefixPreviewName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
-    prefixPreviewInstruction.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
     prefixPreviewStatus.textContent = "Draft ready. Make any edits before adding it.";
     prefixPreviewStatus.dataset.state = "success";
     autoResizeTextarea(prefixPreviewInstruction);
@@ -796,8 +825,8 @@ async function createPrefixFromVoice(audio, flowToken) {
     prefixPreviewName.focus();
     prefixPreviewName.select();
   } catch (error) {
+    if (flowToken !== prefixFlowToken || !prefixDialog.open || isCancellationError(error)) return;
     console.error("Could not create prefix from voice:", error);
-    if (flowToken !== prefixFlowToken || !prefixDialog.open) return;
     setPrefixRecordError(error.message || "Could not create a prefix from that recording.");
     prefixRecordStartButton.disabled = false;
     prefixRecordStopButton.hidden = true;
@@ -807,12 +836,10 @@ async function createPrefixFromVoice(audio, flowToken) {
 function addPreviewPrefix() {
   const nextPrefix = {
     id: "",
-    builtIn: false,
     name: prefixPreviewName.value,
     instruction: prefixPreviewInstruction.value,
-    enabled: true,
-    allowSearch: false,
-    allowClipboard: false
+    allowSearch: prefixPreviewSearch.checked,
+    allowClipboard: prefixPreviewClipboard.checked
   };
   const validationError = getPrefixValidationError([...prefixConfig, nextPrefix]);
   if (validationError) {
@@ -825,21 +852,40 @@ function addPreviewPrefix() {
   renderPrefixes();
   prefixDialog.close();
   queuePrefixSave({ immediate: true });
-  prefixList.lastElementChild?.querySelector("input")?.focus();
+  prefixList.lastElementChild?.querySelector("button")?.focus();
 }
 
 function showPrefixDialogView(view) {
-  [prefixChoiceView, prefixRecordView, prefixPreviewView].forEach((candidate) => {
+  [prefixChoiceView, prefixEditView, prefixRecordView, prefixPreviewView].forEach((candidate) => {
     candidate.hidden = candidate !== view;
   });
+}
+
+function preparePrefixDialog(mode, index) {
+  prefixFlowToken += 1;
+  abortPrefixRecording();
+  editingPrefixIndex = index;
+  prefixDialogKicker.textContent = mode === "edit" ? "Prefix settings" : "New instruction prefix";
+  prefixDialogHeading.textContent = mode === "edit" ? "Edit prefix" : "Add a prefix to your voice";
+  prefixEditRemoveButton.hidden = mode !== "edit";
+  prefixEditSaveButton.textContent = mode === "edit" ? "Save changes" : "Add prefix";
+  prefixEditStatus.textContent = "";
+  prefixEditStatus.dataset.state = "idle";
+  prefixPreviewSearch.checked = false;
+  prefixPreviewClipboard.checked = false;
+  showPrefixDialogView(prefixChoiceView);
 }
 
 function resetPrefixDialog() {
   prefixFlowToken += 1;
   abortPrefixRecording();
+  editingPrefixIndex = -1;
+  desktopBridge?.setStatus?.({ state: "idle" });
   prefixPreviewTranscript.textContent = "";
   prefixPreviewName.value = "";
   prefixPreviewInstruction.value = "";
+  prefixPreviewSearch.checked = false;
+  prefixPreviewClipboard.checked = false;
   prefixPreviewStatus.textContent = "";
   prefixPreviewStatus.dataset.state = "idle";
   prefixRecordStatus.textContent = "Ready when you are.";
@@ -848,6 +894,16 @@ function resetPrefixDialog() {
   prefixRecordStartButton.disabled = false;
   prefixRecordStopButton.disabled = false;
   prefixRecordStopButton.hidden = true;
+  prefixEditName.value = "";
+  prefixEditInstruction.value = "";
+  prefixEditSearch.checked = false;
+  prefixEditClipboard.checked = false;
+  prefixEditStatus.textContent = "";
+  prefixEditStatus.dataset.state = "idle";
+  prefixDialogKicker.textContent = "New instruction prefix";
+  prefixDialogHeading.textContent = "Add a prefix to your voice";
+  prefixEditRemoveButton.hidden = true;
+  prefixEditSaveButton.textContent = "Add prefix";
   showPrefixDialogView(prefixChoiceView);
 }
 
@@ -878,6 +934,7 @@ function setPrefixRecordError(message) {
   prefixRecordOrb.dataset.state = "error";
   prefixRecordStartButton.disabled = false;
   prefixRecordStopButton.hidden = true;
+  desktopBridge?.setStatus?.({ message, state: "error", stage: "instruction" });
 }
 
 function getAudioFileName(mimeType) {
@@ -917,34 +974,19 @@ function getPrefixValidationError(prefixes = prefixConfig) {
   return "";
 }
 
+function isCancellationError(error) {
+  return Boolean(error && (
+    error.code === "ERR_CANCELED"
+    || error.name === "AbortError"
+    || error.name === "CanceledError"
+    || /ERR_CANCELED|AbortError|CanceledError|cancel(?:ed|led) by user/i.test(error.message || "")
+  ));
+}
+
 function removePrefix(index) {
   prefixConfig.splice(index, 1);
   renderPrefixes();
   queuePrefixSave();
-}
-
-async function resetBuiltInPrefix(index, button) {
-  const prefix = prefixConfig[index];
-  if (!prefix?.builtIn || !prefix.id) return;
-  clearTimeout(prefixSaveTimer);
-  button.disabled = true;
-  button.textContent = "Resetting…";
-  prefixStatus.textContent = `Resetting ${prefix.name}…`;
-  prefixStatus.dataset.state = "saving";
-  try {
-    await prefixSaveQueue.catch(() => {});
-    runtimeConfig = await desktopBridge.resetPrefix(prefix.id);
-    prefixConfig = runtimeConfig.prefixes.map(normalizePrefix);
-    renderPrefixes();
-    prefixStatus.textContent = `${prefix.name} reset to its default.`;
-    prefixStatus.dataset.state = "success";
-  } catch (error) {
-    prefixStatus.textContent = error.message || "Could not reset the prefix.";
-    prefixStatus.dataset.state = "error";
-  } finally {
-    button.disabled = false;
-    button.textContent = "Reset to default";
-  }
 }
 
 async function resetToDefaults(event) {
@@ -1079,10 +1121,8 @@ function finishHotkeyCapture() {
 function normalizePrefix(prefix) {
   return {
     id: typeof prefix?.id === "string" ? prefix.id : "",
-    builtIn: prefix?.builtIn === true,
     name: typeof prefix?.name === "string" ? prefix.name : "",
     instruction: typeof prefix?.instruction === "string" ? prefix.instruction : "",
-    enabled: prefix?.enabled !== false,
     allowSearch: prefix?.allowSearch === true,
     allowClipboard: prefix?.allowClipboard === true
   };

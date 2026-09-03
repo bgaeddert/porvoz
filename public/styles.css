@@ -1247,169 +1247,89 @@ select {
 
 .prefix-list {
   display: grid;
-  gap: .85rem;
+  gap: .45rem;
+  margin-top: 1rem;
 }
 
 .prefix-row {
   display: grid;
-  grid-template-columns: minmax(13rem, .72fr) minmax(0, 1.8fr);
-  grid-template-areas:
-    "identity instruction"
-    "controls controls";
-  align-items: start;
-  gap: 1.25rem 1.5rem;
+  grid-template-columns: minmax(9rem, .48fr) minmax(0, 1.8fr) auto;
+  align-items: center;
+  gap: 1rem;
   min-width: 0;
-  padding: 1.25rem;
+  padding: .65rem .8rem .65rem 1rem;
   border: 1px solid var(--line);
   border-left: 3px solid var(--line-bright);
   background: linear-gradient(145deg, rgba(27, 42, 53, .94), rgba(14, 22, 31, .98));
-  box-shadow: 0 12px 34px rgba(0, 0, 0, .14);
-  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+  transition: border-color .18s ease, background .18s ease;
 }
 
 .prefix-row:hover {
   border-color: var(--line-bright);
-  box-shadow: 0 16px 42px rgba(0, 0, 0, .2);
-  transform: translateY(-1px);
+  background: linear-gradient(145deg, rgba(34, 51, 63, .96), rgba(15, 24, 34, .99));
 }
 
-.prefix-row-built-in {
-  border-left-color: var(--signal);
-}
-
-.prefix-row-custom {
-  border-left-color: var(--coral);
-}
-
-.prefix-identity,
-.prefix-instruction-field {
+.prefix-row-name,
+.prefix-row-instruction {
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.prefix-identity {
-  display: grid;
-  align-content: start;
-  gap: .75rem;
-  grid-area: identity;
-}
-
-.prefix-identity-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .75rem;
-}
-
-.prefix-type-badge {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  min-height: 1.55rem;
-  padding: .25rem .55rem;
-  border: 1px solid var(--line-bright);
-  border-radius: 999px;
-  color: var(--muted-bright);
+.prefix-row-name {
+  overflow: hidden;
+  color: var(--text);
   font-family: var(--mono);
-  font-size: .62rem;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.prefix-type-built-in {
-  border-color: rgba(152, 244, 202, .45);
-  background: rgba(152, 244, 202, .08);
-  color: var(--signal);
-}
-
-.prefix-type-custom {
-  border-color: rgba(255, 123, 114, .45);
-  background: rgba(255, 123, 114, .07);
-  color: var(--coral);
-}
-
-.prefix-name-field,
-.prefix-instruction-field {
-  display: grid;
-  gap: .55rem;
-  color: var(--muted-bright);
-  font-family: var(--mono);
-  font-size: .72rem;
+  font-size: .78rem;
   font-weight: 700;
   letter-spacing: .04em;
-  text-transform: uppercase;
+  text-overflow: ellipsis;
 }
 
-.prefix-name-field input,
-.prefix-instruction-field textarea {
-  min-width: 0;
-  font-family: var(--body);
-  letter-spacing: 0;
-  text-transform: none;
+.prefix-row-instruction {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: .45rem .65rem;
+  border: 1px solid var(--line);
+  border-radius: .2rem;
+  background: rgba(13, 17, 23, .42);
+  overflow: hidden;
+  color: var(--muted-bright);
+  font-size: .82rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
 }
 
-.prefix-name-field input {
-  min-height: 2.8rem;
+.prefix-edit-button {
+  min-height: 2.2rem;
+  padding: .4rem .75rem;
+  white-space: nowrap;
 }
 
-.prefix-name-field input[readonly] {
-  border-color: rgba(152, 244, 202, .24);
-  background: rgba(152, 244, 202, .05);
-  color: var(--text);
-  cursor: default;
-}
-
-.prefix-identity-note {
-  margin: 0;
-  color: var(--muted);
-  font-family: var(--body);
-  font-size: .78rem;
-  line-height: 1.45;
-}
-
-.prefix-instruction-field {
-  grid-area: instruction;
-}
-
-.prefix-instruction-field textarea {
-  min-height: 7.15rem;
-  overflow-y: hidden;
-  resize: none;
-}
-
-.prefix-controls {
-  display: flex;
-  grid-area: controls;
-  align-items: flex-end;
-  gap: 1.25rem;
-  min-width: 0;
-  padding-top: 1rem;
-  border-top: 1px solid var(--line);
-}
-
-.prefix-enabled-group,
-.prefix-access-group {
+.prefix-edit-fields {
   display: grid;
-  gap: .45rem;
+  gap: 1rem;
 }
 
-.prefix-access-group {
-  min-width: 0;
+.prefix-access-fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+  margin: 1.35rem 0 0;
+  padding: .95rem 1rem 1rem;
+  border: 1px solid var(--line);
+  background: rgba(13, 17, 23, .25);
 }
 
-.prefix-control-caption {
+.prefix-access-fieldset legend {
+  padding: 0 .35rem;
   color: var(--muted);
   font-family: var(--mono);
   font-size: .64rem;
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
-}
-
-.prefix-toggle-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .5rem;
 }
 
 .prefix-toggle {
@@ -1446,6 +1366,12 @@ select {
   transition: background .18s ease, border-color .18s ease, color .18s ease;
 }
 
+.prefix-toggle input:not(:checked) + span {
+  border-color: rgba(150, 166, 179, .25);
+  background: rgba(13, 17, 23, .26);
+  color: var(--muted);
+}
+
 .prefix-toggle input:checked + span {
   border-color: rgba(152, 244, 202, .55);
   background: rgba(152, 244, 202, .1);
@@ -1457,15 +1383,12 @@ select {
   outline-offset: 3px;
 }
 
-.prefix-row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .6rem;
-  margin-left: auto;
+.prefix-edit-actions {
+  align-items: center;
 }
 
-.prefix-row-actions button {
-  white-space: nowrap;
+.prefix-edit-actions #prefix-edit-remove {
+  margin-right: auto;
 }
 
 #prefix-empty {
@@ -1480,6 +1403,7 @@ select {
 #model-status[data-state="error"],
 #prompt-status[data-state="error"],
 #prefix-status[data-state="error"],
+#prefix-edit-status[data-state="error"],
 #sound-volume-status[data-state="error"],
 #reset-status[data-state="error"] {
   color: var(--coral);
@@ -1488,6 +1412,7 @@ select {
 #model-status[data-state="success"],
 #prompt-status[data-state="success"],
 #prefix-status[data-state="success"],
+#prefix-edit-status[data-state="success"],
 #sound-volume-status[data-state="success"],
 #reset-status[data-state="success"] {
   color: var(--signal);
@@ -2104,20 +2029,9 @@ select {
   }
 
   .prefix-row {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "identity"
-      "instruction"
-      "controls";
-  }
-
-  .prefix-controls {
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .prefix-row-actions {
-    margin-left: 0;
+    grid-template-columns: minmax(6.5rem, .55fr) minmax(0, 1fr) auto;
+    gap: .55rem;
+    padding-left: .75rem;
   }
 
 }

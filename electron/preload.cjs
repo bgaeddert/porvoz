@@ -29,11 +29,8 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   resetPrompt() {
     return ipcRenderer.invoke("porvoz:reset-prompt");
   },
-  savePrefixes(value) {
-    return ipcRenderer.invoke("porvoz:save-prefixes", value);
-  },
-  resetPrefix(id) {
-    return ipcRenderer.invoke("porvoz:reset-prefix", id);
+  savePrefixSettings(value) {
+    return ipcRenderer.invoke("porvoz:save-prefix-settings", value);
   },
   getLogs() {
     return ipcRenderer.invoke("porvoz:get-logs");
@@ -98,6 +95,12 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
     ipcRenderer.on("porvoz:hotkey", listener);
     return () => ipcRenderer.removeListener("porvoz:hotkey", listener);
   },
+  onActivityCanceled(callback) {
+    if (typeof callback !== "function") return () => {};
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on("porvoz:activity-canceled", listener);
+    return () => ipcRenderer.removeListener("porvoz:activity-canceled", listener);
+  },
   onSetupUpdated(callback) {
     if (typeof callback !== "function") return () => {};
     const listener = () => callback();
@@ -109,9 +112,6 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on("porvoz:logs-updated", listener);
     return () => ipcRenderer.removeListener("porvoz:logs-updated", listener);
-  },
-  openSettings() {
-    ipcRenderer.send("porvoz:open-settings");
   },
   typeText(value) {
     return ipcRenderer.invoke("porvoz:type-text", value);

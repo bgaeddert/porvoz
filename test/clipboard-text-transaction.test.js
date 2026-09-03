@@ -160,3 +160,24 @@ test("clipboard text transaction restores the clipboard when paste fails", async
     ["text/html", "<p>original text</p>"]
   ]]);
 });
+
+test("clipboard text transaction restores the clipboard when canceled", async () => {
+  const clipboard = originalClipboard();
+  const controller = new AbortController();
+  const transaction = createClipboardTextTransaction({
+    clipboard,
+    ClipboardItem: FakeClipboardItem,
+    Blob: FakeBlob,
+    platform: "win32"
+  });
+
+  const operation = transaction.pasteText("transcribed text", async () => {
+    controller.abort();
+  }, { signal: controller.signal });
+
+  await assert.rejects(operation, (error) => error.code === "ERR_CANCELED");
+  assert.deepEqual(await describeClipboard(clipboard), [[
+    ["text/plain", "original text"],
+    ["text/html", "<p>original text</p>"]
+  ]]);
+});

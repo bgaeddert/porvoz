@@ -1,13 +1,8 @@
 const desktopBridge = window.porvozDesktop;
 const warning = document.querySelector("#setup-warning");
 const warningMessage = document.querySelector("#setup-warning-message");
-const settingsLink = warning?.querySelector('a[href="settings.html"]');
 
 if (desktopBridge?.isElectron) {
-  settingsLink?.addEventListener("click", (event) => {
-    event.preventDefault();
-    desktopBridge.openSettings();
-  });
   desktopBridge.onSetupUpdated(() => {
     void refreshSetupWarning();
   });

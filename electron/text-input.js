@@ -2,6 +2,7 @@ import { ClipboardItem, clipboard } from "electron";
 import koffi from "koffi";
 import { parseTextCommands } from "./text-command-parser.js";
 import { createClipboardTextTransaction } from "./clipboard-text-transaction.js";
+import { abortableDelay, throwIfAborted } from "./operation-cancellation.js";
 
 const INPUT_KEYBOARD = 1;
 const KEYEVENTF_KEYUP = 0x0002;
@@ -10,8 +11,100 @@ const TEXT_TARGET_FOCUS_DELAY_MS = 100;
 const MODIFIER_POLL_INTERVAL_MS = 25;
 const MAX_MODIFIER_RELEASE_CHECKS = 32;
 const MAX_MODIFIER_RELEASE_CHECKS_AFTER_NORMALIZATION = 8;
+const WINDOWS_KEY_CODES = new Map([
+  ["Control", 0x11],
+  ["Alt", 0x12],
+  ["Shift", 0x10],
+  ["Meta", 0x5b],
+  ["Enter", 0x0d],
+  ["Escape", 0x1b],
+  ["Tab", 0x09],
+  ["Space", 0x20],
+  ["Backspace", 0x08],
+  ["Delete", 0x2e],
+  ["Insert", 0x2d],
+  ["Home", 0x24],
+  ["End", 0x23],
+  ["PageUp", 0x21],
+  ["PageDown", 0x22],
+  ["ArrowUp", 0x26],
+  ["ArrowDown", 0x28],
+  ["ArrowLeft", 0x25],
+  ["ArrowRight", 0x27],
+  ["CapsLock", 0x14],
+  ["NumLock", 0x90],
+  ["ScrollLock", 0x91],
+  ["PrintScreen", 0x2c],
+  ["Pause", 0x13],
+  ["ContextMenu", 0x5d],
+  [";", 0xba],
+  ["=", 0xbb],
+  [",", 0xbc],
+  ["-", 0xbd],
+  [".", 0xbe],
+  ["/", 0xbf],
+  ["`", 0xc0],
+  ["[", 0xdb],
+  ["\\", 0xdc],
+  ["]", 0xdd],
+  ["'", 0xde],
+  ["Numpad0", 0x60],
+  ["Numpad1", 0x61],
+  ["Numpad2", 0x62],
+  ["Numpad3", 0x63],
+  ["Numpad4", 0x64],
+  ["Numpad5", 0x65],
+  ["Numpad6", 0x66],
+  ["Numpad7", 0x67],
+  ["Numpad8", 0x68],
+  ["Numpad9", 0x69],
+  ["NumpadMultiply", 0x6a],
+  ["NumpadAdd", 0x6b],
+  ["NumpadSubtract", 0x6d],
+  ["NumpadDecimal", 0x6e],
+  ["NumpadDivide", 0x6f]
+]);
+for (let functionNumber = 1; functionNumber <= 24; functionNumber += 1) {
+  WINDOWS_KEY_CODES.set(`F${functionNumber}`, 0x70 + functionNumber - 1);
+}
+const X11_KEY_NAMES = new Map([
+  ["Control", "Control_L"],
+  ["Alt", "Alt_L"],
+  ["Shift", "Shift_L"],
+  ["Meta", "Super_L"],
+  ["Enter", "Return"],
+  ["Escape", "Escape"],
+  ["Tab", "Tab"],
+  ["Space", "space"],
+  ["Backspace", "BackSpace"],
+  ["Delete", "Delete"],
+  ["Insert", "Insert"],
+  ["PageUp", "Page_Up"],
+  ["PageDown", "Page_Down"],
+  ["ArrowUp", "Up"],
+  ["ArrowDown", "Down"],
+  ["ArrowLeft", "Left"],
+  ["ArrowRight", "Right"],
+  ["CapsLock", "Caps_Lock"],
+  ["NumLock", "Num_Lock"],
+  ["ScrollLock", "Scroll_Lock"],
+  ["PrintScreen", "Print"],
+  ["ContextMenu", "Menu"],
+  [";", "semicolon"],
+  ["=", "equal"],
+  [",", "comma"],
+  ["-", "minus"],
+  [".", "period"],
+  ["/", "slash"],
+  ["`", "grave"],
+  ["[", "bracketleft"],
+  ["\\", "backslash"],
+  ["]", "bracketright"],
+  ["'", "apostrophe"]
+]);
 
 let textInputForPlatform;
+let syntheticEscapeSuppressedUntil = 0;
 
 if (process.platform === "win32") {
   textInputForPlatform = createWindowsTextInput();
@@ -34,17 +127,25 @@ export function disposeTextInput() {
   textInputForPlatform.dispose();
 }
 
-export async function typeText(text, { target = null } = {}) {
+export function isSyntheticEscapeActive() {
+  return Date.now() < syntheticEscapeSuppressedUntil;
+}
+
+export async function typeText(text, { target = null, signal } = {}) {
   if (typeof text !== "string" || !text) return;
-  await textInputForPlatform.prepareTarget(target);
+  throwIfAborted(signal);
+  await textInputForPlatform.prepareTarget(target, signal);
+  throwIfAborted(signal);
 
   for (const command of parseTextCommands(text)) {
-    if (command.type === "enter") {
-      await textInputForPlatform.pressEnter();
+    throwIfAborted(signal);
+    if (command.type === "key") {
+      await textInputForPlatform.pressKeyCombination(command.keys, signal);
     } else if (command.value) {
       await clipboardTextTransaction.pasteText(
         command.value,
-        () => textInputForPlatform.sendPaste()
+        () => textInputForPlatform.sendPaste(),
+        { signal }
       );
     }
   }
@@ -135,29 +236,34 @@ function createWindowsTextInput() {
       if (!GetWindowThreadProcessId(foregroundWindow, processId)) return null;
       return processId[0] === process.pid ? null : foregroundWindow;
     },
-    async prepareTarget(target) {
-      await waitForModifierKeysReleased();
+    async prepareTarget(target, signal) {
+      throwIfAborted(signal);
+      await waitForModifierKeysReleased(signal);
+      throwIfAborted(signal);
       if (!target) {
-        await wait(TEXT_TARGET_FOCUS_DELAY_MS);
+        await wait(TEXT_TARGET_FOCUS_DELAY_MS, signal);
         return;
       }
 
       if (isTargetForeground(target)) {
-        await wait(TEXT_TARGET_FOCUS_DELAY_MS);
+        await wait(TEXT_TARGET_FOCUS_DELAY_MS, signal);
         return;
       }
 
+      throwIfAborted(signal);
       SetForegroundWindow(target);
-      await wait(TEXT_TARGET_FOCUS_DELAY_MS);
+      await wait(TEXT_TARGET_FOCUS_DELAY_MS, signal);
       if (isTargetForeground(target)) return;
 
+      throwIfAborted(signal);
       sendInput([
         createWindowsKeyInput(0x12, 0, 0),
         createWindowsKeyInput(0x12, 0, KEYEVENTF_KEYUP)
       ]);
-      await wait(MODIFIER_POLL_INTERVAL_MS);
+      await wait(MODIFIER_POLL_INTERVAL_MS, signal);
+      throwIfAborted(signal);
       SetForegroundWindow(target);
-      await wait(TEXT_TARGET_FOCUS_DELAY_MS);
+      await wait(TEXT_TARGET_FOCUS_DELAY_MS, signal);
       if (!isTargetForeground(target)) {
         throw new Error("Windows could not refocus the application that started recording.");
       }
@@ -170,12 +276,21 @@ function createWindowsTextInput() {
         createWindowsKeyInput(0x11, 0, KEYEVENTF_KEYUP)
       ]);
     },
-    async pressEnter() {
-      sendInput([
-        createWindowsKeyInput(0x0d, 0, 0),
-        createWindowsKeyInput(0x0d, 0, KEYEVENTF_KEYUP)
-      ]);
-      await wait(MODIFIER_POLL_INTERVAL_MS);
+    async pressKeyCombination(keys, signal) {
+      throwIfAborted(signal);
+      const virtualKeys = keys.map(getWindowsVirtualKey);
+      throwIfAborted(signal);
+      if (keys.includes("Escape")) suppressSyntheticEscape();
+      const inputs = [
+        ...virtualKeys.map((virtualKey) => createWindowsKeyInput(virtualKey, 0, 0)),
+        ...[...virtualKeys].reverse().map((virtualKey) =>
+          createWindowsKeyInput(virtualKey, 0, KEYEVENTF_KEYUP))
+      ];
+      sendInput(inputs);
+      await wait(MODIFIER_POLL_INTERVAL_MS, signal);
+    },
+    async pressEnter(signal) {
+      await this.pressKeyCombination(["Enter"], signal);
     },
     dispose() {}
   };
@@ -189,29 +304,39 @@ function createWindowsTextInput() {
     return Boolean(targetRoot && foregroundRoot && targetRoot === foregroundRoot);
   }
 
-  async function waitForModifierKeysReleased() {
-    if (await pollModifierRelease(MAX_MODIFIER_RELEASE_CHECKS)) return;
+  async function waitForModifierKeysReleased(signal) {
+    throwIfAborted(signal);
+    if (await pollModifierRelease(MAX_MODIFIER_RELEASE_CHECKS, signal)) return;
 
     const stuckKeys = ModifierReleaseKeys.filter(isKeyDown);
     if (stuckKeys.length) {
+      throwIfAborted(signal);
       sendInput(stuckKeys.map((key) => createWindowsKeyInput(key, 0, KEYEVENTF_KEYUP)));
-      await wait(MODIFIER_POLL_INTERVAL_MS);
-      if (await pollModifierRelease(MAX_MODIFIER_RELEASE_CHECKS_AFTER_NORMALIZATION)) return;
+      await wait(MODIFIER_POLL_INTERVAL_MS, signal);
+      if (await pollModifierRelease(MAX_MODIFIER_RELEASE_CHECKS_AFTER_NORMALIZATION, signal)) return;
     }
 
     throw new Error("Release the keyboard modifiers before pasting the response.");
   }
 
-  async function pollModifierRelease(maxChecks) {
+  async function pollModifierRelease(maxChecks, signal) {
     for (let attempt = 0; attempt < maxChecks; attempt += 1) {
+      throwIfAborted(signal);
       if (!ModifierKeys.some(isKeyDown)) return true;
-      await wait(MODIFIER_POLL_INTERVAL_MS);
+      await wait(MODIFIER_POLL_INTERVAL_MS, signal);
     }
     return !ModifierKeys.some(isKeyDown);
   }
 
   function isKeyDown(key) {
     return (GetAsyncKeyState(key) & 0x8000) !== 0;
+  }
+
+  function getWindowsVirtualKey(key) {
+    const virtualKey = WINDOWS_KEY_CODES.get(key);
+    if (virtualKey) return virtualKey;
+    if (/^[A-Z0-9]$/.test(key)) return key.charCodeAt(0);
+    throw new Error(`Windows does not recognize key notation '${key}'.`);
   }
 
   function sendInput(inputs) {
@@ -255,9 +380,9 @@ function createLinuxTextInput() {
     captureTarget() {
       return null;
     },
-    async prepareTarget() {
+    async prepareTarget(_target, signal) {
       getDisplay();
-      await wait(TEXT_TARGET_FOCUS_DELAY_MS);
+      await wait(TEXT_TARGET_FOCUS_DELAY_MS, signal);
     },
     sendPaste() {
       const control = getKeycode("Control_L");
@@ -270,10 +395,25 @@ function createLinuxTextInput() {
         sendKey(control, false);
       }
     },
-    async pressEnter() {
-      sendKey(getKeycode("Return"), true);
-      sendKey(getKeycode("Return"), false);
-      await wait(MODIFIER_POLL_INTERVAL_MS);
+    async pressKeyCombination(keys, signal) {
+      throwIfAborted(signal);
+      const keycodes = keys.map((key) => getKeycode(getX11KeyName(key)));
+      throwIfAborted(signal);
+      if (keys.includes("Escape")) suppressSyntheticEscape();
+      const pressed = [];
+      try {
+        for (const keycode of keycodes) {
+          throwIfAborted(signal);
+          pressed.push(keycode);
+          sendKey(keycode, true);
+        }
+      } finally {
+        for (const keycode of [...pressed].reverse()) sendKey(keycode, false);
+      }
+      await wait(MODIFIER_POLL_INTERVAL_MS, signal);
+    },
+    async pressEnter(signal) {
+      await this.pressKeyCombination(["Enter"], signal);
     },
     dispose() {
       if (!display) return;
@@ -300,6 +440,16 @@ function createLinuxTextInput() {
     return keycode;
   }
 
+  function getX11KeyName(key) {
+    if (/^Numpad[0-9]$/.test(key)) return `KP_${key.slice(-1)}`;
+    if (key === "NumpadMultiply") return "KP_Multiply";
+    if (key === "NumpadAdd") return "KP_Add";
+    if (key === "NumpadSubtract") return "KP_Subtract";
+    if (key === "NumpadDecimal") return "KP_Decimal";
+    if (key === "NumpadDivide") return "KP_Divide";
+    return X11_KEY_NAMES.get(key) || key;
+  }
+
   function sendKey(keycode, isPressed) {
     if (!XTestFakeKeyEvent(getDisplay(), keycode, isPressed ? 1 : 0, 0)) {
       throw new Error("Linux rejected the requested paste input.");
@@ -319,6 +469,9 @@ function createUnsupportedTextInput() {
     sendPaste() {
       throw new Error(`Clipboard paste input is not available on ${process.platform}.`);
     },
+    async pressKeyCombination() {
+      throw new Error(`Clipboard paste input is not available on ${process.platform}.`);
+    },
     async pressEnter() {
       throw new Error(`Clipboard paste input is not available on ${process.platform}.`);
     },
@@ -326,6 +479,8 @@ function createUnsupportedTextInput() {
   };
 }
 
-function wait(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+const wait = abortableDelay;
+
+function suppressSyntheticEscape() {
+  syntheticEscapeSuppressedUntil = Math.max(syntheticEscapeSuppressedUntil, Date.now() + 100);
 }

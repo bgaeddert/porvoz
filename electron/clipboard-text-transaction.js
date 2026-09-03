@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { abortableDelay, throwIfAborted } from "./operation-cancellation.js";
 
 const CLIPBOARD_SETTLE_DELAY_MS = 500;
 const BOOKMARK_MIME_TYPE = "electron application/bookmark";
@@ -9,7 +10,7 @@ export function createClipboardTextTransaction({
   clipboard,
   ClipboardItem,
   Blob: BlobImplementation = globalThis.Blob,
-  delay = wait,
+  delay = abortableDelay,
   platform = process.platform
 } = {}) {
   if (!clipboard || typeof clipboard.read !== "function" || typeof clipboard.write !== "function") {
@@ -24,9 +25,11 @@ export function createClipboardTextTransaction({
 
   return { pasteText };
 
-  async function pasteText(text, paste) {
+  async function pasteText(text, paste, { signal } = {}) {
     if (typeof text !== "string" || !text) return { clipboardChanged: false };
     if (typeof paste !== "function") throw new TypeError("A paste function is required.");
+
+    throwIfAborted(signal);
 
     const original = await readClipboardSnapshot();
     let temporarySnapshot;
@@ -34,10 +37,14 @@ export function createClipboardTextTransaction({
     let clipboardChanged = false;
 
     try {
+      throwIfAborted(signal);
       await clipboard.write([new ClipboardItem({ "text/plain": text })]);
+      throwIfAborted(signal);
       temporarySnapshot = await readClipboardSnapshot();
+      throwIfAborted(signal);
       await paste();
-      await delay(CLIPBOARD_SETTLE_DELAY_MS);
+      await delay(CLIPBOARD_SETTLE_DELAY_MS, signal);
+      throwIfAborted(signal);
     } catch (error) {
       operationError = error;
     } finally {
@@ -62,6 +69,7 @@ export function createClipboardTextTransaction({
     }
 
     if (operationError) throw operationError;
+    throwIfAborted(signal);
     return { clipboardChanged };
   }
 
@@ -155,8 +163,4 @@ function fingerprint(items) {
     hash.update("\n");
   }
   return hash.digest("hex");
-}
-
-function wait(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

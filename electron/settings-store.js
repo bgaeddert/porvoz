@@ -1,36 +1,39 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { safeStorage } from "electron";
 
+// Upgrade an untouched v1.2.1 prompt to the current packaged prompt while
+// preserving any prompt the user actually edited.
+const RELEASED_DEFAULT_PROMPT_SHA256 = "c6c4242e2ff03c816f88aa8cfa531b654f8f0e2ce544072474c2c985fbed608d";
+
 export function createSettingsStore({ defaultsPath, settingsPath, credentialsPath }) {
   const defaults = readJson(defaultsPath, "The packaged defaults could not be read.");
-  const builtInDefaults = normalizeBuiltInEntries(defaults.prefixes);
   let settings;
   let apiKey = "";
 
   if (existsSync(settingsPath)) {
     settings = readJson(settingsPath, "The saved settings could not be read.");
     validateSettings(settings);
-    const normalizedPrefixes = normalizePrefixEntries(
-      settings.prefixes,
-      defaults.limits.maxPrefixes,
-      builtInDefaults
-    );
+    const normalizedPrefixes = normalizePrefixEntries(settings.prefixes, defaults.limits.maxPrefixes);
     const normalizedSoundVolume = normalizeSoundVolume(settings.soundVolume, defaults.soundVolume);
     const normalizedInstructionReasoning = normalizeInstructionReasoning(
       settings.models.instructionReasoning,
       defaults.models?.instructionReasoning
     );
+    const normalizedPrompt = normalizePrompt(settings.prompt, defaults.prompt);
     if (JSON.stringify(normalizedPrefixes) !== JSON.stringify(settings.prefixes)
       || settings.soundVolume !== normalizedSoundVolume
-      || settings.models.instructionReasoning !== normalizedInstructionReasoning) {
+      || settings.models.instructionReasoning !== normalizedInstructionReasoning
+      || settings.prompt !== normalizedPrompt) {
       settings.prefixes = normalizedPrefixes;
       settings.soundVolume = normalizedSoundVolume;
       settings.models.instructionReasoning = normalizedInstructionReasoning;
+      settings.prompt = normalizedPrompt;
       saveSettingsFile();
     }
   } else {
-    settings = createInitialSettings(defaults, builtInDefaults);
+    settings = createInitialSettings(defaults);
     saveSettingsFile();
   }
 
@@ -45,8 +48,7 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     saveModelSelections,
     savePrompt,
     resetPrompt,
-    savePrefixes,
-    resetBuiltInPrefix,
+    savePrefixSettings,
     getHotkey,
     saveHotkey,
     saveSoundVolume,
@@ -115,23 +117,9 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     return settings.prompt;
   }
 
-  function savePrefixes(prefixes) {
-    settings.prefixes = normalizePrefixEntries(prefixes, defaults.limits.maxPrefixes, builtInDefaults);
+  function savePrefixSettings({ prefixes } = {}) {
+    settings.prefixes = normalizePrefixEntries(prefixes, defaults.limits.maxPrefixes);
     saveSettingsFile();
-  }
-
-  function resetBuiltInPrefix(id) {
-    const builtIn = builtInDefaults.find((prefix) => prefix.id === id);
-    if (!builtIn) throw new Error("Choose a built-in prefix to reset.");
-    const prefixIndex = settings.prefixes.findIndex((prefix) => prefix.builtIn && prefix.id === id);
-    if (prefixIndex === -1) {
-      settings.prefixes = normalizePrefixEntries(settings.prefixes, defaults.limits.maxPrefixes, builtInDefaults);
-    }
-    const normalizedIndex = settings.prefixes.findIndex((prefix) => prefix.builtIn && prefix.id === id);
-    if (normalizedIndex === -1) throw new Error("The built-in prefix could not be found.");
-    settings.prefixes[normalizedIndex] = clone(builtIn);
-    saveSettingsFile();
-    return getSettings();
   }
 
   function getHotkey() {
@@ -151,7 +139,7 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
   }
 
   function resetToDefaults() {
-    settings = createInitialSettings(defaults, builtInDefaults);
+    settings = createInitialSettings(defaults);
     apiKey = "";
     if (existsSync(credentialsPath)) unlinkSync(credentialsPath);
     saveSettingsFile();
@@ -183,7 +171,7 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
   }
 }
 
-function createInitialSettings(defaults, builtInDefaults = normalizeBuiltInEntries(defaults?.prefixes)) {
+function createInitialSettings(defaults) {
   if (!defaults?.limits || typeof defaults.prompt !== "string" || !Array.isArray(defaults.prefixes)) {
     throw new Error("The packaged defaults are invalid.");
   }
@@ -202,7 +190,7 @@ function createInitialSettings(defaults, builtInDefaults = normalizeBuiltInEntri
       )
     },
     prompt: defaults.prompt,
-    prefixes: normalizePrefixEntries(defaults.prefixes, defaults.limits.maxPrefixes, builtInDefaults),
+    prefixes: normalizePrefixEntries(defaults.prefixes, defaults.limits.maxPrefixes),
     hotkey: clone(defaults.hotkey),
     soundVolume: normalizeSoundVolume(defaults.soundVolume, 0.3)
   };
@@ -223,72 +211,26 @@ function validateSettings(settings) {
   }
 }
 
-function normalizeBuiltInEntries(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((prefix, index) => ({
-      id: normalizeId(prefix?.id) || `built-in-${index + 1}`,
-      name: normalizeText(prefix?.name),
-      instruction: normalizeText(prefix?.instruction),
-      builtIn: true,
-      enabled: typeof prefix?.enabled === "boolean" ? prefix.enabled : true,
-      allowSearch: prefix?.allowSearch === true,
-      allowClipboard: prefix?.allowClipboard === true
-    }))
-    .filter((prefix) => prefix.name && prefix.instruction);
-}
-
-function normalizePrefixEntries(value, maxPrefixes, builtInDefaults = []) {
+function normalizePrefixEntries(value, maxPrefixes) {
   const entries = Array.isArray(value) ? value : [];
-  const matchedEntryIndexes = new Set();
-  const builtInNames = new Set();
-  const builtIns = builtInDefaults.map((defaultPrefix) => {
-    const entryIndex = entries.findIndex((entry, index) => {
-      if (matchedEntryIndexes.has(index)) return false;
-      const entryId = normalizeId(entry?.id);
-      const entryName = normalizeText(entry?.name).toLocaleLowerCase();
-      return entryId === defaultPrefix.id || entryName === defaultPrefix.name.toLocaleLowerCase();
-    });
-    if (entryIndex >= 0) matchedEntryIndexes.add(entryIndex);
-    const storedPrefix = entryIndex >= 0 ? entries[entryIndex] : undefined;
-    const normalizedPrefix = {
-      id: defaultPrefix.id,
-      name: defaultPrefix.name,
-      instruction: normalizeText(storedPrefix?.instruction) || defaultPrefix.instruction,
-      builtIn: true,
-      enabled: typeof storedPrefix?.enabled === "boolean" ? storedPrefix.enabled : defaultPrefix.enabled,
-      allowSearch: typeof storedPrefix?.allowSearch === "boolean"
-        ? storedPrefix.allowSearch
-        : defaultPrefix.allowSearch,
-      allowClipboard: typeof storedPrefix?.allowClipboard === "boolean"
-        ? storedPrefix.allowClipboard
-        : defaultPrefix.allowClipboard
-    };
-    builtInNames.add(normalizedPrefix.name.toLocaleLowerCase());
-    return normalizedPrefix;
-  });
-
-  const seenNames = new Set(builtInNames);
-  const userPrefixes = [];
+  const seenNames = new Set();
+  const prefixes = [];
   entries.forEach((entry, index) => {
-    if (matchedEntryIndexes.has(index) || entry?.builtIn === true) return;
     const name = normalizeText(entry?.name);
     const instruction = normalizeText(entry?.instruction);
     const normalizedName = name.toLocaleLowerCase();
     if (!name || !instruction || seenNames.has(normalizedName)) return;
     seenNames.add(normalizedName);
-    userPrefixes.push({
-      id: normalizeId(entry?.id) || `user-${userPrefixes.length + 1}`,
+    prefixes.push({
+      id: normalizeId(entry?.id) || `prefix-${index + 1}`,
       name,
       instruction,
-      builtIn: false,
-      enabled: typeof entry?.enabled === "boolean" ? entry.enabled : true,
       allowSearch: entry?.allowSearch === true,
       allowClipboard: entry?.allowClipboard === true
     });
   });
 
-  return [...builtIns, ...userPrefixes].slice(0, Number(maxPrefixes) || 100);
+  return prefixes.slice(0, Number(maxPrefixes) || 100);
 }
 
 function normalizeText(value) {
@@ -301,6 +243,12 @@ function normalizeId(value) {
 
 function normalizeModel(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizePrompt(value, currentDefault) {
+  const prompt = typeof value === "string" ? value : "";
+  const promptHash = createHash("sha256").update(prompt).digest("hex");
+  return promptHash === RELEASED_DEFAULT_PROMPT_SHA256 ? currentDefault : prompt;
 }
 
 function normalizeInstructionReasoning(value, fallback = "low") {

@@ -8,7 +8,6 @@ const transcript = document.querySelector("#transcript");
 const instructionResponse = document.querySelector("#instruction-response");
 const hotkeyHint = document.querySelector("#hotkey-hint");
 const captureSignal = document.querySelector("#capture-signal");
-const settingsLink = document.querySelector('a[href="settings.html"]');
 const desktopBridge = window.porvozDesktop;
 const MICROPHONE_REQUEST_TIMEOUT_MS = 10_000;
 
@@ -17,6 +16,8 @@ let hotkeySoundVolume = runtimeConfig.soundVolume;
 
 let isTranscribing = false;
 let isTranscriptionProcessing = false;
+let isTypingResponse = false;
+let activityGeneration = 0;
 let stopRequested = false;
 let shouldTypeFinalResponse = false;
 let captureIntentId = "";
@@ -43,10 +44,6 @@ clearButton.addEventListener("click", clearTranscript);
 
 if (desktopBridge?.isElectron) {
   hotkeyHint.hidden = false;
-  settingsLink?.addEventListener("click", (event) => {
-    event.preventDefault();
-    desktopBridge.openSettings();
-  });
   desktopBridge.onHotkey((action, payload) => {
     if (action === "start" && !isTranscribing && !isTranscriptionProcessing) {
       startTranscription({
@@ -62,6 +59,20 @@ if (desktopBridge?.isElectron) {
       void playHotkeySound(action);
       stopTranscription();
     }
+  });
+  desktopBridge.onActivityCanceled(() => {
+    const hadActivity = isTranscribing || isTranscriptionProcessing || isTypingResponse || stopRequested;
+    if (!hadActivity) return;
+    activityGeneration += 1;
+    resetTranscriptionState();
+    isTranscriptionProcessing = false;
+    isTypingResponse = false;
+    recordedChunks = [];
+    Object.values(hotkeySounds).forEach((sound) => {
+      sound.pause();
+      sound.currentTime = 0;
+    });
+    setStatus("Canceled.", "idle");
   });
   desktopBridge.onHotkeyUpdated((hotkey) => {
     hotkeyHint.textContent = `Hold ${hotkey.label} to record.`;
@@ -81,6 +92,7 @@ async function startTranscription({
   captureId = "",
   playStartCue = false
 } = {}) {
+  const generation = activityGeneration;
   if (!window.MediaRecorder) {
     const error = new Error("This Electron build does not support audio recording.");
     logClientError("recording", error);
@@ -100,6 +112,11 @@ async function startTranscription({
 
   try {
     transcriptionStream = await getMicrophoneStream();
+    if (generation !== activityGeneration) {
+      transcriptionStream?.getTracks().forEach((track) => track.stop());
+      transcriptionStream = undefined;
+      return;
+    }
     if (stopRequested) {
       resetTranscriptionState({ stopRecorder: false });
       setStatus("Tap ignored. Hold the hotkey a little longer to record.", "idle");
@@ -108,6 +125,7 @@ async function startTranscription({
     if (playStartCue) {
       setStatus("Microphone ready…", "processing", "recording");
       await playHotkeySound("start");
+      if (generation !== activityGeneration) return;
       if (stopRequested) {
         resetTranscriptionState({ stopRecorder: false });
         setStatus("Tap ignored. Hold the hotkey a little longer to record.", "idle");
@@ -125,6 +143,7 @@ async function startTranscription({
     recordingStartedAt = performance.now();
     setStatus("Recording… Release the hotkey or select Stop recording.", "recording", "recording");
   } catch (error) {
+    if (generation !== activityGeneration) return;
     console.error(error);
     resetTranscriptionState();
     logClientError("recording", error);
@@ -193,6 +212,7 @@ function handleRecordingFailure(error) {
 }
 
 async function processTranscription() {
+  const generation = activityGeneration;
   const typeResultAtCursor = shouldTypeFinalResponse;
   const captureId = captureIntentId;
   const audioType = mediaRecorder?.mimeType || "audio/webm";
@@ -225,12 +245,14 @@ async function processTranscription() {
       audio: await audio.arrayBuffer(),
       mimeType: audio.type
     });
+    if (generation !== activityGeneration) return;
     if (!result?.transcript) throw new Error("Could not transcribe the audio.");
 
     replaceTranscript(result.transcript);
     processStage = "instruction";
     setStatus("Applying instructions…", "processing", "instruction");
     const instructionResult = await requestInstruction(result.transcript, result.logGroupId);
+    if (generation !== activityGeneration) return;
     if (!instructionResult.instructionApplied) {
       setStatus("Transcription complete; no instruction prefix detected.", "success", "transcription");
       if (typeResultAtCursor) await typeFinalResponse(result.transcript, captureId);
@@ -241,9 +263,11 @@ async function processTranscription() {
     setStatus("Transcription complete.", "success", "instruction");
     if (typeResultAtCursor) await typeFinalResponse(instructionResponse.value, captureId);
   } catch (error) {
+    if (generation !== activityGeneration || isCancellationError(error)) return;
     console.error(error);
     setStatus(error.message || "Could not transcribe the audio.", "error", processStage);
   } finally {
+    if (generation !== activityGeneration) return;
     isTranscriptionProcessing = false;
     shouldTypeFinalResponse = false;
     captureIntentId = "";
@@ -363,12 +387,17 @@ async function initializeDesktopHotkeyHint() {
 
 async function typeFinalResponse(text, captureId = "", purpose = "transcription") {
   if (!desktopBridge?.isElectron || !text) return;
+  const generation = activityGeneration;
+  isTypingResponse = true;
   try {
     await desktopBridge.typeText({ text, captureId, purpose });
   } catch (error) {
+    if (generation !== activityGeneration || isCancellationError(error)) return;
     console.error(error);
     await playHotkeySound("failure");
     setStatus(error.message || "Response ready; could not type into the active app.", "error", "typing");
+  } finally {
+    isTypingResponse = false;
   }
 }
 
@@ -417,4 +446,13 @@ function wait(milliseconds) {
 function normalizeSoundVolume(value) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? Math.min(1, Math.max(0, numericValue)) : 0.3;
+}
+
+function isCancellationError(error) {
+  return Boolean(error && (
+    error.code === "ERR_CANCELED"
+    || error.name === "AbortError"
+    || error.name === "CanceledError"
+    || /ERR_CANCELED|AbortError|CanceledError|cancel(?:ed|led) by user/i.test(error.message || "")
+  ));
 }

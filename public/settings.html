@@ -170,7 +170,7 @@
               <div>
                 <p class="panel-kicker">Instruction prefix registry</p>
                 <h2 id="prefixes-heading">Teach Porvoz your prefixes</h2>
-                <p class="section-description">A transcript must begin with an enabled prefix before it reaches the instruction model. Every row controls its own trigger state, Search access, and Clipboard access. Built-in prefixes stay in the registry; reset one to restore its packaged defaults.</p>
+                <p class="section-description">A transcript reaches the instruction model when it begins with a prefix in this list. Select Edit on any row to change its instruction, access, or name.</p>
               </div>
               <button id="add-prefix" class="button-secondary" type="button">Add prefix</button>
             </div>
@@ -224,7 +224,7 @@
       <div class="prefix-dialog-card">
         <div class="prefix-dialog-header">
           <div>
-            <p class="panel-kicker">New instruction prefix</p>
+            <p id="prefix-dialog-kicker" class="panel-kicker">New instruction prefix</p>
             <h2 id="prefix-dialog-heading">Add a prefix to your voice</h2>
           </div>
           <button id="close-prefix-dialog" class="dialog-close" type="button" aria-label="Close prefix dialog">×</button>
@@ -251,6 +251,37 @@
           </div>
         </section>
 
+        <section id="prefix-edit-view" class="prefix-dialog-view" aria-label="Edit prefix settings" hidden>
+          <p class="prefix-dialog-lede">Set the phrase, instruction, and access for this prefix.</p>
+          <div class="prefix-edit-fields">
+            <label class="field-label" for="prefix-edit-name">
+              Prefix name
+              <input id="prefix-edit-name" type="text" placeholder="Example: tidy" />
+            </label>
+            <label class="field-label" for="prefix-edit-instruction">
+              Instruction
+              <textarea id="prefix-edit-instruction" rows="5" placeholder="What should the instruction model do?"></textarea>
+            </label>
+          </div>
+          <fieldset class="prefix-access-fieldset">
+            <legend>Access for this prefix</legend>
+            <label class="prefix-toggle">
+              <input id="prefix-edit-search" type="checkbox" />
+              <span>Search access</span>
+            </label>
+            <label class="prefix-toggle">
+              <input id="prefix-edit-clipboard" type="checkbox" />
+              <span>Clipboard access</span>
+            </label>
+          </fieldset>
+          <p id="prefix-edit-status" class="field-note" aria-live="polite"></p>
+          <div class="dialog-actions prefix-edit-actions">
+            <button id="prefix-edit-remove" class="button-danger" type="button">Remove prefix</button>
+            <button id="prefix-edit-cancel" class="button-secondary" type="button">Cancel</button>
+            <button id="prefix-edit-save" class="button-primary" type="button">Save prefix</button>
+          </div>
+        </section>
+
         <section id="prefix-record-view" class="prefix-dialog-view" aria-labelledby="prefix-record-heading" hidden>
           <p class="panel-kicker">Voice brief</p>
           <h3 id="prefix-record-heading">Tell Porvoz what this prefix should do</h3>
@@ -268,7 +299,7 @@
         <section id="prefix-preview-view" class="prefix-dialog-view" aria-labelledby="prefix-preview-heading" hidden>
           <p class="panel-kicker">AI draft</p>
           <h3 id="prefix-preview-heading">Review your new prefix</h3>
-          <p class="prefix-dialog-lede">Edit anything you like, then add it to the registry. It will start enabled with no extra Search or Clipboard access.</p>
+          <p class="prefix-dialog-lede">Edit anything you like, choose the access this prefix can use, then add it to the registry.</p>
           <div class="prefix-preview-source">
             <span>Heard from you</span>
             <p id="prefix-preview-transcript"></p>
@@ -281,6 +312,17 @@
             Instruction
             <textarea id="prefix-preview-instruction" rows="5" placeholder="What should the instruction model do?"></textarea>
           </label>
+          <fieldset class="prefix-access-fieldset">
+            <legend>Access for this prefix</legend>
+            <label class="prefix-toggle">
+              <input id="prefix-preview-search" type="checkbox" />
+              <span>Search access</span>
+            </label>
+            <label class="prefix-toggle">
+              <input id="prefix-preview-clipboard" type="checkbox" />
+              <span>Clipboard access</span>
+            </label>
+          </fieldset>
           <p id="prefix-preview-status" class="field-note" aria-live="polite"></p>
           <div class="dialog-actions">
             <button id="prefix-preview-cancel" class="button-secondary" type="button">Cancel</button>

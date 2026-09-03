@@ -17,7 +17,17 @@ import { createAppService } from "./app-service.js";
 import { createLogStore } from "./log-store.js";
 import { createSettingsStore } from "./settings-store.js";
 import { createStatusOverlay } from "./status-overlay.js";
-import { captureTextInputTarget, disposeTextInput, typeText } from "./text-input.js";
+import {
+  captureTextInputTarget,
+  disposeTextInput,
+  isSyntheticEscapeActive,
+  typeText
+} from "./text-input.js";
+import {
+  createOperationCanceledError,
+  isCancellationError,
+  throwIfAborted
+} from "./operation-cancellation.js";
 
 if (process.platform === "linux") {
   // Electron may otherwise select an unavailable wallet when launched from
@@ -66,12 +76,13 @@ const SINGLE_MODIFIER_HOTKEY_CODES = new Set([
   "AltRight"
 ]);
 const CAPTURE_ATTEMPT_MAX_AGE_MS = 120_000;
+const ACTIVE_ACTIVITY_STATES = new Set(["recording", "transcribing", "processing", "typing"]);
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 let appService;
 let mainWindow;
-let settingsWindow;
+let captureWindow;
 let statusOverlay;
 let tray;
 let isQuitting = false;
@@ -85,6 +96,8 @@ let suppressedHotkeyKeyCode;
 let hotkeyCaptureTimer;
 let textTypingQueue = Promise.resolve();
 const captureAttempts = new Map();
+const activeOperations = new Set();
+const rendererActivities = new Set();
 const pressedKeys = new Set();
 const capturePressedCodes = new Set();
 const captureSeenCodes = new Set();
@@ -125,6 +138,7 @@ async function startApplication() {
   registerIpcHandlers();
   createTray();
   await createMainWindow();
+  await createCaptureWindow();
   statusOverlay = await createStatusOverlay({
     overlayPath: fileURLToPath(new URL("../public/status-overlay.html", import.meta.url)),
     preloadPath: fileURLToPath(new URL("./status-overlay-preload.cjs", import.meta.url)),
@@ -159,6 +173,10 @@ async function createMainWindow() {
   });
 
   secureRendererWindow(mainWindow);
+  mainWindow.webContents.on("before-input-event", handleSettingsHotkeyInput);
+  mainWindow.on("blur", () => {
+    if (isCapturingHotkey) cancelHotkeyCapture("Hotkey capture canceled because Porvoz lost focus.");
+  });
 
   mainWindow.on("close", (event) => {
     if (!isQuitting) {
@@ -173,46 +191,40 @@ async function createMainWindow() {
   await mainWindow.loadFile(fileURLToPath(new URL("../public/index.html", import.meta.url)));
 }
 
-async function openSettingsWindow() {
-  const settingsPath = fileURLToPath(new URL("../public/settings.html", import.meta.url));
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    await settingsWindow.loadFile(settingsPath);
-    settingsWindow.show();
-    settingsWindow.focus();
-    return;
-  }
-
-  settingsWindow = new BrowserWindow({
-    width: 1120,
-    height: 900,
-    minWidth: 720,
-    minHeight: 600,
-    icon: appIconPath,
-    backgroundColor: "#0d1117",
-    title: "Porvoz · Settings",
+async function createCaptureWindow() {
+  captureWindow = new BrowserWindow({
+    width: 1,
+    height: 1,
+    show: false,
+    frame: false,
+    skipTaskbar: true,
+    focusable: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: false,
       preload: fileURLToPath(new URL("./preload.cjs", import.meta.url))
     }
   });
-  secureRendererWindow(settingsWindow);
-  settingsWindow.webContents.on("before-input-event", handleSettingsHotkeyInput);
-  settingsWindow.on("blur", () => {
-    if (isCapturingHotkey) cancelHotkeyCapture("Hotkey capture canceled because Settings lost focus.");
+
+  secureRendererWindow(captureWindow);
+  captureWindow.on("closed", () => {
+    captureWindow = undefined;
   });
-  settingsWindow.on("closed", () => {
-    clearHotkeyCaptureWatchdog();
-    isCapturingHotkey = false;
-    isHotkeyRecording = false;
-    pressedKeys.clear();
-    clearHotkeyCaptureState();
-    settingsWindow = undefined;
-  });
-  registerContextMenu(settingsWindow);
-  await settingsWindow.loadFile(settingsPath);
-  settingsWindow.show();
+  await captureWindow.loadFile(fileURLToPath(new URL("../public/index.html", import.meta.url)));
+}
+
+async function openSettingsPage() {
+  const settingsPath = fileURLToPath(new URL("../public/settings.html", import.meta.url));
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  await mainWindow.loadFile(settingsPath);
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 function registerContextMenu(browserWindow) {
@@ -262,8 +274,8 @@ function createTray() {
   tray = new Tray(createTrayIcon());
   tray.setToolTip(`Porvoz · Hold ${currentHotkey.label} to transcribe`);
   updateTrayMenu();
-  tray.on("click", () => openSettingsWindow().catch(handleWindowError));
-  tray.on("double-click", () => openSettingsWindow().catch(handleWindowError));
+  tray.on("click", () => openSettingsPage().catch(handleWindowError));
+  tray.on("double-click", () => openSettingsPage().catch(handleWindowError));
 }
 
 function createTrayIcon() {
@@ -362,6 +374,11 @@ function clearHotkeyCaptureState() {
 }
 
 function handleGlobalKeyDown(event) {
+  if (event.keycode === UiohookKey.Escape) {
+    if (isSyntheticEscapeActive()) return;
+    if (!isCapturingHotkey) cancelActiveActivity();
+    return;
+  }
   if (isCapturingHotkey) return;
   if (event.keycode === suppressedHotkeyKeyCode) return;
   const hotkeyKeyCode = getUiohookKeyCode(currentHotkey.key);
@@ -466,8 +483,59 @@ function sendHotkeyAction(action, value) {
       stage: "configuration"
     });
   }
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("porvoz:hotkey", action, value);
+  const targetWindow = getCaptureRendererWindow();
+  if (targetWindow) {
+    targetWindow.webContents.send("porvoz:hotkey", action, value);
+  }
+}
+
+function cancelActiveActivity() {
+  const hasCapture = [...captureAttempts.values()].some((attempt) => attempt.state !== "complete");
+  if (!activeOperations.size && !rendererActivities.size && !hasCapture && !isHotkeyRecording) return false;
+
+  const cancellation = createOperationCanceledError();
+  for (const controller of activeOperations) controller.abort(cancellation);
+  for (const attempt of captureAttempts.values()) attempt.state = "canceled";
+  captureAttempts.clear();
+  isHotkeyRecording = false;
+  rendererActivities.clear();
+  setOverlayStatus({ state: "idle" });
+  notifyActivityCanceled(cancellation.message);
+  return true;
+}
+
+function notifyActivityCanceled(message = "Canceled by user.") {
+  for (const browserWindow of getRendererWindows()) {
+    browserWindow.webContents.send("porvoz:activity-canceled", { message });
+  }
+}
+
+function getRendererWindows() {
+  return [mainWindow, captureWindow]
+    .filter((browserWindow, index, windows) =>
+      browserWindow
+      && !browserWindow.isDestroyed()
+      && windows.indexOf(browserWindow) === index);
+}
+
+function getCaptureRendererWindow() {
+  const visibleRenderer = getRendererWindows().find((browserWindow) => {
+    const rendererPath = getRendererFilePath(browserWindow.webContents.getURL());
+    return browserWindow.isVisible()
+      && rendererPath?.endsWith(`${path.sep}index.html`);
+  });
+  if (visibleRenderer) return visibleRenderer;
+  return getRendererWindows().find((browserWindow) => browserWindow === captureWindow)
+    || getRendererWindows()[0];
+}
+
+async function runActiveOperation(operation) {
+  const controller = new AbortController();
+  activeOperations.add(controller);
+  try {
+    return await operation(controller.signal);
+  } finally {
+    activeOperations.delete(controller);
   }
 }
 
@@ -485,16 +553,16 @@ function registerIpcHandlers() {
     notifySetupUpdated();
     return result;
   });
-  ipcMain.handle("porvoz:populate-models", async () => {
+  ipcMain.handle("porvoz:populate-models", () => runActiveOperation(async (signal) => {
     try {
-      const result = await appService.populateModels();
+      const result = await appService.populateModels({ signal });
       notifySetupUpdated();
       return result;
     } catch (error) {
-      notifyLogsUpdated();
+      if (!isCancellationError(error)) notifyLogsUpdated();
       throw error;
     }
-  });
+  }));
   ipcMain.handle("porvoz:save-model-selections", (_event, value) => {
     const result = appService.saveModelSelections(value);
     notifySetupUpdated();
@@ -502,8 +570,7 @@ function registerIpcHandlers() {
   });
   ipcMain.handle("porvoz:save-prompt", (_event, value) => appService.savePrompt(value));
   ipcMain.handle("porvoz:reset-prompt", () => appService.resetPrompt());
-  ipcMain.handle("porvoz:save-prefixes", (_event, value) => appService.savePrefixes(value));
-  ipcMain.handle("porvoz:reset-prefix", (_event, id) => appService.resetPrefix(id));
+  ipcMain.handle("porvoz:save-prefix-settings", (_event, value) => appService.savePrefixSettings(value));
   ipcMain.handle("porvoz:get-logs", () => appService.getLogs());
   ipcMain.handle("porvoz:log-error", (_event, value) => {
     const result = appService.logError(value);
@@ -525,13 +592,17 @@ function registerIpcHandlers() {
     updateTrayMenu();
     return runtimeConfig;
   });
-  ipcMain.handle("porvoz:transcribe", async (_event, value) => {
+  ipcMain.handle("porvoz:transcribe", (_event, value) => runActiveOperation(async (signal) => {
     setOverlayStatus({ message: "Transcribing…", state: "transcribing", stage: "transcription" });
     try {
-      const result = await appService.transcribe(value);
+      const result = await appService.transcribe(value, { signal });
       notifyLogsUpdated();
       return result;
     } catch (error) {
+      if (isCancellationError(error)) {
+        setOverlayStatus({ state: "idle" });
+        throw error;
+      }
       notifyLogsUpdated();
       setOverlayStatus({
         message: error.message || "Could not transcribe the audio.",
@@ -540,16 +611,21 @@ function registerIpcHandlers() {
       });
       throw error;
     }
-  });
-  ipcMain.handle("porvoz:instruct", async (_event, value) => {
+  }));
+  ipcMain.handle("porvoz:instruct", (_event, value) => runActiveOperation(async (signal) => {
     setOverlayStatus({ message: "Applying instructions…", state: "processing", stage: "instruction" });
     try {
       const result = await appService.instruct(value, {
-        readClipboard: () => clipboard.readText()
+        readClipboard: () => clipboard.readText(),
+        signal
       });
       notifyLogsUpdated();
       return result;
     } catch (error) {
+      if (isCancellationError(error)) {
+        setOverlayStatus({ state: "idle" });
+        throw error;
+      }
       notifyLogsUpdated();
       setOverlayStatus({
         message: error.message || "Could not apply the instructions.",
@@ -558,8 +634,9 @@ function registerIpcHandlers() {
       });
       throw error;
     }
-  });
-  ipcMain.handle("porvoz:create-prefix-from-voice", (_event, value) => appService.createPrefixFromVoice(value));
+  }));
+  ipcMain.handle("porvoz:create-prefix-from-voice", (_event, value) => runActiveOperation((signal) =>
+    appService.createPrefixFromVoice(value, { signal })));
   ipcMain.handle("porvoz:get-hotkey", () => currentHotkey);
   ipcMain.handle("porvoz:begin-hotkey-capture", () => {
     isCapturingHotkey = true;
@@ -585,17 +662,23 @@ function registerIpcHandlers() {
   });
   ipcMain.on("porvoz:status", (_event, value) => {
     if (!value || typeof value !== "object") return;
+    if (ACTIVE_ACTIVITY_STATES.has(value.state)) rendererActivities.add(_event.sender.id);
+    else rendererActivities.delete(_event.sender.id);
     setOverlayStatus(value);
   });
-  ipcMain.handle("porvoz:type-text", async (_event, value) => {
+  ipcMain.handle("porvoz:type-text", (_event, value) => runActiveOperation(async (signal) => {
     const request = normalizeTypingRequest(value);
     if (!request.text) return false;
     setOverlayStatus({ message: "Placing text…", state: "typing", stage: "typing" });
     try {
-      await typeTextAtCursor(request);
+      await typeTextAtCursor(request, signal);
       setOverlayStatus({ message: "Text placed.", state: "success", stage: "typing" });
       return true;
     } catch (error) {
+      if (isCancellationError(error)) {
+        setOverlayStatus({ state: "idle" });
+        throw error;
+      }
       appService.logError({ stage: "typing", error });
       notifyLogsUpdated();
       setOverlayStatus({
@@ -605,10 +688,7 @@ function registerIpcHandlers() {
       });
       throw error;
     }
-  });
-  ipcMain.on("porvoz:open-settings", () => {
-    openSettingsWindow().catch(handleWindowError);
-  });
+  }));
 }
 
 function saveHotkey(nextHotkey) {
@@ -621,15 +701,14 @@ function saveHotkey(nextHotkey) {
   clearHotkeyCaptureState();
   suppressedHotkeyKeyCode = getUiohookKeyCode(currentHotkey.key);
   tray?.setToolTip(`Porvoz · Hold ${currentHotkey.label} to transcribe`);
-    notifyHotkeyUpdated();
-    notifySoundVolumeUpdated(runtimeConfig.soundVolume);
-    updateTrayMenu();
+  notifyHotkeyUpdated();
+  updateTrayMenu();
   return currentHotkey;
 }
 
 function updateTrayMenu() {
   tray?.setContextMenu(Menu.buildFromTemplate([
-    { label: "Open Porvoz", click: () => openSettingsWindow().catch(handleWindowError) },
+    { label: "Open Porvoz", click: () => openSettingsPage().catch(handleWindowError) },
     { label: `Hold ${currentHotkey.label} to record`, enabled: false },
     { type: "separator" },
     { label: "Exit Porvoz", click: () => app.quit() }
@@ -660,37 +739,35 @@ function clearHotkeyCaptureWatchdog() {
 }
 
 function notifyHotkeyUpdated() {
-  for (const window of [mainWindow, settingsWindow]) {
-    if (window && !window.isDestroyed()) window.webContents.send("porvoz:hotkey-updated", currentHotkey);
+  for (const browserWindow of getRendererWindows()) {
+    browserWindow.webContents.send("porvoz:hotkey-updated", currentHotkey);
   }
 }
 
 function notifySoundVolumeUpdated(soundVolume) {
-  for (const window of [mainWindow, settingsWindow]) {
-    if (window && !window.isDestroyed()) window.webContents.send("porvoz:sound-volume-updated", soundVolume);
+  for (const browserWindow of getRendererWindows()) {
+    browserWindow.webContents.send("porvoz:sound-volume-updated", soundVolume);
   }
 }
 
 function notifyLogsUpdated(logs) {
   const payload = { count: Array.isArray(logs) ? logs.length : appService.getLogs().length };
-  for (const window of [mainWindow, settingsWindow]) {
-    if (window && !window.isDestroyed()) window.webContents.send("porvoz:logs-updated", payload);
-  }
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("porvoz:logs-updated", payload);
 }
 
 function notifySetupUpdated() {
-  for (const window of [mainWindow, settingsWindow]) {
-    if (window && !window.isDestroyed()) window.webContents.send("porvoz:setup-updated");
+  for (const browserWindow of getRendererWindows()) {
+    browserWindow.webContents.send("porvoz:setup-updated");
   }
 }
 
 function notifyHotkeyCaptureStatus(state, message) {
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.webContents.send("porvoz:hotkey-capture-status", { state, message });
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("porvoz:hotkey-capture-status", { state, message });
   }
 }
 
-async function typeTextAtCursor(value) {
+async function typeTextAtCursor(value, signal) {
   const request = normalizeTypingRequest(value);
   if (!request.text) return;
   if (typeof request.text !== "string") {
@@ -706,6 +783,7 @@ async function typeTextAtCursor(value) {
   // Queue text injection so concurrent responses cannot interleave. Every
   // platform uses the same clipboard transaction followed by simulated paste.
   const typeOperation = textTypingQueue.then(async () => {
+    throwIfAborted(signal);
     if (request.purpose === "transcription") {
       if (!attempt || attempt.state !== "processing") {
         throw new Error("The typing request is no longer associated with an active capture.");
@@ -714,9 +792,9 @@ async function typeTextAtCursor(value) {
         throw new Error("The typing request expired before the response was ready.");
       }
     }
-    await waitForRecordingHotkeyRelease();
+    await waitForRecordingHotkeyRelease(signal);
     if (attempt) attempt.state = "typing";
-    await typeText(textToType, { target: attempt?.targetWindow || null });
+    await typeText(textToType, { target: attempt?.targetWindow || null, signal });
     if (attempt) attempt.state = "complete";
   });
   textTypingQueue = typeOperation.catch(() => {});
@@ -758,13 +836,14 @@ function getCaptureAttempt(captureId) {
   return captureAttempts.get(captureId);
 }
 
-async function waitForRecordingHotkeyRelease() {
+async function waitForRecordingHotkeyRelease(signal) {
   const deadline = Date.now() + 1500;
   while (isRecordingHotkeyPressed()) {
+    throwIfAborted(signal);
     if (Date.now() >= deadline) {
       throw new Error("Release the recording hotkey before typing the response.");
     }
-    await wait(10);
+    await wait(10, signal);
   }
 }
 
@@ -816,6 +895,8 @@ function shutdownApplication() {
   captureAttempts.clear();
   statusOverlay?.destroy();
   statusOverlay = undefined;
+  if (captureWindow && !captureWindow.isDestroyed()) captureWindow.destroy();
+  captureWindow = undefined;
 }
 
 function handleWindowError(error) {

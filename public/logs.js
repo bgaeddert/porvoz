@@ -8,15 +8,10 @@ const logsStatus = document.querySelector("#logs-status");
 const clearLogsDialog = document.querySelector("#clear-logs-dialog");
 const confirmClearLogsButton = document.querySelector("#confirm-clear-logs");
 const cancelClearLogsButton = document.querySelector("#cancel-clear-logs");
-const settingsLink = document.querySelector('a[href="settings.html"]');
 
 let logs = [];
 
 if (desktopBridge?.isElectron) {
-  settingsLink?.addEventListener("click", (event) => {
-    event.preventDefault();
-    desktopBridge.openSettings();
-  });
   desktopBridge.onLogsUpdated(() => refreshLogs("Updated just now"));
   window.addEventListener("focus", () => refreshLogs("Updated just now"));
   window.addEventListener("pageshow", () => refreshLogs("Updated just now"));

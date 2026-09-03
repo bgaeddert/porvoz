@@ -44,25 +44,29 @@ test("saving a connection with an empty API key preserves the existing key", () 
 test("prefix saves reject incomplete and duplicate definitions", () => {
   const { service } = createService();
 
-  assert.throws(() => service.savePrefixes([
+  assert.throws(() => service.savePrefixSettings({ prefixes: [
     prefix("digits", "Return digits."),
     prefix("unfinished", "")
-  ]), /needs a name and an instruction/);
+  ] }), /needs a name and an instruction/);
 
-  assert.throws(() => service.savePrefixes([
+  assert.throws(() => service.savePrefixSettings({ prefixes: [
     prefix("digits", "Return digits."),
     prefix("DIGITS", "Return more digits.")
-  ]), /already in use/);
+  ] }), /already in use/);
 });
 
 test("prefix saves trim valid values and enforce field limits", () => {
   const { service, settingsStore } = createService();
 
-  service.savePrefixes([prefix("  digits  ", "  Return digits.  ")]);
+  service.savePrefixSettings({
+    prefixes: [prefix("  digits  ", "  Return digits.  ")]
+  });
   assert.equal(settingsStore.getSettings().prefixes[0].name, "digits");
   assert.equal(settingsStore.getSettings().prefixes[0].instruction, "Return digits.");
 
-  assert.throws(() => service.savePrefixes([prefix("a-name-that-is-too-long", "Do it.")]), /up to 12 characters/);
+  assert.throws(() => service.savePrefixSettings({
+    prefixes: [prefix("a-name-that-is-too-long", "Do it.")]
+  }), /up to 12 characters/);
 });
 
 test("sound volume is clamped and persisted as a normalized value", () => {
@@ -115,6 +119,17 @@ test("a transcript without a prefix bypasses the instruction endpoint", async ()
   assert.deepEqual(result, { transcript: "ordinary dictated text", instructionApplied: false });
 });
 
+test("every prefix entry is active when it exists", async () => {
+  const { service } = createService({
+    prefixes: [prefix("digits", "Return digits.")]
+  });
+
+  await assert.rejects(
+    service.instruct({ transcript: "digits 42" }),
+    /Enter the base URL and API key in Settings/
+  );
+});
+
 test("transcription failures retain the provider error in the error log", async () => {
   const server = createServer((request, response) => {
     request.resume();
@@ -161,7 +176,24 @@ test("invalid transcription input returns its validation error and logs it", asy
   assert.equal(logs[0].bytes, 0);
 });
 
-test("chained prefixes are detected together and combine access permissions", async () => {
+test("canceled transcription stops without recording a failure log", async () => {
+  const { service, logs } = createService({ availableModels: ["transcription-model"] });
+  service.saveConnection({ baseUrl: "https://example.com/v1", apiKey: "secret" });
+  service.saveModelSelections({ transcription: "transcription-model" });
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(
+    service.transcribe(
+      { audio: new Uint8Array([1, 2, 3]), mimeType: "audio/webm" },
+      { signal: controller.signal }
+    ),
+    (error) => error.code === "ERR_CANCELED"
+  );
+  assert.equal(logs.length, 0);
+});
+
+test("chained prefixes are detected together and use per-prefix access permissions", async () => {
   let requestBody;
   const server = createServer((request, response) => {
     const chunks = [];
@@ -192,8 +224,11 @@ test("chained prefixes are detected together and combine access permissions", as
     );
 
     assert.deepEqual(result, { transcript: "combined result", instructionApplied: true });
-    assert.match(requestBody.instructions, /chain of consecutive enabled registered instruction prefixes/);
+    assert.match(requestBody.instructions, /chain of consecutive registered instruction prefixes/);
     assert.match(requestBody.instructions, /apply every matched prefix instruction in left-to-right order/);
+    assert.match(requestBody.instructions, /Prefix Search access: yes/);
+    assert.match(requestBody.instructions, /Prefix Clipboard access: yes/);
+    assert.match(requestBody.instructions, /at least one matched prefix grants it/);
     assert.match(requestBody.input, /reference text/);
     assert.deepEqual(requestBody.reasoning, { effort: "high" });
     assert.deepEqual(requestBody.tools, [{ type: "web_search" }]);
@@ -244,17 +279,15 @@ test("voice prefix creation transcribes the brief and returns an editable propos
     assert.equal(result.transcript, "Call this tidy and rewrite the next message to be concise.");
     assert.deepEqual(result.prefix, {
       id: "",
-      builtIn: false,
       name: "tidy",
       instruction: "Rewrite next message concisely.",
-      enabled: true,
       allowSearch: false,
       allowClipboard: false
     });
     assert.match(responsesRequestBody, /Keep answers concise\./);
     assert.match(responsesRequestBody, /"reasoning":\{"effort":"low"\}/);
     assert.match(responsesRequestBody, /Prefix name: digits/);
-    assert.match(responsesRequestBody, /Porvoz supports the exact output token \[enter\]/);
+    assert.match(responsesRequestBody, /Porvoz supports key notation/);
     assert.match(responsesRequestBody, /Do not mention the prefix, trigger phrase, command/);
     assert.match(responsesRequestBody, /Prepend exactly one space to the supplied text/);
   } finally {
@@ -262,15 +295,13 @@ test("voice prefix creation transcribes the brief and returns an editable propos
   }
 });
 
-function prefix(name, instruction, options = {}) {
+function prefix(name, instruction, access = {}) {
   return {
     id: name.toLocaleLowerCase(),
     name,
     instruction,
-    builtIn: false,
-    enabled: true,
-    allowSearch: options.allowSearch === true,
-    allowClipboard: options.allowClipboard === true
+    allowSearch: access.allowSearch === true,
+    allowClipboard: access.allowClipboard === true
   };
 }
 
@@ -315,15 +346,17 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
       settings.prompt = "Keep answers concise.";
       return settings.prompt;
     },
-    savePrefixes(prefixValues) {
-      settings.prefixes = structuredClone(prefixValues);
+    savePrefixSettings(value) {
+      settings.prefixes = structuredClone(value.prefixes);
     },
     saveSoundVolume(value) {
       settings.soundVolume = value;
     },
-    resetBuiltInPrefix() {},
     resetToDefaults() {
-      settings = { ...settings, prefixes: [] };
+      settings = {
+        ...settings,
+        prefixes: []
+      };
       apiKey = "";
     }
   };
