@@ -1,10 +1,11 @@
 import { BrowserWindow, screen } from "electron";
 
-const OVERLAY_WIDTH = 500;
-const OVERLAY_HEIGHT = 78;
-const OVERLAY_BOTTOM_MARGIN = 18;
-const SUCCESS_DISPLAY_MS = 1600;
+const OVERLAY_WIDTH = 320;
+const OVERLAY_HEIGHT = 44;
+const OVERLAY_BOTTOM_MARGIN = 12;
+const SUCCESS_DISPLAY_MS = 500;
 const ERROR_DISPLAY_MS = 4200;
+const FADE_OUT_MS = 100;
 
 /**
  * Creates the non-activating status pill shown above the active display's
@@ -23,6 +24,7 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
   let overlayWindow;
   let isLoaded = false;
   let hideTimer;
+  let fadeTimer;
   let currentStatus = { state: "idle", message: "" };
 
   overlayWindow = new BrowserWindow({
@@ -78,12 +80,21 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
 
   const hide = () => {
     if (!overlayWindow || overlayWindow.isDestroyed()) return;
+    clearTimeout(fadeTimer);
     overlayWindow.hide();
+  };
+
+  const fadeAndHide = () => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) return;
+    overlayWindow.webContents.send("porvoz:overlay-hide");
+    fadeTimer = setTimeout(hide, FADE_OUT_MS);
+    fadeTimer.unref?.();
   };
 
   const showCurrentStatus = () => {
     if (!isLoaded || !overlayWindow || overlayWindow.isDestroyed()) return;
     clearTimeout(hideTimer);
+    clearTimeout(fadeTimer);
     reposition();
     overlayWindow.webContents.send("porvoz:overlay-status", currentStatus);
     overlayWindow.setAlwaysOnTop(true);
@@ -91,7 +102,7 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
 
     if (currentStatus.state === "success" || currentStatus.state === "error") {
       const delay = currentStatus.state === "error" ? ERROR_DISPLAY_MS : SUCCESS_DISPLAY_MS;
-      hideTimer = setTimeout(hide, delay);
+      hideTimer = setTimeout(fadeAndHide, delay);
       hideTimer.unref?.();
     }
   };
@@ -122,6 +133,7 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
 
   overlayWindow.on("closed", () => {
     clearTimeout(hideTimer);
+    clearTimeout(fadeTimer);
     screen.off("display-added", onDisplayChanged);
     screen.off("display-removed", onDisplayChanged);
     screen.off("display-metrics-changed", onDisplayChanged);
@@ -135,11 +147,13 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
     setStatus,
     clear() {
       clearTimeout(hideTimer);
+      clearTimeout(fadeTimer);
       currentStatus = { state: "idle", message: "" };
       hide();
     },
     destroy() {
       clearTimeout(hideTimer);
+      clearTimeout(fadeTimer);
       if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.destroy();
     }
   };

@@ -3,6 +3,7 @@ const indicator = document.querySelector("#status-indicator");
 const message = document.querySelector("#status-message");
 
 window.porvozOverlay?.onStatus(renderStatus);
+window.porvozOverlay?.onHide(() => pill.classList.remove("visible"));
 
 function renderStatus(value = {}) {
   const state = typeof value.state === "string" ? value.state : "idle";
