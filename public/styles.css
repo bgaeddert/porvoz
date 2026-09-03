@@ -932,20 +932,6 @@ input::placeholder {
   color: #748789;
 }
 
-.page-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 3rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(69, 96, 109, .45);
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: .64rem;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
 .settings-stack {
   display: grid;
   gap: 1rem;

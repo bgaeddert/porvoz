@@ -1398,7 +1398,7 @@ function cancelHotkeyCapture() {
 function finishHotkeyCapture() {
   isCapturingHotkey = false;
   captureHotkeyButton.disabled = false;
-  setButtonLabel(captureHotkeyButton, "Capture hotkey");
+  setButtonLabel(captureHotkeyButton, "Set hotkey");
   cancelHotkeyButton.hidden = true;
 }
 

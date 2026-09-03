@@ -5,6 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 *.log
+*.af~lock~
 .env
 .env.*
 !.env.example

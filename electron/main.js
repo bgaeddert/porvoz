@@ -36,6 +36,9 @@ if (process.platform === "linux") {
 }
 
 const appIconPath = fileURLToPath(new URL("./assets/icon.png", import.meta.url));
+const windowIconPath = process.platform === "win32"
+  ? fileURLToPath(new URL("./assets/icon.ico", import.meta.url))
+  : appIconPath;
 const allowedRendererPaths = new Set([
   "index.html",
   "logs.html",
@@ -115,6 +118,7 @@ if (!hasSingleInstanceLock) {
 
 async function startApplication() {
   app.setAppUserModelId("com.porvoz.desktop");
+  if (app.isPackaged) Menu.setApplicationMenu(null);
   settingsStore = createSettingsStore({
     defaultsPath: fileURLToPath(new URL("./defaults.json", import.meta.url)),
     settingsPath: path.join(app.getPath("userData"), "settings.json"),
@@ -160,9 +164,10 @@ async function createMainWindow() {
     height: 820,
     minWidth: 720,
     minHeight: 600,
-    icon: appIconPath,
+    icon: windowIconPath,
+    autoHideMenuBar: true,
     show: false,
-    backgroundColor: "#0d1117",
+    backgroundColor: "#0c0f13",
     title: "Porvoz",
     webPreferences: {
       contextIsolation: true,
@@ -279,7 +284,7 @@ function createTray() {
 }
 
 function createTrayIcon() {
-  return nativeImage.createFromPath(appIconPath).resize({ width: 16, height: 16 });
+  return nativeImage.createFromPath(windowIconPath).resize({ width: 16, height: 16, quality: "best" });
 }
 
 function registerGlobalHotkey() {

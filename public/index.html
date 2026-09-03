@@ -3,24 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0d1117" />
+    <meta name="theme-color" content="#0c0f13" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'" />
-    <title>Porvoz · Transcribe</title>
+    <title>Porvoz · Capture</title>
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./desktop.css" />
   </head>
   <body>
     <div class="app-shell">
-      <header class="topbar">
+      <aside class="app-sidebar">
         <a class="brand" href="index.html">
-          <img class="brand-icon" src="../electron/assets/icon.png" alt="" aria-hidden="true" />
-          <span class="brand-name">Porvoz</span>
+          <img class="brand-icon" src="../electron/assets/icon.png?v=21c0d164" alt="" aria-hidden="true" />
+          <span class="brand-copy">
+            <span class="brand-name">Porvoz</span>
+            <span class="brand-kind">Voice utility</span>
+          </span>
         </a>
         <nav class="main-nav" aria-label="Primary navigation">
-          <a class="nav-link nav-link-active" href="index.html" aria-current="page">Transcribe</a>
-          <a class="nav-link" href="logs.html">Logs</a>
-          <a class="nav-link" href="settings.html">Settings</a>
+          <a class="nav-link nav-link-active" href="index.html" aria-current="page" title="Capture">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V5"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg>
+            <span>Capture</span>
+          </a>
+          <a class="nav-link" href="logs.html" title="Activity">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg>
+            <span>Activity</span>
+          </a>
+          <a class="nav-link" href="settings.html" title="Settings">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15.03 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15"/></svg>
+            <span>Settings</span>
+          </a>
         </nav>
-      </header>
+        <div class="sidebar-meta" aria-label="Application version">
+          <span class="sidebar-meta-name">Porvoz</span>
+          <span data-app-version>Version unavailable</span>
+        </div>
+      </aside>
+
+      <div class="app-workspace">
+        <header class="workspace-header">
+          <div>
+            <p class="workspace-kicker">Voice capture</p>
+            <h1>Capture</h1>
+          </div>
+          <p class="workspace-summary">Record speech and route recognized instructions.</p>
+        </header>
 
       <main class="page-main transcribe-main">
         <aside id="setup-warning" class="setup-warning" hidden role="alert" aria-labelledby="setup-warning-label">
@@ -40,7 +66,7 @@
         <section class="capture-panel" aria-labelledby="capture-heading">
           <div class="capture-header">
             <div>
-              <p id="capture-heading" class="panel-kicker">Capture deck</p>
+              <p id="capture-heading" class="panel-kicker">Recorder</p>
             </div>
             <span id="capture-signal" class="signal-dot" aria-label="System ready"></span>
           </div>
@@ -70,7 +96,7 @@
           <article class="response-card response-card-raw">
             <div class="response-heading">
               <div>
-                <p class="panel-kicker">Raw signal</p>
+                <p class="panel-kicker">Captured speech</p>
                 <h2>Transcript</h2>
               </div>
               <span class="response-tag">source</span>
@@ -81,7 +107,7 @@
           <article class="response-card response-card-result">
             <div class="response-heading">
               <div>
-                <p class="panel-kicker">Routed output</p>
+                <p class="panel-kicker">Processed result</p>
                 <h2>Instruction response</h2>
               </div>
               <span class="response-tag">result</span>
@@ -91,10 +117,7 @@
         </section>
       </main>
 
-      <footer class="page-footer">
-        <span class="page-footer-brand">Porvoz <span data-app-version>Version unavailable</span></span>
-        <span>Local voice workstation</span>
-      </footer>
+      </div>
     </div>
     <script type="module" src="./app-version.js"></script>
     <script type="module" src="./setup-warning.js"></script>

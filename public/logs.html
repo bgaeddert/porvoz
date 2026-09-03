@@ -3,24 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0d1117" />
+    <meta name="theme-color" content="#0c0f13" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'" />
-    <title>Porvoz · Logs</title>
+    <title>Porvoz · Activity</title>
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./desktop.css" />
   </head>
   <body>
     <div class="app-shell">
-      <header class="topbar">
+      <aside class="app-sidebar">
         <a class="brand" href="index.html">
-          <img class="brand-icon" src="../electron/assets/icon.png" alt="" aria-hidden="true" />
-          <span class="brand-name">Porvoz</span>
+          <img class="brand-icon" src="../electron/assets/icon.png?v=21c0d164" alt="" aria-hidden="true" />
+          <span class="brand-copy"><span class="brand-name">Porvoz</span><span class="brand-kind">Voice utility</span></span>
         </a>
         <nav class="main-nav" aria-label="Primary navigation">
-          <a class="nav-link" href="index.html">Transcribe</a>
-          <a class="nav-link nav-link-active" href="logs.html" aria-current="page">Logs</a>
-          <a class="nav-link" href="settings.html">Settings</a>
+          <a class="nav-link" href="index.html" title="Capture">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V5"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg>
+            <span>Capture</span>
+          </a>
+          <a class="nav-link nav-link-active" href="logs.html" aria-current="page" title="Activity">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg>
+            <span>Activity</span>
+          </a>
+          <a class="nav-link" href="settings.html" title="Settings">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15.03 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15"/></svg>
+            <span>Settings</span>
+          </a>
         </nav>
-      </header>
+        <div class="sidebar-meta" aria-label="Application version"><span class="sidebar-meta-name">Porvoz</span><span data-app-version>Version unavailable</span></div>
+      </aside>
+
+      <div class="app-workspace">
+        <header class="workspace-header">
+          <div><p class="workspace-kicker">Local history</p><h1>Activity</h1></div>
+          <p class="workspace-summary">Transcripts, processed responses, and operational errors.</p>
+        </header>
 
       <main class="page-main logs-main">
         <aside id="setup-warning" class="setup-warning" hidden role="alert" aria-labelledby="setup-warning-label">
@@ -37,11 +54,7 @@
           </div>
           <a class="setup-warning-link" href="settings.html">Open Settings</a>
         </aside>
-        <section class="logs-toolbar" aria-labelledby="logs-heading">
-          <div class="logs-title-block">
-            <p class="eyebrow">Response archive</p>
-            <h1 id="logs-heading">Logs</h1>
-          </div>
+        <section class="logs-toolbar" aria-label="Activity controls">
           <div class="logs-toolbar-actions">
             <div class="log-counter" aria-live="polite">
               <strong id="log-count">0</strong>
@@ -63,7 +76,7 @@
         <section class="logs-ledger" aria-labelledby="ledger-heading">
           <div class="logs-section-heading">
             <div>
-              <p class="panel-kicker">Signal ledger</p>
+              <p class="panel-kicker">History</p>
               <h2 id="ledger-heading">Recent activity</h2>
             </div>
             <span id="logs-status" class="logs-status" aria-live="polite">Stored locally</span>
@@ -79,17 +92,14 @@
               </svg>
             </span>
             <div>
-              <h2>The archive is quiet.</h2>
+              <h2>No activity yet</h2>
               <p>Start a transcription to place the first event here. Successful responses and operational errors are saved automatically.</p>
             </div>
           </div>
         </section>
       </main>
 
-      <footer class="page-footer">
-        <span class="page-footer-brand">Porvoz <span data-app-version>Version unavailable</span></span>
-        <span>Response archive · stored on this device</span>
-      </footer>
+      </div>
     </div>
 
     <dialog id="clear-logs-dialog" class="reset-dialog logs-clear-dialog" aria-labelledby="clear-logs-heading">
