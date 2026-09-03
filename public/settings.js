@@ -1,5 +1,7 @@
 import { loadRuntimeConfig } from "./runtime-config.js";
 import { isRecordingTooShort } from "./capture-policy.js";
+import { createButtonLabel, createIcon, setButtonLabel } from "./icons.js";
+import { getUniquePrefixName, parsePrefix, serializePrefix } from "./prefix-transfer.js";
 
 const baseUrlInput = document.querySelector("#base-url");
 const apiKeyInput = document.querySelector("#api-key");
@@ -27,6 +29,7 @@ const instructionPrompt = document.querySelector("#instruction-prompt");
 const promptStatus = document.querySelector("#prompt-status");
 const resetPromptButton = document.querySelector("#reset-prompt");
 const addPrefixButton = document.querySelector("#add-prefix");
+const importPrefixButton = document.querySelector("#import-prefix");
 const prefixList = document.querySelector("#prefix-list");
 const prefixEmpty = document.querySelector("#prefix-empty");
 const prefixStatus = document.querySelector("#prefix-status");
@@ -138,6 +141,7 @@ modelPickerDialog.addEventListener("close", resetModelPicker);
 instructionPrompt.addEventListener("input", handlePromptInput);
 resetPromptButton.addEventListener("click", () => promptResetDialog.showModal());
 addPrefixButton.addEventListener("click", openPrefixDialog);
+importPrefixButton.addEventListener("click", importPrefixFromClipboard);
 closePrefixDialogButton.addEventListener("click", () => prefixDialog.close());
 voicePrefixOption.addEventListener("click", showVoicePrefixRecorder);
 manualPrefixOption.addEventListener("click", addPrefixManually);
@@ -565,15 +569,137 @@ function renderPrefixes() {
 
     const actionButton = document.createElement("button");
     actionButton.type = "button";
-    actionButton.className = "button-secondary prefix-edit-button";
-    actionButton.textContent = "Edit";
+    actionButton.className = "button-secondary button-with-icon prefix-edit-button";
+    actionButton.append(createIcon("pencil"), createButtonLabel("Edit"));
     actionButton.setAttribute("aria-label", `Edit ${prefix.name} prefix`);
     actionButton.addEventListener("click", () => openPrefixEditor(index));
 
-    row.append(name, instruction, actionButton);
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.className = "button-secondary button-with-icon prefix-copy-button";
+    copyButton.append(createIcon("copy"), createButtonLabel("Copy"));
+    copyButton.setAttribute("aria-label", `Copy ${prefix.name} prefix JSON`);
+    copyButton.title = "Copy prefix JSON";
+    copyButton.addEventListener("click", () => copyPrefix(prefix, copyButton));
+
+    const actions = document.createElement("div");
+    actions.className = "prefix-row-actions";
+    actions.append(copyButton, actionButton);
+
+    row.append(name, instruction, actions);
     prefixList.append(row);
   });
   prefixEmpty.hidden = prefixConfig.length > 0;
+}
+
+async function copyPrefix(prefix, button) {
+  try {
+    await writeClipboardText(serializePrefix(prefix));
+    setButtonLabel(button, "Copied");
+    prefixStatus.textContent = `Copied “${prefix.name}” as JSON. Use Import from clipboard to add a copy.`;
+    prefixStatus.dataset.state = "success";
+    window.setTimeout(() => {
+      if (button.isConnected) setButtonLabel(button, "Copy");
+    }, 1600);
+  } catch (error) {
+    console.error("Could not copy instruction prefix:", error);
+    prefixStatus.textContent = error.message || "Could not copy the prefix JSON.";
+    prefixStatus.dataset.state = "error";
+  }
+}
+
+async function writeClipboardText(text) {
+  if (desktopBridge?.writeClipboardText) {
+    await desktopBridge.writeClipboardText(text);
+    return;
+  }
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.setAttribute("aria-hidden", "true");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-1000px";
+  document.body.append(textarea);
+  textarea.select();
+  try {
+    if (!document.execCommand("copy")) throw new Error("Clipboard access is unavailable.");
+  } finally {
+    textarea.remove();
+  }
+}
+
+async function readClipboardText() {
+  if (desktopBridge?.readClipboardText) return desktopBridge.readClipboardText();
+  if (navigator.clipboard?.readText) return navigator.clipboard.readText();
+  throw new Error("Clipboard access is unavailable.");
+}
+
+async function importPrefixFromClipboard() {
+  if (importPrefixButton.disabled) return;
+  importPrefixButton.disabled = true;
+  prefixStatus.textContent = "Reading the clipboard…";
+  prefixStatus.dataset.state = "saving";
+
+  try {
+    const result = parsePrefix(await readClipboardText());
+    if (result.state === "not-prefix") {
+      prefixStatus.textContent = "The clipboard does not contain a prefix JSON object.";
+      prefixStatus.dataset.state = "error";
+      return;
+    }
+    if (result.state === "invalid") {
+      prefixStatus.textContent = result.message;
+      prefixStatus.dataset.state = "error";
+      return;
+    }
+
+    addPastedPrefix(result.prefix);
+  } catch (error) {
+    console.error("Could not import instruction prefix:", error);
+    prefixStatus.textContent = error.message || "Could not read the prefix from the clipboard.";
+    prefixStatus.dataset.state = "error";
+  } finally {
+    importPrefixButton.disabled = false;
+  }
+}
+
+function addPastedPrefix(prefix) {
+  if (prefixConfig.length >= runtimeConfig.limits.maxPrefixes) {
+    prefixStatus.textContent = `You can save up to ${runtimeConfig.limits.maxPrefixes} instruction prefixes.`;
+    prefixStatus.dataset.state = "error";
+    return;
+  }
+
+  const nextPrefix = {
+    ...prefix,
+    name: getUniquePrefixName(
+      prefix.name,
+      prefixConfig,
+      runtimeConfig.limits.maxPrefixNameCharacters
+    )
+  };
+  const validationError = getPrefixValidationError([...prefixConfig, nextPrefix]);
+  if (validationError) {
+    prefixStatus.textContent = validationError;
+    prefixStatus.dataset.state = "error";
+    return;
+  }
+
+  prefixConfig = [...prefixConfig, nextPrefix];
+  renderPrefixes();
+  queuePrefixSave({ immediate: true });
+  prefixStatus.textContent = nextPrefix.name === prefix.name
+    ? `Pasted “${nextPrefix.name}” and added it to the registry.`
+    : `Pasted “${prefix.name}” as “${nextPrefix.name}” and added it to the registry.`;
+  prefixStatus.dataset.state = "success";
+  requestAnimationFrame(() => {
+    prefixList.lastElementChild?.querySelector(".prefix-copy-button")?.focus();
+  });
 }
 
 function queuePrefixSave({ immediate = false } = {}) {
@@ -638,7 +764,7 @@ function addPrefixManually() {
   prefixEditStatus.textContent = "";
   prefixEditStatus.dataset.state = "idle";
   prefixEditRemoveButton.hidden = true;
-  prefixEditSaveButton.textContent = "Add prefix";
+  setButtonLabel(prefixEditSaveButton, "Add prefix");
   showPrefixDialogView(prefixEditView);
   prefixEditName.focus();
 }
@@ -656,7 +782,7 @@ function openPrefixEditor(index) {
   prefixEditStatus.textContent = "";
   prefixEditStatus.dataset.state = "idle";
   prefixEditRemoveButton.hidden = false;
-  prefixEditSaveButton.textContent = "Save changes";
+  setButtonLabel(prefixEditSaveButton, "Save changes");
   showPrefixDialogView(prefixEditView);
   prefixDialog.showModal();
   prefixEditName.focus();
@@ -868,7 +994,7 @@ function preparePrefixDialog(mode, index) {
   prefixDialogKicker.textContent = mode === "edit" ? "Prefix settings" : "New instruction prefix";
   prefixDialogHeading.textContent = mode === "edit" ? "Edit prefix" : "Add a prefix to your voice";
   prefixEditRemoveButton.hidden = mode !== "edit";
-  prefixEditSaveButton.textContent = mode === "edit" ? "Save changes" : "Add prefix";
+  setButtonLabel(prefixEditSaveButton, mode === "edit" ? "Save changes" : "Add prefix");
   prefixEditStatus.textContent = "";
   prefixEditStatus.dataset.state = "idle";
   prefixPreviewSearch.checked = false;
@@ -903,7 +1029,7 @@ function resetPrefixDialog() {
   prefixDialogKicker.textContent = "New instruction prefix";
   prefixDialogHeading.textContent = "Add a prefix to your voice";
   prefixEditRemoveButton.hidden = true;
-  prefixEditSaveButton.textContent = "Add prefix";
+  setButtonLabel(prefixEditSaveButton, "Add prefix");
   showPrefixDialogView(prefixChoiceView);
 }
 
@@ -1094,7 +1220,7 @@ async function beginHotkeyCapture() {
   if (isCapturingHotkey) return;
   isCapturingHotkey = true;
   captureHotkeyButton.disabled = true;
-  captureHotkeyButton.textContent = "Press keys…";
+  setButtonLabel(captureHotkeyButton, "Press keys…");
   cancelHotkeyButton.hidden = false;
   hotkeyStatus.textContent = "Press one Control/Alt key, or hold modifiers and press a trigger; release to save. Escape cancels.";
   try {
@@ -1114,7 +1240,7 @@ function cancelHotkeyCapture() {
 function finishHotkeyCapture() {
   isCapturingHotkey = false;
   captureHotkeyButton.disabled = false;
-  captureHotkeyButton.textContent = "Capture hotkey";
+  setButtonLabel(captureHotkeyButton, "Capture hotkey");
   cancelHotkeyButton.hidden = true;
 }
 

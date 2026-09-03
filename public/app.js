@@ -1,5 +1,6 @@
 import { loadRuntimeConfig } from "./runtime-config.js";
 import { MINIMUM_RECORDING_DURATION_MS, isRecordingTooShort } from "./capture-policy.js";
+import { setButtonIcon, setButtonLabel } from "./icons.js";
 
 const transcribeButton = document.querySelector("#transcribe");
 const clearButton = document.querySelector("#clear");
@@ -323,7 +324,8 @@ function releaseRecordingResources() {
 }
 
 function updateTranscribeButtonLabel() {
-  transcribeButton.textContent = isTranscribing ? "Stop recording" : "Start recording";
+  setButtonIcon(transcribeButton, isTranscribing ? "player-stop" : "microphone");
+  setButtonLabel(transcribeButton, isTranscribing ? "Stop recording" : "Start recording");
   transcribeButton.setAttribute("aria-pressed", String(isTranscribing));
 }
 

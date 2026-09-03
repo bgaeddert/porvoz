@@ -24,7 +24,13 @@
 
       <main class="page-main logs-main">
         <aside id="setup-warning" class="setup-warning" hidden role="alert" aria-labelledby="setup-warning-label">
-          <span class="setup-warning-mark" aria-hidden="true">!</span>
+          <span class="setup-warning-mark" aria-hidden="true">
+            <svg class="icon icon-tabler icon-tabler-alert-triangle" viewBox="0 0 24 24" focusable="false">
+              <path d="M12 9v4" />
+              <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0" />
+              <path d="M12 16h.01" />
+            </svg>
+          </span>
           <div class="setup-warning-copy">
             <p id="setup-warning-label" class="panel-kicker">Configuration needed</p>
             <p id="setup-warning-message" class="setup-warning-message">Open Settings to finish configuring Porvoz.</p>
@@ -41,7 +47,16 @@
               <strong id="log-count">0</strong>
               <span id="log-count-label">events stored</span>
             </div>
-            <button id="clear-logs" class="button-danger logs-clear-button" type="button">Clear all logs</button>
+            <button id="clear-logs" class="button-danger button-with-icon logs-clear-button" type="button">
+              <svg class="icon icon-tabler icon-tabler-trash" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 7l16 0" />
+                <path d="M10 11l0 6" />
+                <path d="M14 11l0 6" />
+                <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+                <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+              </svg>
+              <span class="button-label">Clear all logs</span>
+            </button>
           </div>
         </section>
 
@@ -55,7 +70,14 @@
           </div>
           <div id="log-list" class="log-list"></div>
           <div id="logs-empty" class="logs-empty" hidden>
-            <span class="logs-empty-mark" aria-hidden="true">∅</span>
+            <span class="logs-empty-mark" aria-hidden="true">
+              <svg class="icon icon-tabler icon-tabler-archive-off" viewBox="0 0 24 24" focusable="false">
+                <path d="M8 4h11a2 2 0 1 1 0 4h-7m-4 0h-3a2 2 0 0 1 -.826 -3.822" />
+                <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 1.824 -1.18m.176 -3.82v-7" />
+                <path d="M10 12h2" />
+                <path d="M3 3l18 18" />
+              </svg>
+            </span>
             <div>
               <h2>The archive is quiet.</h2>
               <p>Start a transcription to place the first event here. Successful responses and operational errors are saved automatically.</p>
@@ -77,7 +99,16 @@
         <p>This permanently removes every transcript, instruction response, and error saved in Porvoz. Your settings and API connection will stay untouched.</p>
         <div class="dialog-actions">
           <button id="cancel-clear-logs" class="button-secondary" value="cancel" type="submit">Keep logs</button>
-          <button id="confirm-clear-logs" class="button-danger" value="confirm" type="button">Clear all logs</button>
+          <button id="confirm-clear-logs" class="button-danger button-with-icon" value="confirm" type="button">
+            <svg class="icon icon-tabler icon-tabler-trash" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 7l16 0" />
+              <path d="M10 11l0 6" />
+              <path d="M14 11l0 6" />
+              <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+              <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+            </svg>
+            <span class="button-label">Clear all logs</span>
+          </button>
         </div>
       </form>
     </dialog>

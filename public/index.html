@@ -24,7 +24,13 @@
 
       <main class="page-main transcribe-main">
         <aside id="setup-warning" class="setup-warning" hidden role="alert" aria-labelledby="setup-warning-label">
-          <span class="setup-warning-mark" aria-hidden="true">!</span>
+          <span class="setup-warning-mark" aria-hidden="true">
+            <svg class="icon icon-tabler icon-tabler-alert-triangle" viewBox="0 0 24 24" focusable="false">
+              <path d="M12 9v4" />
+              <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0" />
+              <path d="M12 16h.01" />
+            </svg>
+          </span>
           <div class="setup-warning-copy">
             <p id="setup-warning-label" class="panel-kicker">Configuration needed</p>
             <p id="setup-warning-message" class="setup-warning-message">Open Settings to finish configuring Porvoz.</p>
@@ -39,8 +45,22 @@
             <span id="capture-signal" class="signal-dot" aria-label="System ready"></span>
           </div>
           <div class="capture-controls">
-            <button id="transcribe" class="button-primary" type="button" aria-pressed="false">Start recording</button>
-            <button id="clear" class="button-secondary" type="button">Clear</button>
+            <button id="transcribe" class="button-primary button-with-icon" type="button" aria-pressed="false">
+              <svg class="icon icon-tabler icon-tabler-microphone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M9 5a3 3 0 0 1 3 -3a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3a3 3 0 0 1 -3 -3l0 -5" />
+                <path d="M5 10a7 7 0 0 0 14 0" />
+                <path d="M8 21l8 0" />
+                <path d="M12 17l0 4" />
+              </svg>
+              <span class="button-label">Start recording</span>
+            </button>
+            <button id="clear" class="button-secondary button-with-icon" type="button">
+              <svg class="icon icon-tabler icon-tabler-eraser" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3" />
+                <path d="M18 13.3l-6.3 -6.3" />
+              </svg>
+              <span class="button-label">Clear</span>
+            </button>
           </div>
           <p id="hotkey-hint" class="hotkey-hint" hidden>Hold Right Ctrl to record.</p>
           <p id="status" class="status-line" data-state="idle" aria-live="polite">Ready to record.</p>

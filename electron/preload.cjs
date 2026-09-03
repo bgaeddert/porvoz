@@ -32,6 +32,12 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   savePrefixSettings(value) {
     return ipcRenderer.invoke("porvoz:save-prefix-settings", value);
   },
+  writeClipboardText(value) {
+    return ipcRenderer.invoke("porvoz:write-clipboard-text", value);
+  },
+  readClipboardText() {
+    return ipcRenderer.invoke("porvoz:read-clipboard-text");
+  },
   getLogs() {
     return ipcRenderer.invoke("porvoz:get-logs");
   },

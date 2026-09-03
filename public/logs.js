@@ -1,3 +1,5 @@
+import { createIcon } from "./icons.js";
+
 const desktopBridge = window.porvozDesktop;
 const logCount = document.querySelector("#log-count");
 const logCountLabel = document.querySelector("#log-count-label");
@@ -141,8 +143,7 @@ function createStageConnector(log) {
     : log.prefix ? `Prefix applied · ${log.prefix}` : "Instruction applied";
   const arrow = document.createElement("span");
   arrow.className = "log-stage-arrow";
-  arrow.setAttribute("aria-hidden", "true");
-  arrow.textContent = "↓";
+  arrow.append(createIcon("arrow-down", "log-stage-arrow-icon"));
   connector.append(label, arrow);
   return connector;
 }

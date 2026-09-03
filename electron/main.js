@@ -571,6 +571,11 @@ function registerIpcHandlers() {
   ipcMain.handle("porvoz:save-prompt", (_event, value) => appService.savePrompt(value));
   ipcMain.handle("porvoz:reset-prompt", () => appService.resetPrompt());
   ipcMain.handle("porvoz:save-prefix-settings", (_event, value) => appService.savePrefixSettings(value));
+  ipcMain.handle("porvoz:write-clipboard-text", (_event, value) => {
+    if (typeof value !== "string") throw new Error("Clipboard content must be text.");
+    clipboard.writeText(value);
+  });
+  ipcMain.handle("porvoz:read-clipboard-text", () => clipboard.readText());
   ipcMain.handle("porvoz:get-logs", () => appService.getLogs());
   ipcMain.handle("porvoz:log-error", (_event, value) => {
     const result = appService.logError(value);

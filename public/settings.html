@@ -24,7 +24,13 @@
 
       <main class="page-main settings-main">
         <aside id="setup-warning" class="setup-warning" hidden role="alert" aria-labelledby="setup-warning-label">
-          <span class="setup-warning-mark" aria-hidden="true">!</span>
+          <span class="setup-warning-mark" aria-hidden="true">
+            <svg class="icon icon-tabler icon-tabler-alert-triangle" viewBox="0 0 24 24" focusable="false">
+              <path d="M12 9v4" />
+              <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0" />
+              <path d="M12 16h.01" />
+            </svg>
+          </span>
           <div class="setup-warning-copy">
             <p id="setup-warning-label" class="panel-kicker">Configuration needed</p>
             <p id="setup-warning-message" class="setup-warning-message">Open Settings to finish configuring Porvoz.</p>
@@ -58,7 +64,14 @@
               </label>
               <div class="form-actions">
                 <p id="connection-status" class="field-note" aria-live="polite">Loading connection settings…</p>
-                <button class="button-primary" type="submit">Save connection</button>
+                <button class="button-primary button-with-icon" type="submit">
+                  <svg class="icon icon-tabler icon-tabler-device-floppy" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" />
+                    <path d="M10 14a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+                    <path d="M14 4l0 4l-6 0l0 -4" />
+                  </svg>
+                  <span class="button-label">Save connection</span>
+                </button>
               </div>
             </form>
             <p class="security-note">The key is stored by the local Electron app and is never returned to this page. Disabling certificate verification makes HTTPS vulnerable to interception.</p>
@@ -78,9 +91,9 @@
                 <div class="model-input-row">
                   <input id="transcription-model" type="text" autocomplete="off" spellcheck="false" placeholder="Example: openai/whisper-1" required />
                   <button id="open-transcription-model-picker" class="button-secondary model-picker-button" type="button" aria-haspopup="dialog" aria-controls="model-picker-dialog" aria-label="Browse transcription models" title="Load models to browse the catalog" disabled>
-                    <svg class="model-picker-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <circle cx="10.8" cy="10.8" r="5.8"></circle>
-                      <path d="m15.2 15.2 4.4 4.4"></path>
+                    <svg class="icon icon-tabler icon-tabler-search model-picker-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+                      <path d="M21 21l-6 -6" />
                     </svg>
                   </button>
                 </div>
@@ -90,9 +103,9 @@
                 <div class="model-input-row">
                   <input id="instruction-model" type="text" autocomplete="off" spellcheck="false" placeholder="Example: openai/gpt-4o-mini" aria-describedby="model-status" required />
                   <button id="open-instruction-model-picker" class="button-secondary model-picker-button" type="button" aria-haspopup="dialog" aria-controls="model-picker-dialog" aria-label="Browse instruction models" title="Load models to browse the catalog" disabled>
-                    <svg class="model-picker-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <circle cx="10.8" cy="10.8" r="5.8"></circle>
-                      <path d="m15.2 15.2 4.4 4.4"></path>
+                    <svg class="icon icon-tabler icon-tabler-search model-picker-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+                      <path d="M21 21l-6 -6" />
                     </svg>
                   </button>
                 </div>
@@ -109,7 +122,13 @@
               </label>
               <div class="form-actions model-actions">
                 <p id="model-status" class="field-note" aria-live="polite">No models loaded yet.</p>
-                <button id="populate-models" class="button-secondary" type="button">Load models</button>
+                <button id="populate-models" class="button-secondary button-with-icon" type="button">
+                  <svg class="icon icon-tabler icon-tabler-refresh" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
+                    <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
+                  </svg>
+                  <span class="button-label">Load models</span>
+                </button>
               </div>
             </div>
             <p class="field-note">Type or paste a model ID to save it directly, or browse the loaded catalog and apply a selection.</p>
@@ -129,8 +148,26 @@
                 <kbd id="hotkey-display">Right Ctrl</kbd>
               </div>
               <div class="hotkey-actions">
-                <button id="capture-hotkey" class="button-secondary" type="button">Capture hotkey</button>
-                <button id="cancel-hotkey" class="button-secondary" type="button" hidden>Cancel</button>
+                <button id="capture-hotkey" class="button-secondary button-with-icon" type="button">
+                  <svg class="icon icon-tabler icon-tabler-keyboard" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M2 8a2 2 0 0 1 2 -2h16a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2l0 -8" />
+                    <path d="M6 10l0 .01" />
+                    <path d="M10 10l0 .01" />
+                    <path d="M14 10l0 .01" />
+                    <path d="M18 10l0 .01" />
+                    <path d="M6 14l0 .01" />
+                    <path d="M18 14l0 .01" />
+                    <path d="M10 14l4 .01" />
+                  </svg>
+                  <span class="button-label">Capture hotkey</span>
+                </button>
+                <button id="cancel-hotkey" class="button-secondary button-with-icon" type="button" hidden>
+                  <svg class="icon icon-tabler icon-tabler-x" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M18 6l-12 12" />
+                    <path d="M6 6l12 12" />
+                  </svg>
+                  <span class="button-label">Cancel</span>
+                </button>
               </div>
             </div>
             <p id="hotkey-status" class="field-note" aria-live="polite">Click Capture hotkey, then press one Control/Alt key or a combination. Release to save; Escape cancels.</p>
@@ -141,7 +178,14 @@
               </div>
               <label class="sound-volume-control" for="sound-volume">
                 <span class="sound-volume-label">
-                  <span>Volume</span>
+                  <span class="volume-label-text">
+                    <svg class="icon icon-tabler icon-tabler-volume" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M15 8a5 5 0 0 1 0 8" />
+                      <path d="M17.7 5a9 9 0 0 1 0 14" />
+                      <path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5" />
+                    </svg>
+                    <span>Volume</span>
+                  </span>
                   <output id="sound-volume-value" for="sound-volume">30%</output>
                 </span>
                 <input id="sound-volume" type="range" min="0" max="100" step="1" value="30" />
@@ -156,7 +200,14 @@
                 <p class="panel-kicker">Instruction behavior</p>
                 <h2 id="prompt-heading">Main instruction prompt</h2>
               </div>
-              <button id="reset-prompt" class="button-secondary" type="button">Reset prompt</button>
+              <button id="reset-prompt" class="button-secondary button-with-icon" type="button">
+                <svg class="icon icon-tabler icon-tabler-restore" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M3.06 13a9 9 0 1 0 .49 -4.087" />
+                  <path d="M3 4.001v5h5" />
+                  <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+                </svg>
+                <span class="button-label">Reset prompt</span>
+              </button>
             </div>
             <label class="field-label" for="instruction-prompt">
               Instructions prompt
@@ -170,13 +221,28 @@
               <div>
                 <p class="panel-kicker">Instruction prefix registry</p>
                 <h2 id="prefixes-heading">Teach Porvoz your prefixes</h2>
-                <p class="section-description">A transcript reaches the instruction model when it begins with a prefix in this list. Select Edit on any row to change its instruction, access, or name.</p>
+                <p class="section-description">A transcript reaches the instruction model when it begins with a prefix in this list. Select Edit on any row to change it, or Copy to move its JSON between Porvoz installs.</p>
               </div>
-              <button id="add-prefix" class="button-secondary" type="button">Add prefix</button>
+              <div class="prefix-heading-actions">
+                <button id="import-prefix" class="button-secondary button-with-icon" type="button">
+                  <svg class="icon icon-tabler icon-tabler-clipboard" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2" />
+                    <path d="M9 5a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2" />
+                  </svg>
+                  <span class="button-label">Import from clipboard</span>
+                </button>
+                <button id="add-prefix" class="button-secondary button-with-icon" type="button">
+                  <svg class="icon icon-tabler icon-tabler-plus" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M12 5l0 14" />
+                    <path d="M5 12l14 0" />
+                  </svg>
+                  <span class="button-label">Add prefix</span>
+                </button>
+              </div>
             </div>
             <div id="prefix-list" class="prefix-list"></div>
             <p id="prefix-empty" class="field-note" hidden>No instruction prefixes configured.</p>
-            <p id="prefix-status" class="field-note" aria-live="polite">Changes save as you make them.</p>
+            <p id="prefix-status" class="field-note" aria-live="polite">Changes save as you make them. Use Import from clipboard to add a copied prefix.</p>
           </section>
 
           <section class="settings-card settings-card-reset" aria-labelledby="reset-heading">
@@ -186,7 +252,14 @@
                 <h2 id="reset-heading">Reset all settings</h2>
                 <p class="section-description">Clear the connection, loaded models, prompt, prefixes, and capture key, then rebuild the page from the packaged defaults.</p>
               </div>
-              <button id="reset-defaults" class="button-danger" type="button">Reset to defaults</button>
+              <button id="reset-defaults" class="button-danger button-with-icon" type="button">
+                <svg class="icon icon-tabler icon-tabler-restore" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M3.06 13a9 9 0 1 0 .49 -4.087" />
+                  <path d="M3 4.001v5h5" />
+                  <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+                </svg>
+                <span class="button-label">Reset to defaults</span>
+              </button>
             </div>
             <p id="reset-status" class="field-note" aria-live="polite">Your current settings stay unchanged until you confirm the reset.</p>
           </section>
@@ -205,7 +278,14 @@
         <p>This removes the saved API key and every editable setting. The packaged defaults will be loaded again.</p>
         <div class="dialog-actions">
           <button id="cancel-reset" class="button-secondary" value="cancel" type="submit">Keep settings</button>
-          <button id="confirm-reset" class="button-danger" value="confirm" type="button">Reset everything</button>
+          <button id="confirm-reset" class="button-danger button-with-icon" value="confirm" type="button">
+            <svg class="icon icon-tabler icon-tabler-restore" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3.06 13a9 9 0 1 0 .49 -4.087" />
+              <path d="M3 4.001v5h5" />
+              <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+            </svg>
+            <span class="button-label">Reset everything</span>
+          </button>
         </div>
       </form>
     </dialog>
@@ -216,7 +296,14 @@
         <p>Your current main instruction prompt will be replaced with Porvoz’s packaged default. The rest of your settings will stay unchanged.</p>
         <div class="dialog-actions">
           <button id="cancel-prompt-reset" class="button-secondary" value="cancel" type="submit">Keep prompt</button>
-          <button id="confirm-prompt-reset" class="button-danger" value="confirm" type="button">Reset prompt</button>
+          <button id="confirm-prompt-reset" class="button-danger button-with-icon" value="confirm" type="button">
+            <svg class="icon icon-tabler icon-tabler-restore" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3.06 13a9 9 0 1 0 .49 -4.087" />
+              <path d="M3 4.001v5h5" />
+              <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+            </svg>
+            <span class="button-label">Reset prompt</span>
+          </button>
         </div>
       </form>
     </dialog>
@@ -227,14 +314,23 @@
             <p id="prefix-dialog-kicker" class="panel-kicker">New instruction prefix</p>
             <h2 id="prefix-dialog-heading">Add a prefix to your voice</h2>
           </div>
-          <button id="close-prefix-dialog" class="dialog-close" type="button" aria-label="Close prefix dialog">×</button>
+          <button id="close-prefix-dialog" class="dialog-close" type="button" aria-label="Close prefix dialog">
+            <svg class="icon icon-tabler icon-tabler-x" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M18 6l-12 12" />
+              <path d="M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         <section id="prefix-choice-view" class="prefix-dialog-view" aria-label="Choose how to add a prefix">
           <p class="prefix-dialog-lede">Give Porvoz a phrase to listen for, and it will turn your idea into a reusable instruction.</p>
           <div class="prefix-creation-options">
             <button id="voice-prefix-option" class="prefix-voice-option" type="button">
-              <span class="prefix-option-mark" aria-hidden="true">✦</span>
+              <span class="prefix-option-mark" aria-hidden="true">
+                <svg class="icon icon-tabler icon-tabler-sparkles" viewBox="0 0 24 24" focusable="false">
+                  <path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6" />
+                </svg>
+              </span>
               <span class="prefix-option-copy">
                 <strong>Create a new prefix with your voice</strong>
                 <small>Describe what you want the prefix to do. AI will use your prompt and existing prefixes to draft the trigger and instruction.</small>
@@ -242,7 +338,12 @@
               <span class="prefix-ai-badge">AI</span>
             </button>
             <button id="manual-prefix-option" class="prefix-manual-option" type="button">
-              <span class="prefix-option-mark" aria-hidden="true">＋</span>
+              <span class="prefix-option-mark" aria-hidden="true">
+                <svg class="icon icon-tabler icon-tabler-plus" viewBox="0 0 24 24" focusable="false">
+                  <path d="M12 5l0 14" />
+                  <path d="M5 12l14 0" />
+                </svg>
+              </span>
               <span class="prefix-option-copy">
                 <strong>Add a prefix manually</strong>
                 <small>Start with a blank row and write the name and instruction yourself.</small>
@@ -276,9 +377,25 @@
           </fieldset>
           <p id="prefix-edit-status" class="field-note" aria-live="polite"></p>
           <div class="dialog-actions prefix-edit-actions">
-            <button id="prefix-edit-remove" class="button-danger" type="button">Remove prefix</button>
+            <button id="prefix-edit-remove" class="button-danger button-with-icon" type="button">
+              <svg class="icon icon-tabler icon-tabler-trash" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 7l16 0" />
+                <path d="M10 11l0 6" />
+                <path d="M14 11l0 6" />
+                <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+                <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+              </svg>
+              <span class="button-label">Remove prefix</span>
+            </button>
             <button id="prefix-edit-cancel" class="button-secondary" type="button">Cancel</button>
-            <button id="prefix-edit-save" class="button-primary" type="button">Save prefix</button>
+            <button id="prefix-edit-save" class="button-primary button-with-icon" type="button">
+              <svg class="icon icon-tabler icon-tabler-device-floppy" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" />
+                <path d="M10 14a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+                <path d="M14 4l0 4l-6 0l0 -4" />
+              </svg>
+              <span class="button-label">Save prefix</span>
+            </button>
           </div>
         </section>
 
@@ -290,8 +407,21 @@
           <p id="prefix-record-status" class="prefix-record-status" aria-live="polite">Ready when you are.</p>
           <div class="dialog-actions prefix-record-actions">
             <button id="prefix-record-cancel" class="button-secondary" type="button">Back</button>
-            <button id="prefix-record-start" class="button-primary" type="button">Start listening</button>
-            <button id="prefix-record-stop" class="button-danger" type="button" hidden>Stop and create</button>
+            <button id="prefix-record-start" class="button-primary button-with-icon" type="button">
+              <svg class="icon icon-tabler icon-tabler-microphone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M9 5a3 3 0 0 1 3 -3a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3a3 3 0 0 1 -3 -3l0 -5" />
+                <path d="M5 10a7 7 0 0 0 14 0" />
+                <path d="M8 21l8 0" />
+                <path d="M12 17l0 4" />
+              </svg>
+              <span class="button-label">Start listening</span>
+            </button>
+            <button id="prefix-record-stop" class="button-danger button-with-icon" type="button" hidden>
+              <svg class="icon icon-tabler icon-tabler-player-stop" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M5 7a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -10" />
+              </svg>
+              <span class="button-label">Stop and create</span>
+            </button>
           </div>
           <p class="prefix-dialog-footnote">Your recording is sent to the configured transcription and instruction models. Nothing is saved until you approve the preview.</p>
         </section>
@@ -326,7 +456,13 @@
           <p id="prefix-preview-status" class="field-note" aria-live="polite"></p>
           <div class="dialog-actions">
             <button id="prefix-preview-cancel" class="button-secondary" type="button">Cancel</button>
-            <button id="prefix-preview-add" class="button-primary" type="button">Add prefix</button>
+            <button id="prefix-preview-add" class="button-primary button-with-icon" type="button">
+              <svg class="icon icon-tabler icon-tabler-plus" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 5l0 14" />
+                <path d="M5 12l14 0" />
+              </svg>
+              <span class="button-label">Add prefix</span>
+            </button>
           </div>
         </section>
       </div>
@@ -338,7 +474,12 @@
             <p class="panel-kicker">Loaded catalog</p>
             <h2 id="model-picker-heading">Browse models</h2>
           </div>
-          <button id="close-model-picker" class="dialog-close" type="button" aria-label="Close model picker">×</button>
+          <button id="close-model-picker" class="dialog-close" type="button" aria-label="Close model picker">
+            <svg class="icon icon-tabler icon-tabler-x" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M18 6l-12 12" />
+              <path d="M6 6l12 12" />
+            </svg>
+          </button>
         </div>
         <p id="model-picker-description" class="model-picker-lede">Type to filter the loaded catalog, choose a model, then save it into the field.</p>
         <div class="model-picker-combobox">
@@ -347,8 +488,8 @@
             <div class="model-combobox-input-row">
               <input id="model-picker-input" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="model-picker-menu" placeholder="Type to filter model IDs" />
               <button id="toggle-model-picker" class="button-secondary model-picker-toggle" type="button" aria-label="Show model catalog" aria-expanded="false" aria-controls="model-picker-menu" title="Show model catalog">
-                <svg class="model-picker-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="m6 9 6 6 6-6"></path>
+                <svg class="icon icon-tabler icon-tabler-chevron-down model-picker-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M6 9l6 6l6 -6" />
                 </svg>
               </button>
             </div>

@@ -4,9 +4,19 @@ Porvoz is a tray-first Electron desktop app for voice transcription and customiz
 
 The API key stays in the operating system credential store. Porvoz does not start a web server. When it types a response, it temporarily places the text on the system clipboard for a simulated paste and restores the previous clipboard contents when they have not changed externally.
 
+## Iconography
+
+Porvoz uses the [Tabler Icons](https://github.com/tabler/tabler-icons) outline set for interface icons. Icons are kept inline so the app remains self-contained and available offline; the standard is Tabler’s 24×24 viewBox with a 2px stroke.
+
 ## Download and install
 
-The current release is [Porvoz v1.3.0](https://github.com/bgaeddert/porvoz/releases/tag/v1.3.0). Release packages are x64 builds.
+The current release is [Porvoz v1.3.1](https://github.com/bgaeddert/porvoz/releases/tag/v1.3.1). Release packages are x64 builds.
+
+### What's new in v1.3.1
+
+Prefixes can now be copied as portable JSON and imported into another Porvoz installation. The JSON contains the prefix name, instruction, and access settings, but not the source machine's local registry ID. Imported prefixes are validated, receive a fresh local ID, and get a `duplicate` suffix when their name is already in use. The repository also includes [portable prefix examples](examples.md).
+
+The interface now uses the [Tabler Icons](https://github.com/tabler/tabler-icons) outline set for its actionable and status icons. Icons are embedded inline so the application remains self-contained and available offline.
 
 ### What's new in v1.3.0
 
@@ -36,15 +46,15 @@ Windows and Linux now use a TypeWhisper-style temporary clipboard transaction fo
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.3.0/Porvoz-1.3.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.3.1/Porvoz-1.3.1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.3.0/Porvoz-1.3.0-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.3.1/Porvoz-1.3.1-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-1.3.0-linux-x86_64.AppImage
-./Porvoz-1.3.0-linux-x86_64.AppImage
+chmod +x Porvoz-1.3.1-linux-x86_64.AppImage
+./Porvoz-1.3.1-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to save the API key securely. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -53,7 +63,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.3.0/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.3.1/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -73,6 +83,8 @@ The endpoint must provide the OpenAI-compatible audio transcription and Response
 Prefixes are reusable voice triggers. A transcript reaches the instruction model when it begins with a prefix in the registry; matching is case-insensitive. Porvoz can recognize a chain of consecutive prefixes from left to right, remove the matched trigger phrases, and apply every matched instruction in order. If no registered prefix matches, the transcription is returned without calling the instruction model.
 
 The **Instruction prefix registry** in Settings shows every entry at the same level with its trigger name and instruction. Select **Edit** to change the name, instruction, access, or remove the prefix. Every saved prefix is active immediately.
+
+Each prefix row also has a **Copy** button. It puts a portable JSON version of that prefix on the system clipboard without its local registry ID. Select **Import from clipboard** to read and add it; imported prefixes are validated before saving, receive a fresh local ID, and a name collision gets a `duplicate` suffix automatically. The repository's ready-to-copy examples are in [examples.md](examples.md).
 
 Porvoz loads these five ordinary prefix entries by default when no settings have been saved:
 
