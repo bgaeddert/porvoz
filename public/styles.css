@@ -993,7 +993,8 @@ input::placeholder {
 .connection-form,
 .model-grid,
 .hotkey-setting,
-.sound-setting {
+.sound-setting,
+.profile-switcher {
   display: grid;
   gap: 1rem;
 }
@@ -1001,6 +1002,21 @@ input::placeholder {
 .connection-form {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: end;
+}
+
+.profile-switcher {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  margin-bottom: 1.2rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-switcher-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .7rem;
 }
 
 .model-grid {
@@ -2020,8 +2036,13 @@ select {
   .model-grid,
   .hotkey-setting,
   .sound-setting,
+  .profile-switcher,
   .logs-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .profile-switcher-actions {
+    justify-content: flex-start;
   }
 
   .instruction-reasoning-field {

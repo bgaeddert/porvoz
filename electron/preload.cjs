@@ -23,6 +23,18 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   saveModelSelections(value) {
     return ipcRenderer.invoke("porvoz:save-model-selections", value);
   },
+  createProfile(value) {
+    return ipcRenderer.invoke("porvoz:create-profile", value);
+  },
+  renameProfile(value) {
+    return ipcRenderer.invoke("porvoz:rename-profile", value);
+  },
+  deleteProfile(value) {
+    return ipcRenderer.invoke("porvoz:delete-profile", value);
+  },
+  setActiveProfile(value) {
+    return ipcRenderer.invoke("porvoz:set-active-profile", value);
+  },
   savePrompt(value) {
     return ipcRenderer.invoke("porvoz:save-prompt", value);
   },

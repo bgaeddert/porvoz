@@ -3,6 +3,22 @@ import { isRecordingTooShort } from "./capture-policy.js";
 import { createButtonLabel, createIcon, setButtonLabel } from "./icons.js";
 import { getUniquePrefixName, parsePrefix, serializePrefix } from "./prefix-transfer.js";
 
+const profileSelect = document.querySelector("#profile-select");
+const addProfileButton = document.querySelector("#add-profile");
+const renameProfileButton = document.querySelector("#rename-profile");
+const deleteProfileButton = document.querySelector("#delete-profile");
+const profileStatus = document.querySelector("#profile-status");
+const profileDialog = document.querySelector("#profile-dialog");
+const profileDialogKicker = document.querySelector("#profile-dialog-kicker");
+const profileDialogHeading = document.querySelector("#profile-dialog-heading");
+const profileNameInput = document.querySelector("#profile-name-input");
+const profileDialogStatus = document.querySelector("#profile-dialog-status");
+const cancelProfileDialogButton = document.querySelector("#cancel-profile-dialog");
+const saveProfileDialogButton = document.querySelector("#save-profile-dialog");
+const deleteProfileDialog = document.querySelector("#delete-profile-dialog");
+const deleteProfileDialogHeading = document.querySelector("#delete-profile-dialog-heading");
+const cancelDeleteProfileButton = document.querySelector("#cancel-delete-profile");
+const confirmDeleteProfileButton = document.querySelector("#confirm-delete-profile");
 const baseUrlInput = document.querySelector("#base-url");
 const apiKeyInput = document.querySelector("#api-key");
 const verifyCertificateInput = document.querySelector("#verify-certificate");
@@ -98,15 +114,18 @@ let prefixFlowToken = 0;
 let editingPrefixIndex = -1;
 let modelPickerTarget = "";
 let modelPickerSelection = "";
+let profileDialogMode = "add";
 
 baseUrlInput.maxLength = 2048;
 apiKeyInput.maxLength = 4096;
+profileNameInput.maxLength = runtimeConfig.limits.maxProfileNameCharacters;
 instructionPrompt.maxLength = runtimeConfig.limits.maxInstructionPromptCharacters;
 prefixEditName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
 prefixEditInstruction.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
 prefixPreviewName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
 prefixPreviewInstruction.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
 
+renderProfiles();
 loadConnectionSettings();
 renderModels();
 initializeInstructionPrompt();
@@ -114,6 +133,14 @@ renderPrefixes();
 renderSoundVolume(runtimeConfig.soundVolume);
 await initializeHotkey();
 
+profileSelect.addEventListener("change", switchActiveProfile);
+addProfileButton.addEventListener("click", openAddProfileDialog);
+renameProfileButton.addEventListener("click", openRenameProfileDialog);
+deleteProfileButton.addEventListener("click", openDeleteProfileDialog);
+cancelProfileDialogButton.addEventListener("click", () => profileDialog.close());
+saveProfileDialogButton.addEventListener("click", saveProfileDialog);
+cancelDeleteProfileButton.addEventListener("click", () => deleteProfileDialog.close());
+confirmDeleteProfileButton.addEventListener("click", confirmDeleteProfile);
 connectionForm.addEventListener("submit", saveConnection);
 populateModelsButton.addEventListener("click", populateModels);
 transcriptionModel.addEventListener("input", handleModelInput);
@@ -190,6 +217,136 @@ function handleActivityCanceled() {
   if (modelsActive) {
     modelStatus.textContent = "Model loading canceled.";
     modelStatus.dataset.state = "idle";
+  }
+}
+
+function renderProfiles() {
+  profileSelect.replaceChildren(...runtimeConfig.profiles.map((profile) => {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = profile.name;
+    return option;
+  }));
+  profileSelect.value = runtimeConfig.activeProfileId;
+  deleteProfileButton.disabled = runtimeConfig.profiles.length <= 1;
+}
+
+function getActiveProfileName() {
+  return runtimeConfig.profiles.find((profile) => profile.id === runtimeConfig.activeProfileId)?.name || "";
+}
+
+async function switchActiveProfile() {
+  const nextProfileId = profileSelect.value;
+  if (nextProfileId === runtimeConfig.activeProfileId) return;
+  setProfileControlsDisabled(true);
+  profileStatus.textContent = "Switching connection profile…";
+  profileStatus.dataset.state = "saving";
+  try {
+    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
+    runtimeConfig = await desktopBridge.setActiveProfile({ id: nextProfileId });
+    renderProfiles();
+    await loadConnectionSettings();
+    renderModels();
+    profileStatus.textContent = `Switched to “${getActiveProfileName()}”.`;
+    profileStatus.dataset.state = "success";
+  } catch (error) {
+    renderProfiles();
+    profileStatus.textContent = error.message || "Could not switch connection profiles.";
+    profileStatus.dataset.state = "error";
+  } finally {
+    setProfileControlsDisabled(false);
+  }
+}
+
+function setProfileControlsDisabled(disabled) {
+  profileSelect.disabled = disabled;
+  addProfileButton.disabled = disabled;
+  renameProfileButton.disabled = disabled;
+  // renderProfiles() is always called before this re-enables (both on
+  // success and on error), and it sets the correct disabled state for a
+  // single remaining profile — so only force it on, never force it off.
+  deleteProfileButton.disabled = disabled || deleteProfileButton.disabled;
+}
+
+function openAddProfileDialog() {
+  profileDialogMode = "add";
+  profileDialogKicker.textContent = "New connection profile";
+  profileDialogHeading.textContent = "Name this profile";
+  profileNameInput.value = "";
+  profileDialogStatus.textContent = "";
+  profileDialogStatus.dataset.state = "idle";
+  setButtonLabel(saveProfileDialogButton, "Add profile");
+  profileDialog.showModal();
+  profileNameInput.focus();
+}
+
+function openRenameProfileDialog() {
+  profileDialogMode = "rename";
+  profileDialogKicker.textContent = "Profile settings";
+  profileDialogHeading.textContent = "Rename profile";
+  profileNameInput.value = getActiveProfileName();
+  profileDialogStatus.textContent = "";
+  profileDialogStatus.dataset.state = "idle";
+  setButtonLabel(saveProfileDialogButton, "Save name");
+  profileDialog.showModal();
+  profileNameInput.focus();
+  profileNameInput.select();
+}
+
+async function saveProfileDialog() {
+  const name = profileNameInput.value.trim();
+  if (!name) {
+    profileDialogStatus.textContent = "Enter a name for the connection profile.";
+    profileDialogStatus.dataset.state = "error";
+    return;
+  }
+  saveProfileDialogButton.disabled = true;
+  profileDialogStatus.textContent = "Saving…";
+  profileDialogStatus.dataset.state = "saving";
+  try {
+    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
+    runtimeConfig = profileDialogMode === "add"
+      ? await desktopBridge.createProfile({ name })
+      : await desktopBridge.renameProfile({ id: runtimeConfig.activeProfileId, name });
+    renderProfiles();
+    await loadConnectionSettings();
+    renderModels();
+    profileDialog.close();
+    profileStatus.textContent = profileDialogMode === "add"
+      ? `Added “${name}” and made it the active profile.`
+      : `Renamed the profile to “${name}”.`;
+    profileStatus.dataset.state = "success";
+  } catch (error) {
+    profileDialogStatus.textContent = error.message || "Could not save the connection profile.";
+    profileDialogStatus.dataset.state = "error";
+  } finally {
+    saveProfileDialogButton.disabled = false;
+  }
+}
+
+function openDeleteProfileDialog() {
+  if (deleteProfileButton.disabled) return;
+  deleteProfileDialogHeading.textContent = `Delete “${getActiveProfileName()}”?`;
+  deleteProfileDialog.showModal();
+}
+
+async function confirmDeleteProfile() {
+  confirmDeleteProfileButton.disabled = true;
+  const deletedName = getActiveProfileName();
+  try {
+    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
+    runtimeConfig = await desktopBridge.deleteProfile({ id: runtimeConfig.activeProfileId });
+    renderProfiles();
+    await loadConnectionSettings();
+    renderModels();
+    deleteProfileDialog.close();
+    profileStatus.textContent = `Deleted “${deletedName}”. Now using “${getActiveProfileName()}”.`;
+    profileStatus.dataset.state = "success";
+  } catch (error) {
+    profileStatus.textContent = error.message || "Could not delete the connection profile.";
+    profileStatus.dataset.state = "error";
+  } finally {
+    confirmDeleteProfileButton.disabled = false;
   }
 }
 
@@ -1128,6 +1285,7 @@ async function resetToDefaults(event) {
     await modelSaveQueue.catch(() => {});
     runtimeConfig = await desktopBridge.resetToDefaults();
     prefixConfig = runtimeConfig.prefixes.map(normalizePrefix);
+    renderProfiles();
     renderModels();
     initializeInstructionPrompt();
     renderPrefixes();

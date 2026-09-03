@@ -10,7 +10,11 @@ Porvoz uses the [Tabler Icons](https://github.com/tabler/tabler-icons) outline s
 
 ## Download and install
 
-The current release is [Porvoz v1.3.1](https://github.com/bgaeddert/porvoz/releases/tag/v1.3.1). Release packages are x64 builds.
+The current release is [Porvoz v1.3.2](https://github.com/bgaeddert/porvoz/releases/tag/v1.3.2). Release packages are x64 builds.
+
+### What's new in v1.3.2
+
+Settings can now save multiple named **connection profiles**, each with its own base URL, API key, transcription model, and instruction model. Use the profile dropdown above the connection form to switch between them; switching makes that profile active immediately, and the form below always edits whichever profile is selected. Add, rename, or delete profiles from the same row — Porvoz keeps at least one profile at all times. Existing installations migrate automatically: your current connection and key become a profile named "Default" and stay active, with no action needed.
 
 ### What's new in v1.3.1
 
@@ -46,15 +50,15 @@ Windows and Linux now use a TypeWhisper-style temporary clipboard transaction fo
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.3.1/Porvoz-1.3.1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.3.2/Porvoz-1.3.2-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.3.1/Porvoz-1.3.1-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.3.2/Porvoz-1.3.2-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-1.3.1-linux-x86_64.AppImage
-./Porvoz-1.3.1-linux-x86_64.AppImage
+chmod +x Porvoz-1.3.2-linux-x86_64.AppImage
+./Porvoz-1.3.2-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to save the API key securely. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -63,7 +67,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.3.1/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.3.2/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -72,8 +76,8 @@ There is no macOS package in the current release.
 Porvoz starts hidden and adds a tray icon. Choose **Open Porvoz** from the tray menu to open Settings; the app continues running in the tray when its windows are closed.
 
 1. Open **Settings**.
-2. Enter the endpoint's base URL and API key.
-3. Select **Load models**. Porvoz reads the endpoint's `/v1/models` catalog.
+2. Enter the endpoint's base URL and API key under the active connection profile. To configure another endpoint later, select **New profile** above the form, give it a name, then fill in its own base URL, key, and models — Porvoz keeps every profile's settings separate and switches instantly when you pick a different one from the dropdown. Use **Rename** or **Delete** for any profile except the last one.
+3. Select **Load models**. Porvoz reads the endpoint's `/v1/models` catalog for the selected profile.
 4. Type or paste a model ID into the **Transcription model** and **Instruction model** fields; each is saved automatically. You can also use the browse button beside either field to search the loaded catalog, choose a model, and save it into that field. Choose the instruction reasoning level (`low`, `medium`, or `high`); it defaults to `low` and applies only to instruction-model requests.
 
 The endpoint must provide the OpenAI-compatible audio transcription and Responses API operations used by the app. **Verify certificate** is enabled by default for every API request. Disable it only for a trusted self-signed endpoint on a network you control.
@@ -121,9 +125,9 @@ Windows and Linux use one clipboard transaction: Porvoz snapshots the clipboard,
 
 ## Local data and security
 
-Non-secret settings are stored in the platform user-data directory as `settings.json`. The API key is encrypted in a separate credential file using the operating system's secure credential facility. The packaged `electron/defaults.json` contains only first-run defaults and never contains an API key.
+Non-secret settings, including every connection profile's name, base URL, and model choices, are stored in the platform user-data directory as `settings.json`. Each profile's API key is encrypted separately in a credential file using the operating system's secure credential facility; a profile's key is never returned to the Settings page once saved. The packaged `electron/defaults.json` contains only first-run defaults and never contains an API key.
 
-Use **Reset to defaults** in Settings to remove the saved API key and editable settings, then rebuild from the packaged defaults.
+Use **Reset to defaults** in Settings to remove every connection profile, its saved API key, and every other editable setting, then rebuild from the packaged defaults.
 
 ## Development
 

@@ -43,8 +43,42 @@
               <div>
                 <p class="panel-kicker">API connection</p>
                 <h2 id="connection-heading">Where Porvoz sends requests</h2>
+                <p class="section-description">Save a named profile for each endpoint and switch between them here.</p>
               </div>
             </div>
+            <div class="profile-switcher">
+              <label class="field-label" for="profile-select">
+                Connection profile
+                <select id="profile-select"></select>
+              </label>
+              <div class="profile-switcher-actions">
+                <button id="add-profile" class="button-secondary button-with-icon" type="button">
+                  <svg class="icon icon-tabler icon-tabler-plus" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M12 5l0 14" />
+                    <path d="M5 12l14 0" />
+                  </svg>
+                  <span class="button-label">New profile</span>
+                </button>
+                <button id="rename-profile" class="button-secondary button-with-icon" type="button">
+                  <svg class="icon icon-tabler icon-tabler-pencil" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+                    <path d="M13.5 6.5l4 4" />
+                  </svg>
+                  <span class="button-label">Rename</span>
+                </button>
+                <button id="delete-profile" class="button-danger button-with-icon" type="button">
+                  <svg class="icon icon-tabler icon-tabler-trash" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M4 7l16 0" />
+                    <path d="M10 11l0 6" />
+                    <path d="M14 11l0 6" />
+                    <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+                    <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+                  </svg>
+                  <span class="button-label">Delete</span>
+                </button>
+              </div>
+            </div>
+            <p id="profile-status" class="field-note" aria-live="polite">Each profile keeps its own base URL, key, and model choices.</p>
             <form id="connection-form" class="connection-form">
               <label class="field-label" for="base-url">
                 Base URL
@@ -250,7 +284,7 @@
               <div>
                 <p class="panel-kicker">Fresh start</p>
                 <h2 id="reset-heading">Reset all settings</h2>
-                <p class="section-description">Clear the connection, loaded models, prompt, prefixes, and capture key, then rebuild the page from the packaged defaults.</p>
+                <p class="section-description">Clear every connection profile, loaded models, prompt, prefixes, and capture key, then rebuild the page from the packaged defaults.</p>
               </div>
               <button id="reset-defaults" class="button-danger button-with-icon" type="button">
                 <svg class="icon icon-tabler icon-tabler-restore" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -275,7 +309,7 @@
       <form method="dialog" class="reset-dialog-card">
         <p class="panel-kicker">Confirm reset</p>
         <h2 id="reset-dialog-heading">Start with a clean slate?</h2>
-        <p>This removes the saved API key and every editable setting. The packaged defaults will be loaded again.</p>
+        <p>This removes every connection profile, its saved API key, and every editable setting. The packaged defaults will be loaded again.</p>
         <div class="dialog-actions">
           <button id="cancel-reset" class="button-secondary" value="cancel" type="submit">Keep settings</button>
           <button id="confirm-reset" class="button-danger button-with-icon" value="confirm" type="button">
@@ -303,6 +337,48 @@
               <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
             </svg>
             <span class="button-label">Reset prompt</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="profile-dialog" class="reset-dialog" aria-labelledby="profile-dialog-heading">
+      <form method="dialog" class="reset-dialog-card">
+        <p id="profile-dialog-kicker" class="panel-kicker">New connection profile</p>
+        <h2 id="profile-dialog-heading">Name this profile</h2>
+        <label class="field-label" for="profile-name-input">
+          Profile name
+          <input id="profile-name-input" type="text" placeholder="Example: OpenRouter" required />
+        </label>
+        <p id="profile-dialog-status" class="field-note" aria-live="polite"></p>
+        <div class="dialog-actions">
+          <button id="cancel-profile-dialog" class="button-secondary" value="cancel" type="submit">Cancel</button>
+          <button id="save-profile-dialog" class="button-primary button-with-icon" value="save" type="button">
+            <svg class="icon icon-tabler icon-tabler-device-floppy" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" />
+              <path d="M10 14a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+              <path d="M14 4l0 4l-6 0l0 -4" />
+            </svg>
+            <span class="button-label">Add profile</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="delete-profile-dialog" class="reset-dialog" aria-labelledby="delete-profile-dialog-heading">
+      <form method="dialog" class="reset-dialog-card">
+        <p class="panel-kicker">Confirm delete</p>
+        <h2 id="delete-profile-dialog-heading">Delete this connection profile?</h2>
+        <p id="delete-profile-dialog-message">This removes its base URL, key, and model choices. This cannot be undone.</p>
+        <div class="dialog-actions">
+          <button id="cancel-delete-profile" class="button-secondary" value="cancel" type="submit">Keep profile</button>
+          <button id="confirm-delete-profile" class="button-danger button-with-icon" value="confirm" type="button">
+            <svg class="icon icon-tabler icon-tabler-trash" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 7l16 0" />
+              <path d="M10 11l0 6" />
+              <path d="M14 11l0 6" />
+              <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+              <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+            </svg>
+            <span class="button-label">Delete profile</span>
           </button>
         </div>
       </form>
