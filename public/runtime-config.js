@@ -4,7 +4,11 @@ export async function loadRuntimeConfig() {
     throw new Error("Porvoz must be running as the Electron app.");
   }
   const result = await desktopBridge.getRuntimeConfig();
-  if (!result?.models
+  if (!Array.isArray(result?.profiles)
+    || !result.profiles.length
+    || typeof result.activeProfileId !== "string"
+    || !result.profiles.some((profile) => profile.id === result.activeProfileId)
+    || !result?.models
     || !Array.isArray(result.models.available)
     || !result.models.selected
     || !["low", "medium", "high"].includes(result.models.selected.instructionReasoning)

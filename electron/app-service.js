@@ -33,6 +33,10 @@ export function createAppService(settingsStore, logStore) {
     resetPrompt,
     savePrefixSettings,
     saveSoundVolume,
+    createProfile,
+    renameProfile,
+    deleteProfile,
+    setActiveProfile,
     resetToDefaults,
     getLogs,
     clearLogs,
@@ -42,16 +46,25 @@ export function createAppService(settingsStore, logStore) {
     createPrefixFromVoice
   };
 
+  function getActiveProfile(settings) {
+    const profile = settings.profiles.find((candidate) => candidate.id === settings.activeProfileId);
+    if (!profile) throw new Error("The active connection profile could not be found.");
+    return profile;
+  }
+
   function getRuntimeConfig() {
     const settings = settingsStore.getSettings();
+    const activeProfile = getActiveProfile(settings);
     return {
       limits,
+      profiles: settings.profiles.map(({ id, name }) => ({ id, name })),
+      activeProfileId: settings.activeProfileId,
       models: {
-        available: settings.models.available,
+        available: activeProfile.models.available,
         selected: {
-          transcription: settings.models.transcription,
-          instruction: settings.models.instruction,
-          instructionReasoning: normalizeInstructionReasoning(settings.models.instructionReasoning)
+          transcription: activeProfile.models.transcription,
+          instruction: activeProfile.models.instruction,
+          instructionReasoning: normalizeInstructionReasoning(activeProfile.models.instructionReasoning)
         }
       },
       prompt: settings.prompt,
@@ -62,21 +75,24 @@ export function createAppService(settingsStore, logStore) {
 
   function getConnectionSettings() {
     const settings = settingsStore.getSettings();
+    const activeProfile = getActiveProfile(settings);
     return {
-      baseUrl: settings.connection.baseUrl,
-      verifyCertificate: settings.connection.verifyCertificate !== false,
-      apiKeyConfigured: Boolean(settingsStore.getApiKey())
+      profileId: activeProfile.id,
+      baseUrl: activeProfile.connection.baseUrl,
+      verifyCertificate: activeProfile.connection.verifyCertificate !== false,
+      apiKeyConfigured: settingsStore.hasApiKey(activeProfile.id)
     };
   }
 
   function getSetupStatus() {
     const settings = settingsStore.getSettings();
+    const activeProfile = getActiveProfile(settings);
     const connection = getConnectionSettings();
     const missing = [];
     if (!connection.baseUrl) missing.push("API base URL");
     if (!connection.apiKeyConfigured) missing.push("API key");
-    if (!settings.models.transcription) missing.push("transcription model");
-    if (!settings.models.instruction) missing.push("instruction model");
+    if (!activeProfile.models.transcription) missing.push("transcription model");
+    if (!activeProfile.models.instruction) missing.push("instruction model");
     const missingItems = formatList(missing);
 
     return {
@@ -106,8 +122,33 @@ export function createAppService(settingsStore, logStore) {
     return getConnectionSettings();
   }
 
+  function createProfile(value) {
+    settingsStore.addProfile(value);
+    resetOpenAIClient();
+    return getRuntimeConfig();
+  }
+
+  function renameProfile(value) {
+    settingsStore.renameProfile(value);
+    return getRuntimeConfig();
+  }
+
+  function deleteProfile(value) {
+    const wasActive = settingsStore.getSettings().activeProfileId === value?.id;
+    settingsStore.deleteProfile(value);
+    if (wasActive) resetOpenAIClient();
+    return getRuntimeConfig();
+  }
+
+  function setActiveProfile(value) {
+    settingsStore.setActiveProfile(value);
+    resetOpenAIClient();
+    return getRuntimeConfig();
+  }
+
   async function populateModels({ signal } = {}) {
     if (!hasApiConfig()) throw new Error("Enter the base URL and API key before loading models.");
+    const targetProfileId = getConnectionSettings().profileId;
 
     try {
       throwIfAborted(signal);
@@ -126,7 +167,7 @@ export function createAppService(settingsStore, logStore) {
         : [];
       if (!models.length) throw new Error("The model endpoint returned no models.");
       throwIfAborted(signal);
-      settingsStore.saveModelCatalog(models);
+      settingsStore.saveModelCatalog(targetProfileId, models);
       return getRuntimeConfig();
     } catch (error) {
       const canceled = cancellationErrorFor(error, signal);
@@ -145,7 +186,7 @@ export function createAppService(settingsStore, logStore) {
   }
 
   function saveModelSelections(value) {
-    settingsStore.saveModelSelections(value);
+    settingsStore.saveModelSelections(undefined, value);
     return getRuntimeConfig();
   }
 
@@ -185,7 +226,7 @@ export function createAppService(settingsStore, logStore) {
   async function transcribe({ audio, mimeType } = {}, { signal } = {}) {
     const normalizedMimeType = typeof mimeType === "string" ? mimeType.toLowerCase() : "";
     const audioBuffer = toBuffer(audio);
-    const selectedModel = settingsStore.getSettings().models.transcription;
+    const selectedModel = getActiveProfile(settingsStore.getSettings()).models.transcription;
 
     try {
       throwIfAborted(signal);
@@ -295,12 +336,13 @@ export function createAppService(settingsStore, logStore) {
 
   async function createPrefixFromVoice({ audio, mimeType } = {}, { signal } = {}) {
     const settings = settingsStore.getSettings();
+    const activeProfile = getActiveProfile(settings);
     throwIfAborted(signal);
     if (!hasApiConfig()) throw new Error("Enter the base URL and API key in Settings.");
-    if (!settings.models.transcription) {
+    if (!activeProfile.models.transcription) {
       throw new Error("Choose a transcription model in Settings after loading models.");
     }
-    if (!settings.models.instruction) {
+    if (!activeProfile.models.instruction) {
       throw new Error("Choose an instruction model in Settings after loading models.");
     }
 
@@ -317,6 +359,7 @@ export function createAppService(settingsStore, logStore) {
   }
 
   async function createPrefixWithModel(transcript, settings, signal) {
+    const activeProfile = getActiveProfile(settings);
     const prefixes = normalizePrefixes(settings.prefixes);
     const prefixRegistry = prefixes.length
       ? prefixes.map(({ name, instruction, allowSearch, allowClipboard }) => [
@@ -359,8 +402,8 @@ export function createAppService(settingsStore, logStore) {
     try {
       throwIfAborted(signal);
       response = await getOpenAIClient().responses.create({
-        model: settings.models.instruction,
-        reasoning: { effort: normalizeInstructionReasoning(settings.models.instructionReasoning) },
+        model: activeProfile.models.instruction,
+        reasoning: { effort: normalizeInstructionReasoning(activeProfile.models.instructionReasoning) },
         instructions,
         input
       }, requestOptions(signal));
@@ -368,10 +411,10 @@ export function createAppService(settingsStore, logStore) {
     } catch (error) {
       const canceled = cancellationErrorFor(error, signal);
       if (canceled) throw canceled;
-      logError({ stage: "instruction", error, model: settings.models.instruction });
+      logError({ stage: "instruction", error, model: activeProfile.models.instruction });
       console.error("Prefix generation model error:", {
         status: error?.status,
-        model: settings.models.instruction,
+        model: activeProfile.models.instruction,
         message: error?.message
       });
       throw new Error(isApiTimeoutError(error)
@@ -559,6 +602,7 @@ export function createAppService(settingsStore, logStore) {
   }
 
   function getInstructionInputs(value, settings) {
+    const activeProfile = getActiveProfile(settings);
     const valueTranscript = typeof value === "string" ? value.trim() : "";
     const prompt = settings.prompt.trim();
     const prefixes = normalizePrefixes(settings.prefixes);
@@ -576,8 +620,8 @@ export function createAppService(settingsStore, logStore) {
     return {
       transcript: valueTranscript,
       prompt,
-      model: settings.models.instruction,
-      reasoning: normalizeInstructionReasoning(settings.models.instructionReasoning),
+      model: activeProfile.models.instruction,
+      reasoning: normalizeInstructionReasoning(activeProfile.models.instructionReasoning),
       prefixes,
       activePrefixes
     };

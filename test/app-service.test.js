@@ -27,7 +27,7 @@ test("connection URLs are normalized before being saved", () => {
 
   service.saveConnection({ baseUrl: "  https://example.com/api/v1///  ", apiKey: "secret", verifyCertificate: true });
 
-  assert.equal(settingsStore.getSettings().connection.baseUrl, "https://example.com/api/v1");
+  assert.equal(settingsStore.getSettings().profiles[0].connection.baseUrl, "https://example.com/api/v1");
   assert.equal(service.getConnectionSettings().apiKeyConfigured, true);
 });
 
@@ -306,38 +306,51 @@ function prefix(name, instruction, access = {}) {
 }
 
 function createService({ prefixes = [], availableModels = [] } = {}) {
-  let apiKey = "";
+  const apiKeys = new Map();
   const logs = [];
   let settings = {
-    connection: { baseUrl: "", verifyCertificate: true },
-    models: {
-      available: availableModels,
-      transcription: "",
-      instruction: "",
-      instructionReasoning: "low"
-    },
+    profiles: [{
+      id: "default",
+      name: "Default",
+      connection: { baseUrl: "", verifyCertificate: true },
+      models: {
+        available: availableModels,
+        transcription: "",
+        instruction: "",
+        instructionReasoning: "low"
+      }
+    }],
+    activeProfileId: "default",
     prompt: "Keep answers concise.",
     prefixes,
     hotkey: { key: "ControlRight", modifiers: [], label: "Right Ctrl" },
     soundVolume: 0.3
   };
 
+  const resolveProfileId = (profileId) => profileId || settings.activeProfileId;
+  const getProfile = (profileId) => settings.profiles.find(
+    (profile) => profile.id === resolveProfileId(profileId)
+  );
+
   const settingsStore = {
     getLimits: () => ({ ...limits }),
     getSettings: () => structuredClone(settings),
-    getApiKey: () => apiKey,
+    getApiKey: (profileId) => apiKeys.get(resolveProfileId(profileId)) || "",
+    hasApiKey: (profileId) => apiKeys.has(resolveProfileId(profileId)),
     saveConnection(value) {
-      settings.connection = {
+      const profile = getProfile(value.profileId);
+      profile.connection = {
         baseUrl: value.baseUrl,
         verifyCertificate: value.verifyCertificate !== false
       };
-      if (value.apiKey) apiKey = value.apiKey;
+      if (value.apiKey) apiKeys.set(profile.id, value.apiKey);
     },
-    saveModelCatalog(models) {
-      settings.models.available = [...models];
+    saveModelCatalog(profileId, models) {
+      getProfile(profileId).models.available = [...models];
     },
-    saveModelSelections(value) {
-      settings.models = { ...settings.models, ...value };
+    saveModelSelections(profileId, value) {
+      const profile = getProfile(profileId);
+      profile.models = { ...profile.models, ...value };
     },
     savePrompt(promptValue) {
       settings.prompt = promptValue;
@@ -352,12 +365,41 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
     saveSoundVolume(value) {
       settings.soundVolume = value;
     },
+    addProfile({ name } = {}) {
+      const profile = {
+        id: `profile-${settings.profiles.length + 1}`,
+        name: name || `Connection ${settings.profiles.length + 1}`,
+        connection: { baseUrl: "", verifyCertificate: true },
+        models: { available: [], transcription: "", instruction: "", instructionReasoning: "low" }
+      };
+      settings.profiles.push(profile);
+      settings.activeProfileId = profile.id;
+      return structuredClone(profile);
+    },
+    renameProfile({ id, name } = {}) {
+      getProfile(id).name = name;
+    },
+    deleteProfile({ id } = {}) {
+      settings.profiles = settings.profiles.filter((profile) => profile.id !== id);
+      apiKeys.delete(id);
+      if (settings.activeProfileId === id) settings.activeProfileId = settings.profiles[0].id;
+    },
+    setActiveProfile({ id } = {}) {
+      settings.activeProfileId = id;
+    },
     resetToDefaults() {
       settings = {
         ...settings,
+        profiles: [{
+          id: "default",
+          name: "Default",
+          connection: { baseUrl: "", verifyCertificate: true },
+          models: { available: [], transcription: "", instruction: "", instructionReasoning: "low" }
+        }],
+        activeProfileId: "default",
         prefixes: []
       };
-      apiKey = "";
+      apiKeys.clear();
     }
   };
 

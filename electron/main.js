@@ -568,6 +568,22 @@ function registerIpcHandlers() {
     notifySetupUpdated();
     return result;
   });
+  ipcMain.handle("porvoz:create-profile", (_event, value) => {
+    const result = appService.createProfile(value);
+    notifySetupUpdated();
+    return result;
+  });
+  ipcMain.handle("porvoz:rename-profile", (_event, value) => appService.renameProfile(value));
+  ipcMain.handle("porvoz:delete-profile", (_event, value) => {
+    const result = appService.deleteProfile(value);
+    notifySetupUpdated();
+    return result;
+  });
+  ipcMain.handle("porvoz:set-active-profile", (_event, value) => {
+    const result = appService.setActiveProfile(value);
+    notifySetupUpdated();
+    return result;
+  });
   ipcMain.handle("porvoz:save-prompt", (_event, value) => appService.savePrompt(value));
   ipcMain.handle("porvoz:reset-prompt", () => appService.resetPrompt());
   ipcMain.handle("porvoz:save-prefix-settings", (_event, value) => appService.savePrefixSettings(value));
