@@ -10,49 +10,7 @@ Porvoz uses the [Tabler Icons](https://github.com/tabler/tabler-icons) outline s
 
 ## Download and install
 
-The current release is [Porvoz v1.4.0](https://github.com/bgaeddert/porvoz/releases/tag/v1.4.0). Release packages are x64 builds.
-
-### What's new in v1.4.0
-
-Porvoz now uses a compact dark desktop interface with persistent sidebar navigation. Capture, Activity, and Settings are always available from the primary sidebar, while Settings is organized into focused **Provider & models**, **Keyboard**, **Sound**, **Instructions**, and **Advanced** pages. Connection profiles and model routing now live together, instruction prompts and prefixes share one page, and the app name and version remain fixed at the bottom of the sidebar.
-
-The release also introduces refreshed application artwork, a multi-resolution Windows icon, properly aligned compact dialogs and model controls, and a smaller status pill that clears quickly after successful transcription. Packaged builds no longer show the default Electron application menu.
-
-### What's new in v1.3.2
-
-Settings can now save multiple named **connection profiles**, each with its own base URL, API key, transcription model, and instruction model. Use the profile dropdown above the connection form to switch between them; switching makes that profile active immediately, and the form below always edits whichever profile is selected. Add, rename, or delete profiles from the same row — Porvoz keeps at least one profile at all times. Existing installations migrate automatically: your current connection and key become a profile named "Default" and stay active, with no action needed.
-
-### What's new in v1.3.1
-
-Prefixes can now be copied as portable JSON and imported into another Porvoz installation. The JSON contains the prefix name, instruction, and access settings, but not the source machine's local registry ID. Imported prefixes are validated, receive a fresh local ID, and get a `duplicate` suffix when their name is already in use. The repository also includes [portable prefix examples](examples.md).
-
-The interface now uses the [Tabler Icons](https://github.com/tabler/tabler-icons) outline set for its actionable and status icons. Icons are embedded inline so the application remains self-contained and available offline.
-
-### What's new in v1.3.0
-
-Instruction prefixes are now ordinary editable entries: rename, update, grant Search or Clipboard access, and remove any prefix, including the packaged defaults. New prefixes can be created manually or drafted from a voice description, with access choices reviewed before saving. Existing installations keep their saved prefix definitions while migrating the packaged instruction prompt to the current key-action and access rules when it was not customized.
-
-Instruction responses can now contain bracketed keyboard actions such as `[Enter]`, `[Control+F]`, and `[Control+Shift+ArrowDown]`; Porvoz sends supported standalone keys and modifier combinations between pasted text segments. Press **Escape** from anywhere to cancel an active recording, request, or text-placement operation. The capture renderer stays available while the main window is showing Settings or Logs, and cancellation restores the clipboard safely.
-
-### What's new in v1.2.1
-
-The Settings model picker now uses a unified searchable combobox: type to filter the loaded catalog, open the contained results list, select a model, and save it into the requested model field. The results list has its own scroll area, model choices are clickable, browse controls stay disabled until models are loaded, and the picker controls use consistent vector icons and accessible focus states.
-
-### What's new in v1.2.0
-
-Porvoz now shows a compact, click-through status pill at the bottom of the active display while it records, transcribes, applies instructions, and places text. It confirms successful placement briefly and keeps concise categorized error feedback visible when an operation fails. The overlay is available while Porvoz is hidden to the system tray and does not take focus away from the application receiving the text.
-
-### What's new in v1.1.2
-
-Linux text placement no longer attempts to read Electron's internal X11 clipboard transport targets, which could cause multi-second delays before a response was pasted. The footer now keeps the app name and current version together on the left across every page.
-
-### What's new in v1.1.1
-
-The Settings model-routing section now includes an instruction reasoning dropdown with `low`, `medium`, and `high` options. It defaults to `low` and applies only to instruction-model requests; transcription requests are unchanged. Existing installations migrate to the new default automatically.
-
-### What's new in v1.1.0
-
-Windows and Linux now use a TypeWhisper-style temporary clipboard transaction for text insertion. Porvoz snapshots the existing clipboard, pastes the response through the target application, and restores the original clipboard when it has not changed externally. The release also adds a failure cue when text placement cannot be completed and removes the previous platform-specific literal typing and strict Windows control eligibility paths.
+The current release is [Porvoz v1.4.0](https://github.com/bgaeddert/porvoz/releases/tag/v1.4.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
 
 ### Windows
 
