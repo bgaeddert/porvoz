@@ -7,7 +7,6 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'" />
     <title>Porvoz · Activity</title>
     <link rel="stylesheet" href="./styles.css" />
-    <link rel="stylesheet" href="./desktop.css" />
   </head>
   <body>
     <div class="app-shell">
@@ -55,6 +54,13 @@
           <a class="setup-warning-link" href="settings.html">Open Settings</a>
         </aside>
         <section class="logs-toolbar" aria-label="Activity controls">
+          <div class="logs-filter">
+            <svg class="icon icon-tabler icon-tabler-search" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+              <path d="M21 21l-6 -6" />
+            </svg>
+            <input id="log-filter" type="search" autocomplete="off" spellcheck="false" placeholder="Filter transcripts, responses, and errors" aria-label="Filter activity" />
+          </div>
           <div class="logs-toolbar-actions">
             <div class="log-counter" aria-live="polite">
               <strong id="log-count">0</strong>

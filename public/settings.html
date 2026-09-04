@@ -7,7 +7,6 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'" />
     <title>Porvoz · Settings</title>
     <link rel="stylesheet" href="./styles.css" />
-    <link rel="stylesheet" href="./desktop.css" />
   </head>
   <body>
     <div class="app-shell">
@@ -30,10 +29,7 @@
         <nav class="section-nav" aria-label="Settings sections">
           <p>Configure</p>
           <a href="#provider">Provider &amp; models</a>
-          <a href="#keyboard">Keyboard</a>
-          <a href="#sound">Sound</a>
-          <a href="#instructions">Instructions</a>
-          <a href="#advanced">Advanced</a>
+          <a href="#capture">Capture &amp; instructions</a>
         </nav>
         <div class="sidebar-meta" aria-label="Application version"><span class="sidebar-meta-name">Porvoz</span><span data-app-version>Version unavailable</span></div>
       </aside>
@@ -190,7 +186,7 @@
             <p class="field-note">Type or paste a model ID to save it directly, or browse the loaded catalog and apply a selection.</p>
           </section>
 
-          <section id="keyboard" class="settings-card" data-settings-page="keyboard" aria-labelledby="hotkey-heading" hidden>
+          <section id="keyboard" class="settings-card" data-settings-page="capture" aria-labelledby="hotkey-heading" hidden>
             <div class="settings-heading">
               <div>
                 <p class="panel-kicker">Keyboard</p>
@@ -229,7 +225,7 @@
             <p id="hotkey-status" class="field-note" aria-live="polite">Click Set hotkey, then press one Control/Alt key or a combination. Release to save; Escape cancels.</p>
           </section>
 
-          <section id="sound" class="settings-card" data-settings-page="sound" aria-labelledby="sound-heading" hidden>
+          <section id="sound" class="settings-card" data-settings-page="capture" aria-labelledby="sound-heading" hidden>
             <div class="settings-heading">
               <div>
                 <p class="panel-kicker">Sound</p>
@@ -242,25 +238,33 @@
                 <span class="hotkey-caption">Cue volume</span>
                 <p>Set the playback level for the start and stop sounds.</p>
               </div>
-              <label class="sound-volume-control" for="sound-volume">
-                <span class="sound-volume-label">
-                  <span class="volume-label-text">
-                    <svg class="icon icon-tabler icon-tabler-volume" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d="M15 8a5 5 0 0 1 0 8" />
-                      <path d="M17.7 5a9 9 0 0 1 0 14" />
-                      <path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5" />
-                    </svg>
-                    <span>Volume</span>
+              <div class="sound-controls">
+                <label class="sound-volume-control" for="sound-volume">
+                  <span class="sound-volume-label">
+                    <span class="volume-label-text">
+                      <svg class="icon icon-tabler icon-tabler-volume" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M15 8a5 5 0 0 1 0 8" />
+                        <path d="M17.7 5a9 9 0 0 1 0 14" />
+                        <path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5" />
+                      </svg>
+                      <span>Volume</span>
+                    </span>
+                    <output id="sound-volume-value" for="sound-volume">30%</output>
                   </span>
-                  <output id="sound-volume-value" for="sound-volume">30%</output>
-                </span>
-                <input id="sound-volume" type="range" min="0" max="100" step="1" value="30" />
-              </label>
+                  <input id="sound-volume" type="range" min="0" max="100" step="1" value="30" />
+                </label>
+                <button id="preview-cue" class="button-secondary button-with-icon sound-preview-button" type="button">
+                  <svg class="icon icon-tabler icon-tabler-player-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M7 4v16l13 -8z" />
+                  </svg>
+                  <span class="button-label">Play cue</span>
+                </button>
+              </div>
             </div>
             <p id="sound-volume-status" class="field-note" aria-live="polite">Cue volume is saved automatically.</p>
           </section>
 
-          <section id="instruction-prompt-settings" class="settings-card" data-settings-page="instructions" aria-labelledby="prompt-heading" hidden>
+          <section id="instruction-prompt-settings" class="settings-card" data-settings-page="capture" aria-labelledby="prompt-heading" hidden>
             <div class="settings-heading settings-heading-actions">
               <div>
                 <p class="panel-kicker">Instructions</p>
@@ -282,12 +286,12 @@
             <p id="prompt-status" class="field-note" aria-live="polite">Changes save as you type.</p>
           </section>
 
-          <section id="prefixes" class="settings-card" data-settings-page="instructions" aria-labelledby="prefixes-heading" hidden>
+          <section id="prefixes" class="settings-card" data-settings-page="capture" aria-labelledby="prefixes-heading" hidden>
             <div class="settings-heading settings-heading-actions">
               <div>
                 <p class="panel-kicker">Prefixes</p>
                 <h2 id="prefixes-heading">Instruction shortcuts</h2>
-                <p class="section-description">A transcript reaches the instruction model when it begins with a prefix in this list. Select Edit on any row to change it, or Copy to move its JSON between Porvoz installs.</p>
+                <p class="section-description">A transcript reaches the instruction model when it begins with a prefix in this list. Select a row to edit it, or copy its JSON to move it between Porvoz installs.</p>
               </div>
               <div class="prefix-heading-actions">
                 <button id="import-prefix" class="button-secondary button-with-icon" type="button">
@@ -311,7 +315,7 @@
             <p id="prefix-status" class="field-note" aria-live="polite">Changes save as you make them. Use Import from clipboard to add a copied prefix.</p>
           </section>
 
-          <section id="advanced" class="settings-card settings-card-reset" data-settings-page="advanced" aria-labelledby="reset-heading" hidden>
+          <section id="advanced" class="settings-card settings-card-reset" data-settings-page="capture" aria-labelledby="reset-heading" hidden>
             <div class="settings-heading settings-heading-actions">
               <div>
                 <p class="panel-kicker">Advanced</p>
@@ -590,17 +594,8 @@
           <p id="model-picker-description" class="model-picker-lede">Type to filter the loaded catalog, choose a model, then save it into the field.</p>
           <div class="model-picker-combobox">
             <label class="field-label" for="model-picker-input">Search and choose a model</label>
-            <div class="model-combobox">
-              <div class="model-combobox-input-row">
-                <input id="model-picker-input" type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="model-picker-menu" placeholder="Type to filter model IDs" />
-                <button id="toggle-model-picker" class="button-secondary model-picker-toggle" type="button" aria-label="Show model catalog" aria-expanded="false" aria-controls="model-picker-menu" title="Show model catalog">
-                  <svg class="icon icon-tabler icon-tabler-chevron-down model-picker-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M6 9l6 6l6 -6" />
-                  </svg>
-                </button>
-              </div>
-              <div id="model-picker-menu" class="model-picker-menu" role="listbox" aria-label="Available models" hidden></div>
-            </div>
+            <input id="model-picker-input" type="search" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="model-picker-menu" placeholder="Type to filter model IDs" />
+            <div id="model-picker-menu" class="model-picker-menu" role="listbox" aria-label="Available models"></div>
           </div>
           <p id="model-picker-status" class="field-note" aria-live="polite">No models loaded yet.</p>
         </div>

@@ -357,6 +357,15 @@ function clearTranscript() {
 function setStatus(message, state = "idle", stage = "") {
   status.textContent = message;
   status.dataset.state = state;
+  // A failure in a request stage is almost always a credentials or model
+  // problem, so offer the page that fixes it instead of ending on the message.
+  if (state === "error" && (stage === "transcription" || stage === "instruction")) {
+    const recovery = document.createElement("a");
+    recovery.className = "status-recovery";
+    recovery.href = "settings.html#provider";
+    recovery.textContent = "Open provider settings";
+    status.append(recovery);
+  }
   captureSignal.dataset.state = state;
   captureSignal.setAttribute("aria-label", state === "recording"
     ? "Recording in progress"
