@@ -3,23 +3,18 @@ const pageDetails = {
     title: "Provider & models",
     summary: "Manage the API connection and choose the models Porvoz uses."
   },
-  keyboard: {
-    title: "Keyboard",
-    summary: "Choose the global keyboard shortcut used to start recording."
-  },
-  sound: {
-    title: "Sound",
-    summary: "Set the playback level for recording start and stop cues."
-  },
-  instructions: {
-    title: "Instructions",
-    summary: "Set processing behavior and manage spoken instruction shortcuts."
-  },
-  advanced: {
-    title: "Advanced",
-    summary: "Restore the application to its packaged configuration."
+  capture: {
+    title: "Capture & instructions",
+    summary: "Set the hotkey and cue volume, then manage how transcripts are processed."
   }
 };
+
+const legacyPageAliases = new Map([
+  ["keyboard", "capture"],
+  ["sound", "capture"],
+  ["instructions", "capture"],
+  ["advanced", "capture"]
+]);
 
 const links = [...document.querySelectorAll(".section-nav a[href^='#']")];
 const sections = [...document.querySelectorAll(".settings-stack > .settings-card[data-settings-page]")];
@@ -28,7 +23,8 @@ const pageSummary = document.querySelector("#settings-page-summary");
 
 function getRequestedPage() {
   const requestedPage = window.location.hash.slice(1);
-  return Object.hasOwn(pageDetails, requestedPage) ? requestedPage : "provider";
+  return legacyPageAliases.get(requestedPage)
+    || (Object.hasOwn(pageDetails, requestedPage) ? requestedPage : "provider");
 }
 
 function showRequestedPage() {
@@ -46,6 +42,7 @@ function showRequestedPage() {
   pageTitle.textContent = details.title;
   pageSummary.textContent = details.summary;
   document.title = `Porvoz · ${details.title}`;
+  window.scrollTo(0, 0);
 
   requestAnimationFrame(() => {
     const visibleSections = sections.filter((section) => section.dataset.settingsPage === currentPage);
@@ -56,7 +53,12 @@ function showRequestedPage() {
   });
 }
 
-if (!window.location.hash || !Object.hasOwn(pageDetails, window.location.hash.slice(1))) {
+const initialHash = window.location.hash.slice(1);
+if (!initialHash) {
+  window.history.replaceState(null, "", "#provider");
+} else if (legacyPageAliases.has(initialHash)) {
+  window.history.replaceState(null, "", `#${legacyPageAliases.get(initialHash)}`);
+} else if (!Object.hasOwn(pageDetails, initialHash)) {
   window.history.replaceState(null, "", "#provider");
 }
 

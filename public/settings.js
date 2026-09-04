@@ -35,7 +35,6 @@ const modelPickerDialog = document.querySelector("#model-picker-dialog");
 const modelPickerHeading = document.querySelector("#model-picker-heading");
 const modelPickerDescription = document.querySelector("#model-picker-description");
 const modelPickerInput = document.querySelector("#model-picker-input");
-const modelPickerToggleButton = document.querySelector("#toggle-model-picker");
 const modelPickerMenu = document.querySelector("#model-picker-menu");
 const modelPickerStatus = document.querySelector("#model-picker-status");
 const closeModelPickerButton = document.querySelector("#close-model-picker");
@@ -94,6 +93,8 @@ const hotkeyStatus = document.querySelector("#hotkey-status");
 const soundVolumeInput = document.querySelector("#sound-volume");
 const soundVolumeValue = document.querySelector("#sound-volume-value");
 const soundVolumeStatus = document.querySelector("#sound-volume-status");
+const previewCueButton = document.querySelector("#preview-cue");
+const previewCueSound = new Audio("./assets/recording-start.mp3");
 const desktopBridge = window.porvozDesktop;
 
 let runtimeConfig = await loadRuntimeConfig();
@@ -148,18 +149,11 @@ instructionModel.addEventListener("input", handleModelInput);
 instructionReasoning.addEventListener("change", saveModelSelections);
 openTranscriptionModelPickerButton.addEventListener("click", () => openModelPicker("transcription"));
 openInstructionModelPickerButton.addEventListener("click", () => openModelPicker("instruction"));
-modelPickerInput.addEventListener("click", () => setModelPickerMenuOpen(true));
 modelPickerInput.addEventListener("input", () => {
   modelPickerSelection = "";
   renderModelPickerOptions();
-  setModelPickerMenuOpen(true);
 });
 modelPickerInput.addEventListener("keydown", handleModelPickerInputKeydown);
-modelPickerToggleButton.addEventListener("click", () => {
-  const shouldOpen = modelPickerMenu.hidden;
-  setModelPickerMenuOpen(shouldOpen);
-  if (shouldOpen) modelPickerInput.focus();
-});
 modelPickerMenu.addEventListener("keydown", handleModelPickerOptionKeydown);
 closeModelPickerButton.addEventListener("click", () => modelPickerDialog.close());
 cancelModelPickerButton.addEventListener("click", () => modelPickerDialog.close());
@@ -190,6 +184,7 @@ captureHotkeyButton.addEventListener("click", beginHotkeyCapture);
 cancelHotkeyButton.addEventListener("click", cancelHotkeyCapture);
 soundVolumeInput.addEventListener("input", updateSoundVolumePreview);
 soundVolumeInput.addEventListener("change", saveSoundVolume);
+previewCueButton?.addEventListener("click", playCuePreview);
 
 if (desktopBridge?.isElectron) {
   desktopBridge.onHotkeyUpdated(handleHotkeyUpdated);
@@ -497,7 +492,6 @@ function openModelPicker(target) {
   renderModelPickerOptions();
   modelPickerDialog.showModal();
   modelPickerInput.focus();
-  setModelPickerMenuOpen(true);
 }
 
 function renderModelPickerOptions() {
@@ -547,32 +541,41 @@ function resetModelPicker() {
   document.body.classList.remove("model-picker-open");
   modelPickerInput.value = "";
   modelPickerMenu.replaceChildren();
-  setModelPickerMenuOpen(false);
   modelPickerStatus.textContent = "No models loaded yet.";
   modelPickerStatus.dataset.state = "idle";
 }
 
-function setModelPickerMenuOpen(isOpen) {
-  modelPickerMenu.hidden = !isOpen;
-  modelPickerMenu.closest(".model-combobox")?.setAttribute("data-open", String(isOpen));
-  modelPickerInput.setAttribute("aria-expanded", String(isOpen));
-  modelPickerToggleButton.setAttribute("aria-expanded", String(isOpen));
+const SPEECH_MODEL_HINTS = ["whisper", "transcribe", "speech-to-text", "speech_to_text", "stt", "voxtral", "gpt-4o-audio"];
+
+function looksLikeSpeechModel(normalizedModel) {
+  return SPEECH_MODEL_HINTS.some((hint) => normalizedModel.includes(hint));
 }
 
 function createModelMenuOptions(models) {
-  const groups = new Map([
-    ["OpenAI / Codex", []],
-    ["Anthropic / Claude", []],
-    ["Other", []]
-  ]);
+  // The picker opens from either the transcription or the instruction field.
+  // Models that suit the field you opened it from are listed first, but nothing
+  // is hidden — an endpoint is free to name its models anything it likes.
+  const isTranscriptionTarget = modelPickerTarget === "transcription";
+  const groups = isTranscriptionTarget
+    ? new Map([
+        ["Speech to text", []],
+        ["Other models", []]
+      ])
+    : new Map([
+        ["OpenAI / Codex", []],
+        ["Anthropic / Claude", []],
+        ["Other", []]
+      ]);
 
   for (const model of [...models].sort((first, second) => first.localeCompare(second))) {
     const normalizedModel = model.toLocaleLowerCase();
-    const group = normalizedModel.includes("claude")
-      ? "Anthropic / Claude"
-      : normalizedModel.includes("gpt") || normalizedModel.includes("codex") || normalizedModel.startsWith("openai/")
-        ? "OpenAI / Codex"
-        : "Other";
+    const group = isTranscriptionTarget
+      ? (looksLikeSpeechModel(normalizedModel) ? "Speech to text" : "Other models")
+      : normalizedModel.includes("claude")
+        ? "Anthropic / Claude"
+        : normalizedModel.includes("gpt") || normalizedModel.includes("codex") || normalizedModel.startsWith("openai/")
+          ? "OpenAI / Codex"
+          : "Other";
     groups.get(group).push(model);
   }
 
@@ -610,14 +613,10 @@ function handleModelPickerInputKeydown(event) {
   const options = getModelPickerOptions();
   if (event.key === "ArrowDown") {
     event.preventDefault();
-    setModelPickerMenuOpen(true);
     options[0]?.focus();
-  } else if (event.key === "Enter" && !modelPickerMenu.hidden && options.length === 1) {
+  } else if (event.key === "Enter" && options.length === 1) {
     event.preventDefault();
     selectModelFromPicker(options[0].dataset.model);
-  } else if (event.key === "Escape" && !modelPickerMenu.hidden) {
-    event.preventDefault();
-    setModelPickerMenuOpen(false);
   }
 }
 
@@ -637,25 +636,18 @@ function handleModelPickerOptionKeydown(event) {
   } else if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
     selectModelFromPicker(event.target.dataset.model);
-  } else if (event.key === "Escape") {
-    event.preventDefault();
-    setModelPickerMenuOpen(false);
-    modelPickerInput.focus();
   }
 }
 
 function selectModelFromPicker(model) {
   if (!model) return;
   modelPickerSelection = model;
-  modelPickerInput.value = model;
   modelPickerMenu.querySelectorAll("[role=option]").forEach((option) => {
     option.setAttribute("aria-selected", String(option.dataset.model === model));
   });
   saveModelPickerButton.disabled = false;
-  modelPickerStatus.textContent = `${model} selected. Click Save model to apply it.`;
+  modelPickerStatus.textContent = `${model} selected. Choose Save model to apply it.`;
   modelPickerStatus.dataset.state = "success";
-  setModelPickerMenuOpen(false);
-  modelPickerInput.focus();
 }
 
 function getModelPickerOptions() {
@@ -711,37 +703,41 @@ function renderPrefixes() {
     const row = document.createElement("article");
     row.className = "prefix-row";
 
+    // The row itself opens the editor, so nothing in it pretends to be a field.
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-label", `Edit ${prefix.name} prefix`);
+    row.addEventListener("click", (event) => {
+      if (event.target.closest(".prefix-copy-button")) return;
+      openPrefixEditor(index);
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openPrefixEditor(index);
+    });
+
     const name = document.createElement("strong");
     name.className = "prefix-row-name";
     name.textContent = prefix.name;
     name.title = prefix.name;
 
-    const instruction = document.createElement("input");
-    instruction.type = "text";
-    instruction.readOnly = true;
+    const instruction = document.createElement("p");
     instruction.className = "prefix-row-instruction";
-    instruction.value = prefix.instruction;
-    instruction.setAttribute("aria-label", `Instruction for ${prefix.name} prefix`);
+    instruction.textContent = prefix.instruction;
     instruction.title = prefix.instruction;
-
-    const actionButton = document.createElement("button");
-    actionButton.type = "button";
-    actionButton.className = "button-secondary button-with-icon prefix-edit-button";
-    actionButton.append(createIcon("pencil"), createButtonLabel("Edit"));
-    actionButton.setAttribute("aria-label", `Edit ${prefix.name} prefix`);
-    actionButton.addEventListener("click", () => openPrefixEditor(index));
 
     const copyButton = document.createElement("button");
     copyButton.type = "button";
-    copyButton.className = "button-secondary button-with-icon prefix-copy-button";
-    copyButton.append(createIcon("copy"), createButtonLabel("Copy"));
+    copyButton.className = "button-secondary prefix-copy-button";
+    copyButton.append(createIcon("copy"));
     copyButton.setAttribute("aria-label", `Copy ${prefix.name} prefix JSON`);
     copyButton.title = "Copy prefix JSON";
     copyButton.addEventListener("click", () => copyPrefix(prefix, copyButton));
 
     const actions = document.createElement("div");
     actions.className = "prefix-row-actions";
-    actions.append(copyButton, actionButton);
+    actions.append(copyButton);
 
     row.append(name, instruction, actions);
     prefixList.append(row);
@@ -752,11 +748,11 @@ function renderPrefixes() {
 async function copyPrefix(prefix, button) {
   try {
     await writeClipboardText(serializePrefix(prefix));
-    setButtonLabel(button, "Copied");
+    button.title = "Copied";
     prefixStatus.textContent = `Copied “${prefix.name}” as JSON. Use Import from clipboard to add a copy.`;
     prefixStatus.dataset.state = "success";
     window.setTimeout(() => {
-      if (button.isConnected) setButtonLabel(button, "Copy");
+      if (button.isConnected) button.title = "Copy prefix JSON";
     }, 1600);
   } catch (error) {
     console.error("Could not copy instruction prefix:", error);
@@ -1322,6 +1318,20 @@ function renderSoundVolume(value) {
   soundVolumeInput.value = String(percentage);
   soundVolumeInput.style.setProperty("--volume-percent", `${percentage}%`);
   soundVolumeValue.textContent = `${percentage}%`;
+}
+
+// You cannot judge a cue volume you have never heard, so let it be heard.
+async function playCuePreview() {
+  previewCueSound.pause();
+  previewCueSound.currentTime = 0;
+  previewCueSound.volume = normalizeSoundVolume(Number(soundVolumeInput.value) / 100);
+  try {
+    await previewCueSound.play();
+  } catch (error) {
+    console.error("Could not play the cue preview:", error);
+    soundVolumeStatus.textContent = "Could not play the cue on this device.";
+    soundVolumeStatus.dataset.state = "error";
+  }
 }
 
 function updateSoundVolumePreview() {

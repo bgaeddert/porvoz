@@ -10,8 +10,10 @@ const logsStatus = document.querySelector("#logs-status");
 const clearLogsDialog = document.querySelector("#clear-logs-dialog");
 const confirmClearLogsButton = document.querySelector("#confirm-clear-logs");
 const cancelClearLogsButton = document.querySelector("#cancel-clear-logs");
+const logFilter = document.querySelector("#log-filter");
 
 let logs = [];
+let filterTerm = "";
 
 if (desktopBridge?.isElectron) {
   desktopBridge.onLogsUpdated(() => refreshLogs("Updated just now"));
@@ -27,6 +29,10 @@ if (desktopBridge?.isElectron) {
 clearLogsButton.addEventListener("click", () => clearLogsDialog.showModal());
 cancelClearLogsButton.addEventListener("click", () => clearLogsDialog.close());
 confirmClearLogsButton.addEventListener("click", clearAllLogs);
+logFilter?.addEventListener("input", () => {
+  filterTerm = logFilter.value.trim().toLocaleLowerCase();
+  renderLogs(logs);
+});
 
 await refreshLogs();
 
@@ -48,12 +54,37 @@ async function refreshLogs(statusMessage = "Stored locally") {
 }
 
 function renderLogs(entries) {
-  const orderedLogs = [...entries].sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt));
+  const orderedLogs = [...entries]
+    .filter(matchesFilter)
+    .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt));
   const count = orderedLogs.length;
   logCount.textContent = count.toLocaleString();
-  logCountLabel.textContent = count === 1 ? "event stored" : "events stored";
+  logCountLabel.textContent = filterTerm
+    ? (count === 1 ? "event matches" : "events match")
+    : (count === 1 ? "event stored" : "events stored");
+  clearLogsButton.disabled = entries.length === 0;
   logList.replaceChildren(...buildLogGroups(orderedLogs).map(createLogGroup));
   logsEmpty.hidden = count > 0;
+  setEmptyStateCopy(entries.length > 0 && count === 0);
+}
+
+function matchesFilter(log) {
+  if (!filterTerm) return true;
+  return [log.text, log.prefix, log.model, log.stage, log.errorCode, log.instructions, log.input]
+    .some((value) => typeof value === "string" && value.toLocaleLowerCase().includes(filterTerm));
+}
+
+function setEmptyStateCopy(isFilteredOut) {
+  const heading = logsEmpty.querySelector("h2");
+  const body = logsEmpty.querySelector("p");
+  if (!heading || !body) return;
+  if (isFilteredOut) {
+    heading.textContent = "Nothing matches that filter";
+    body.textContent = "No stored transcript, response, or error contains that text. Clear the filter to see everything again.";
+    return;
+  }
+  heading.textContent = "No activity yet";
+  body.textContent = "Start a transcription to place the first event here. Successful responses and operational errors are saved automatically.";
 }
 
 function buildLogGroups(orderedLogs) {
@@ -167,20 +198,23 @@ function createLogStage(log) {
   time.textContent = formatTimestamp(log.createdAt);
 
   meta.append(type, time);
+  // Every chip reads "Label · value" so the row scans as one list, not a mix.
   if (log.stage) meta.append(createMetaChip(`Stage · ${formatStage(log.stage)}`));
-  if (log.status !== null) meta.append(createMetaChip(`HTTP ${log.status}`));
+  if (log.status !== null) meta.append(createMetaChip(`Status · HTTP ${log.status}`));
   if (log.errorCode) meta.append(createMetaChip(`Code · ${log.errorCode}`));
-  if (log.model) meta.append(createMetaChip(log.model));
-  if (log.mimeType) meta.append(createMetaChip(log.mimeType));
-  if (log.bytes !== null) meta.append(createMetaChip(`${log.bytes.toLocaleString()} bytes`));
+  if (log.model) meta.append(createMetaChip(`Model · ${log.model}`));
+  if (log.mimeType) meta.append(createMetaChip(`Format · ${log.mimeType}`));
+  if (log.bytes !== null) meta.append(createMetaChip(`Size · ${log.bytes.toLocaleString()} bytes`));
   if (log.prefix) meta.append(createMetaChip(`Prefix · ${log.prefix}`));
+  // Access grants are a different class of fact and get their own styling.
   if (log.searchEnabled || log.clipboardEnabled) {
     const access = document.createElement("div");
     access.className = "log-stage-access";
-    if (log.searchEnabled) access.append(createMetaChip("Search"));
-    if (log.clipboardEnabled) access.append(createMetaChip("Clipboard"));
+    if (log.searchEnabled) access.append(createMetaChip("Access · Search"));
+    if (log.clipboardEnabled) access.append(createMetaChip("Access · Clipboard"));
     meta.append(access);
   }
+  meta.append(createStageActions(log));
 
   const content = document.createElement("div");
   content.className = "log-stage-content";
@@ -197,6 +231,53 @@ function createLogStage(log) {
 
   stage.append(meta, content);
   return stage;
+}
+
+function createStageActions(log) {
+  const actions = document.createElement("div");
+  actions.className = "log-stage-actions";
+
+  // A failure that names the provider settings should be able to open them.
+  if (log.type === "error" && (log.stage === "transcription" || log.stage === "instruction")) {
+    const recovery = document.createElement("a");
+    recovery.className = "log-recovery-link";
+    recovery.href = "settings.html#provider";
+    recovery.textContent = "Open provider settings";
+    actions.append(recovery);
+  }
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.className = "button-secondary button-with-icon log-copy-button";
+  copyButton.append(createIcon("copy"), createButtonLabel("Copy"));
+  copyButton.setAttribute("aria-label", "Copy this text to the clipboard");
+  copyButton.addEventListener("click", () => copyStageText(log.text, copyButton));
+  actions.append(copyButton);
+
+  return actions;
+}
+
+function createButtonLabel(text) {
+  const label = document.createElement("span");
+  label.className = "button-label";
+  label.textContent = text;
+  return label;
+}
+
+async function copyStageText(text, button) {
+  const label = button.querySelector(".button-label");
+  try {
+    if (desktopBridge?.writeClipboardText) await desktopBridge.writeClipboardText(text);
+    else if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+    else throw new Error("Clipboard access is unavailable.");
+    label.textContent = "Copied";
+  } catch (error) {
+    console.error("Could not copy the entry:", error);
+    label.textContent = "Copy failed";
+  }
+  setTimeout(() => {
+    label.textContent = "Copy";
+  }, 1600);
 }
 
 function createPromptDetails(log) {

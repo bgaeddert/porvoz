@@ -50,9 +50,13 @@ body {
   border-color: rgba(255, 115, 115, 0.52);
 }
 
-.status-pill[data-state="transcribing"],
-.status-pill[data-state="processing"] {
+.status-pill[data-state="transcribing"] {
   border-color: rgba(123, 173, 255, 0.5);
+}
+
+/* Transcribing and processing are separate phases and read as separate states. */
+.status-pill[data-state="processing"] {
+  border-color: rgba(224, 176, 92, 0.55);
 }
 
 .status-pill[data-state="typing"] {
@@ -99,9 +103,17 @@ body {
 
 .status-pill[data-state="transcribing"] .status-indicator,
 .status-pill[data-state="processing"] .status-indicator {
+  animation: indicator-spin 1s linear infinite;
+}
+
+.status-pill[data-state="transcribing"] .status-indicator {
   background: #7badff;
   color: rgba(123, 173, 255, 0.68);
-  animation: indicator-spin 1s linear infinite;
+}
+
+.status-pill[data-state="processing"] .status-indicator {
+  background: #e0b05c;
+  color: rgba(224, 176, 92, 0.68);
 }
 
 .status-pill[data-state="transcribing"] .status-indicator::before,

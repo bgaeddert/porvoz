@@ -6,19 +6,19 @@ Instead of forcing you into a fixed vocabulary or workflow, Porvoz adapts to the
 
 ## Download and install
 
-The current release is [Porvoz v1.4.0](https://github.com/bgaeddert/porvoz/releases/tag/v1.4.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
+The current release is [Porvoz v1.4.1](https://github.com/bgaeddert/porvoz/releases/tag/v1.4.1). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.4.0/Porvoz-1.4.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v1.4.1/Porvoz-1.4.1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.4.0/Porvoz-1.4.0-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v1.4.1/Porvoz-1.4.1-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-1.4.0-linux-x86_64.AppImage
-./Porvoz-1.4.0-linux-x86_64.AppImage
+chmod +x Porvoz-1.4.1-linux-x86_64.AppImage
+./Porvoz-1.4.1-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to save the API key securely. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -27,7 +27,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.4.0/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v1.4.1/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -71,7 +71,7 @@ Prefix names must be unique, ignoring case. Use **Remove prefix** to delete any 
 
 ## Using Porvoz
 
-Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe and type the result into the application that owns the cursor. Use **Settings → Keyboard → Set hotkey** to choose another key or combination, such as **Ctrl + Shift + F12**; changes take effect immediately.
+Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe and type the result into the application that owns the cursor. Use **Settings → Capture & instructions → Keyboard → Set hotkey** to choose another key or combination, such as **Ctrl + Shift + F12**; changes take effect immediately.
 
 While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. The pill is visual-only: it ignores mouse input and does not become the active typing window.
 
@@ -120,4 +120,4 @@ GitHub Actions runs the test suite on Windows and Ubuntu. Pushing a tag beginnin
 
 Porvoz uses the [Tabler Icons](https://github.com/tabler/tabler-icons) outline set for interface icons. Icons are kept inline so the app remains self-contained and available offline; the standard is Tabler’s 24×24 viewBox with a 2px stroke.
 
-The capture feedback sounds are the CC0 **Recording Start.mp3** and **Recording Stop.mp3** clips by [AbdrTar on Freesound](https://freesound.org/people/AbdrTar/). The start clip is [sound 519985](https://freesound.org/people/AbdrTar/sounds/519985/), and the stop clip is [sound 519986](https://freesound.org/people/AbdrTar/sounds/519986/). Failed text placement uses the CC0 [Wrong Choice](https://freesound.org/people/unadamlar/sounds/476177/) clip by unadamlar. Their shared playback volume defaults to 30% and can be adjusted under **Settings → Sound → Recording cues**.
+The capture feedback sounds are the CC0 **Recording Start.mp3** and **Recording Stop.mp3** clips by [AbdrTar on Freesound](https://freesound.org/people/AbdrTar/). The start clip is [sound 519985](https://freesound.org/people/AbdrTar/sounds/519985/), and the stop clip is [sound 519986](https://freesound.org/people/AbdrTar/sounds/519986/). Failed text placement uses the CC0 [Wrong Choice](https://freesound.org/people/unadamlar/sounds/476177/) clip by unadamlar. Their shared playback volume defaults to 30% and can be previewed or adjusted under **Settings → Capture & instructions → Sound → Recording cues**.
