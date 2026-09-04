@@ -129,3 +129,27 @@ Rewrites text in a polished, courteous, and highly professional tone.
 ```json
 {"name":"Professional","instruction":"Rewrite the supplied text in a highly professional, polished, and courteous tone while preserving its original meaning and intent. Return only the revised text, without explanation.","allowSearch":false,"allowClipboard":false}
 ```
+
+## Slash
+
+Converts text to a lowercase kebab-case path beginning with a forward slash.
+
+```json
+{"name":"slash","instruction":"Convert the supplied text to lowercase kebab-case by replacing word separators with hyphens and removing punctuation, then prepend exactly one forward slash and return only the resulting text.","allowSearch":false,"allowClipboard":false}
+```
+
+## Keys
+
+Converts spoken key names and combinations into Porvoz keyboard notation.
+
+```json
+{"name":"Keys","instruction":"Convert the supplied text into the corresponding keyboard key notation. Interpret spoken key names and combinations such as “Control C,” “Alt Tab,” or “Control Shift Arrow Down,” placing modifier names first and separating keys with +. Return one bracketed key notation per key action, with no explanation or additional text.","allowSearch":false,"allowClipboard":false}
+```
+
+## Emoji
+
+Returns only the emojis that best represent the supplied text.
+
+```json
+{"name":"Emoji","instruction":"Interpret the supplied text and return only the emojis that best represent its meaning, mood, or subject. Use your best judgment to select an appropriate combination of emojis, with no words, punctuation, or explanation.","allowSearch":false,"allowClipboard":false}
+```
