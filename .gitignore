@@ -11,3 +11,4 @@ pnpm-debug.log*
 !.env.example
 release/
 dist/
+data/

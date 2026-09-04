@@ -1,0 +1,25 @@
+services:
+  porvoz:
+    build:
+      context: .
+    image: bgaeddert/porvoz:${PORVOZ_IMAGE_TAG:-latest}
+    environment:
+      PORVOZ_ADMIN_KEY: ${PORVOZ_ADMIN_KEY:?Set PORVOZ_ADMIN_KEY in .env}
+      PORVOZ_MASTER_KEY: ${PORVOZ_MASTER_KEY:?Set PORVOZ_MASTER_KEY in .env}
+      PORVOZ_DATABASE_PATH: /data/porvoz.db
+      PORVOZ_HOST: 0.0.0.0
+      PORVOZ_PORT: 8080
+    ports:
+      - "${PORVOZ_PORT:-8080}:8080"
+    volumes:
+      - porvoz-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  porvoz-data:

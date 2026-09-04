@@ -8,6 +8,12 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   getRuntimeConfig() {
     return ipcRenderer.invoke("porvoz:get-runtime-config");
   },
+  getBackendSettings() {
+    return ipcRenderer.invoke("porvoz:get-backend-settings");
+  },
+  saveBackendSettings(value) {
+    return ipcRenderer.invoke("porvoz:save-backend-settings", value);
+  },
   getConnectionSettings() {
     return ipcRenderer.invoke("porvoz:get-connection-settings");
   },
@@ -44,6 +50,12 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   savePrefixSettings(value) {
     return ipcRenderer.invoke("porvoz:save-prefix-settings", value);
   },
+  getInferenceKey() {
+    return ipcRenderer.invoke("porvoz:get-inference-key");
+  },
+  rotateInferenceKey() {
+    return ipcRenderer.invoke("porvoz:rotate-inference-key");
+  },
   writeClipboardText(value) {
     return ipcRenderer.invoke("porvoz:write-clipboard-text", value);
   },
@@ -64,9 +76,6 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   },
   transcribe(value) {
     return ipcRenderer.invoke("porvoz:transcribe", value);
-  },
-  instruct(value) {
-    return ipcRenderer.invoke("porvoz:instruct", value);
   },
   createPrefixFromVoice(value) {
     return ipcRenderer.invoke("porvoz:create-prefix-from-voice", value);

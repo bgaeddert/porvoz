@@ -28,16 +28,18 @@
         </nav>
         <nav class="section-nav" aria-label="Settings sections">
           <p>Configure</p>
+          <a href="#capture">Prefixes &amp; instructions</a>
           <a href="#provider">Provider &amp; models</a>
-          <a href="#capture">Capture &amp; instructions</a>
+          <a href="#keyboard">Keyboard</a>
+          <a href="#sound">Sound</a>
         </nav>
         <div class="sidebar-meta" aria-label="Application version"><span class="sidebar-meta-name">Porvoz</span><span data-app-version>Version unavailable</span></div>
       </aside>
 
       <div class="app-workspace">
         <header class="workspace-header">
-          <div><p id="settings-page-kicker" class="workspace-kicker">Settings</p><h1 id="settings-page-title">Provider &amp; models</h1></div>
-          <p id="settings-page-summary" class="workspace-summary">Manage the API connection and choose the models Porvoz uses.</p>
+          <div><p id="settings-page-kicker" class="workspace-kicker">Settings</p><h1 id="settings-page-title">Prefixes &amp; instructions</h1></div>
+          <p id="settings-page-summary" class="workspace-summary">Manage the instruction prompt, reusable prefixes, and reset controls.</p>
         </header>
 
       <main class="page-main settings-main">
@@ -56,7 +58,40 @@
           <a class="setup-warning-link" href="settings.html">Open Settings</a>
         </aside>
         <div class="settings-stack">
-          <section id="connection" class="settings-card connection-card" data-settings-page="provider" aria-labelledby="connection-heading">
+          <section id="backend" class="settings-card connection-card" data-settings-page="provider" aria-labelledby="backend-heading" hidden>
+            <div class="settings-heading">
+              <div>
+                <p class="panel-kicker">Backend</p>
+                <h2 id="backend-heading">Porvoz server</h2>
+                <p class="section-description">Use the private server started with this desktop app, or connect to a remote Porvoz server.</p>
+              </div>
+            </div>
+            <form id="backend-form" class="connection-form">
+              <label class="field-label" for="backend-mode">
+                Server mode
+                <select id="backend-mode">
+                  <option value="local">Local child server</option>
+                  <option value="remote">Remote server</option>
+                </select>
+              </label>
+              <div id="remote-backend-fields" class="connection-form" hidden>
+                <label class="field-label" for="remote-backend-url">
+                  Remote server URL
+                  <input id="remote-backend-url" type="url" inputmode="url" autocomplete="url" placeholder="https://porvoz.example.com" />
+                </label>
+                <label class="field-label" for="remote-admin-key">
+                  Admin API key
+                  <input id="remote-admin-key" type="password" autocomplete="new-password" placeholder="Paste the server admin key" />
+                </label>
+              </div>
+              <div class="form-actions">
+                <p id="backend-status" class="field-note" aria-live="polite">Loading server configuration…</p>
+                <button class="button-primary" type="submit">Save server</button>
+              </div>
+            </form>
+          </section>
+
+          <section id="connection" class="settings-card connection-card" data-settings-page="provider" aria-labelledby="connection-heading" hidden>
             <div class="settings-heading">
               <div>
                 <p class="panel-kicker">Connection</p>
@@ -126,10 +161,19 @@
                 </button>
               </div>
             </form>
-            <p class="security-note">The key is stored by the local Electron app and is never returned to this page. Disabling certificate verification makes HTTPS vulnerable to interception.</p>
+            <div class="model-field inference-key-field">
+              <label class="field-label" for="inference-api-key">Third-party inference API key</label>
+              <div class="model-input-row inference-key-row">
+                <input id="inference-api-key" type="text" autocomplete="off" spellcheck="false" readonly />
+                <button id="copy-inference-api-key" class="button-secondary" type="button">Copy</button>
+                <button id="rotate-inference-api-key" class="button-secondary" type="button">Regenerate</button>
+              </div>
+              <small>OpenAI-compatible clients use this key for the selected profile. It is intentionally visible and copyable.</small>
+            </div>
+            <p class="security-note">The provider key is encrypted in the Porvoz server database and is never returned to this page. Disabling certificate verification makes HTTPS vulnerable to interception.</p>
           </section>
 
-          <section id="models" class="settings-card" data-settings-page="provider" aria-labelledby="models-heading">
+          <section id="models" class="settings-card" data-settings-page="provider" aria-labelledby="models-heading" hidden>
             <div class="settings-heading">
               <div>
                 <p class="panel-kicker">Models</p>
@@ -186,7 +230,7 @@
             <p class="field-note">Type or paste a model ID to save it directly, or browse the loaded catalog and apply a selection.</p>
           </section>
 
-          <section id="keyboard" class="settings-card" data-settings-page="capture" aria-labelledby="hotkey-heading" hidden>
+          <section id="keyboard" class="settings-card" data-settings-page="keyboard" aria-labelledby="hotkey-heading" hidden>
             <div class="settings-heading">
               <div>
                 <p class="panel-kicker">Keyboard</p>
@@ -225,7 +269,7 @@
             <p id="hotkey-status" class="field-note" aria-live="polite">Click Set hotkey, then press one Control/Alt key or a combination. Release to save; Escape cancels.</p>
           </section>
 
-          <section id="sound" class="settings-card" data-settings-page="capture" aria-labelledby="sound-heading" hidden>
+          <section id="sound" class="settings-card" data-settings-page="sound" aria-labelledby="sound-heading" hidden>
             <div class="settings-heading">
               <div>
                 <p class="panel-kicker">Sound</p>
@@ -264,7 +308,7 @@
             <p id="sound-volume-status" class="field-note" aria-live="polite">Cue volume is saved automatically.</p>
           </section>
 
-          <section id="instruction-prompt-settings" class="settings-card" data-settings-page="capture" aria-labelledby="prompt-heading" hidden>
+          <section id="instruction-prompt-settings" class="settings-card" data-settings-page="capture" aria-labelledby="prompt-heading">
             <div class="settings-heading settings-heading-actions">
               <div>
                 <p class="panel-kicker">Instructions</p>
@@ -286,7 +330,7 @@
             <p id="prompt-status" class="field-note" aria-live="polite">Changes save as you type.</p>
           </section>
 
-          <section id="prefixes" class="settings-card" data-settings-page="capture" aria-labelledby="prefixes-heading" hidden>
+          <section id="prefixes" class="settings-card" data-settings-page="capture" aria-labelledby="prefixes-heading">
             <div class="settings-heading settings-heading-actions">
               <div>
                 <p class="panel-kicker">Prefixes</p>
@@ -294,6 +338,13 @@
                 <p class="section-description">A transcript reaches the instruction model when it begins with a prefix in this list. Select a row to edit it, or copy its JSON to move it between Porvoz installs.</p>
               </div>
               <div class="prefix-heading-actions">
+                <button id="refresh-prefixes" class="button-secondary button-with-icon" type="button">
+                  <svg class="icon icon-tabler icon-tabler-refresh" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
+                    <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
+                  </svg>
+                  <span class="button-label">Refresh prefixes</span>
+                </button>
                 <button id="import-prefix" class="button-secondary button-with-icon" type="button">
                   <svg class="icon icon-tabler icon-tabler-clipboard" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2" />
@@ -315,7 +366,7 @@
             <p id="prefix-status" class="field-note" aria-live="polite">Changes save as you make them. Use Import from clipboard to add a copied prefix.</p>
           </section>
 
-          <section id="advanced" class="settings-card settings-card-reset" data-settings-page="capture" aria-labelledby="reset-heading" hidden>
+          <section id="advanced" class="settings-card settings-card-reset" data-settings-page="capture" aria-labelledby="reset-heading">
             <div class="settings-heading settings-heading-actions">
               <div>
                 <p class="panel-kicker">Advanced</p>

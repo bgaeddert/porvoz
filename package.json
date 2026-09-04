@@ -1,6 +1,6 @@
 {
   "name": "porvoz",
-  "version": "1.4.1",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "productName": "Porvoz",
@@ -12,14 +12,19 @@
     "postinstall": "electron-rebuild",
     "start": "electron .",
     "desktop": "electron .",
+    "server": "node server/cli.js",
     "test": "node --test",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
     "package:win": "electron-builder --win nsis --x64 --publish never",
     "package:linux": "electron-builder --linux AppImage --x64 --publish never",
     "package:dir": "electron-builder --dir --publish never"
   },
   "dependencies": {
+    "busboy": "^1.6.0",
     "koffi": "^3.1.6",
     "openai": "^7.8.0",
+    "sql.js": "^1.14.2",
     "uiohook-napi": "^1.5.5",
     "undici": "^7.29.0"
   },
