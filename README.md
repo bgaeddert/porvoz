@@ -4,10 +4,6 @@ Porvoz is a tray-first Electron desktop app for voice transcription and customiz
 
 The API key stays in the operating system credential store. Porvoz does not start a web server. When it types a response, it temporarily places the text on the system clipboard for a simulated paste and restores the previous clipboard contents when they have not changed externally.
 
-## Iconography
-
-Porvoz uses the [Tabler Icons](https://github.com/tabler/tabler-icons) outline set for interface icons. Icons are kept inline so the app remains self-contained and available offline; the standard is Tabler’s 24×24 viewBox with a 2px stroke.
-
 ## Download and install
 
 The current release is [Porvoz v1.4.0](https://github.com/bgaeddert/porvoz/releases/tag/v1.4.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
@@ -119,5 +115,9 @@ sudo apt install build-essential libasound2-dev libgbm-dev libgtk-3-dev libnss3-
 ```
 
 GitHub Actions runs the test suite on Windows and Ubuntu. Pushing a tag beginning with `v` builds the Windows NSIS installer and Linux AppImage, then attaches both files and a checksum manifest to a GitHub Release.
+
+## Attributions
+
+Porvoz uses the [Tabler Icons](https://github.com/tabler/tabler-icons) outline set for interface icons. Icons are kept inline so the app remains self-contained and available offline; the standard is Tabler’s 24×24 viewBox with a 2px stroke.
 
 The capture feedback sounds are the CC0 **Recording Start.mp3** and **Recording Stop.mp3** clips by [AbdrTar on Freesound](https://freesound.org/people/AbdrTar/). The start clip is [sound 519985](https://freesound.org/people/AbdrTar/sounds/519985/), and the stop clip is [sound 519986](https://freesound.org/people/AbdrTar/sounds/519986/). Failed text placement uses the CC0 [Wrong Choice](https://freesound.org/people/unadamlar/sounds/476177/) clip by unadamlar. Their shared playback volume defaults to 30% and can be adjusted under **Settings → Sound → Recording cues**.
