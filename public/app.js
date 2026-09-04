@@ -249,17 +249,14 @@ async function processTranscription() {
     if (generation !== activityGeneration) return;
     if (!result?.transcript) throw new Error("Could not transcribe the audio.");
 
-    replaceTranscript(result.transcript);
-    processStage = "instruction";
-    setStatus("Applying instructions…", "processing", "instruction");
-    const instructionResult = await requestInstruction(result.transcript, result.logGroupId);
-    if (generation !== activityGeneration) return;
-    if (!instructionResult.instructionApplied) {
+    replaceTranscript(result.rawTranscript || result.transcript);
+    if (!result.instructionApplied) {
       setStatus("Transcription complete; no instruction prefix detected.", "success", "transcription");
       if (typeResultAtCursor) await typeFinalResponse(result.transcript, captureId);
       return;
     }
-    instructionResponse.value = instructionResult.transcript;
+    processStage = "instruction";
+    instructionResponse.value = result.transcript;
     autoResizeTextarea(instructionResponse);
     setStatus("Transcription complete.", "success", "instruction");
     if (typeResultAtCursor) await typeFinalResponse(instructionResponse.value, captureId);
@@ -332,13 +329,6 @@ function updateTranscribeButtonLabel() {
 function autoResizeTextarea(textarea) {
   textarea.style.height = "auto";
   textarea.style.height = textarea.scrollHeight + "px";
-}
-
-async function requestInstruction(transcriptText, logGroupId) {
-  if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
-  const result = await desktopBridge.instruct({ transcript: transcriptText, logGroupId });
-  if (!result?.transcript) throw new Error("Could not run the instruction model.");
-  return result;
 }
 
 function replaceTranscript(text) {

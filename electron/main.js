@@ -7,15 +7,16 @@ import {
   dialog,
   nativeImage,
   session,
-  ipcMain
+  ipcMain,
+  safeStorage
 } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { uIOhook, UiohookKey } from "uiohook-napi";
-import { createAppService } from "./app-service.js";
-import { createLogStore } from "./log-store.js";
 import { createSettingsStore } from "./settings-store.js";
+import { createBackendManager } from "./backend-manager.js";
+import { createDesktopPreferences } from "./desktop-preferences.js";
 import { createStatusOverlay } from "./status-overlay.js";
 import {
   captureTextInputTarget,
@@ -90,10 +91,11 @@ let statusOverlay;
 let tray;
 let isQuitting = false;
 let isHotkeyRecording = false;
+let hotkeyIntentGeneration = 0;
 let isCapturingHotkey = false;
 let hookStarted = false;
-let settingsStore;
-let logStore;
+let backendManager;
+let desktopPreferences;
 let currentHotkey;
 let suppressedHotkeyKeyCode;
 let hotkeyCaptureTimer;
@@ -119,17 +121,34 @@ if (!hasSingleInstanceLock) {
 async function startApplication() {
   app.setAppUserModelId("com.porvoz.desktop");
   if (app.isPackaged) Menu.setApplicationMenu(null);
-  settingsStore = createSettingsStore({
-    defaultsPath: fileURLToPath(new URL("./defaults.json", import.meta.url)),
-    settingsPath: path.join(app.getPath("userData"), "settings.json"),
-    credentialsPath: path.join(app.getPath("userData"), "credentials.bin")
+  const userDataPath = app.getPath("userData");
+  const defaultsPath = fileURLToPath(new URL("./defaults.json", import.meta.url));
+  const legacySettingsStore = createSettingsStore({
+    defaultsPath,
+    settingsPath: path.join(userDataPath, "settings.json"),
+    credentialsPath: path.join(userDataPath, "credentials.bin")
   });
-  logStore = createLogStore({
-    logsPath: path.join(app.getPath("userData"), "logs.json"),
-    maxEntries: settingsStore.getLimits().maxLogEntries
+  const legacySettings = legacySettingsStore.getSettings();
+  const legacyProviderKeys = {};
+  for (const profile of legacySettings.profiles) {
+    if (!legacySettingsStore.hasApiKey(profile.id)) continue;
+    legacyProviderKeys[profile.id] = legacySettingsStore.getApiKey(profile.id);
+  }
+  desktopPreferences = createDesktopPreferences({
+    preferencesPath: path.join(userDataPath, "desktop-preferences.json"),
+    safeStorage,
+    legacySettings
   });
+  backendManager = createBackendManager({
+    app,
+    safeStorage,
+    preferences: desktopPreferences,
+    userDataPath,
+    legacyConfiguration: { settings: legacySettings, providerKeys: legacyProviderKeys }
+  });
+  await backendManager.start();
+  appService = backendManager.getClient();
   currentHotkey = loadHotkey();
-  appService = createAppService(settingsStore, logStore);
 
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const rendererPath = getRendererFilePath(webContents.getURL());
@@ -149,11 +168,12 @@ async function startApplication() {
     secureWindow: secureRendererWindow
   });
   registerGlobalHotkey();
+  if (!app.isPackaged && process.env.PORVOZ_SHOW_WINDOW_FOR_TESTS === "1") showMainWindow();
 }
 
 function loadHotkey() {
-  if (!settingsStore) throw new Error("The settings store is not initialized.");
-  const hotkey = normalizeHotkey(settingsStore.getHotkey());
+  if (!desktopPreferences) throw new Error("The desktop preferences are not initialized.");
+  const hotkey = normalizeHotkey(desktopPreferences.getHotkey());
   if (!hotkey) throw new Error("The saved hotkey is invalid.");
   return hotkey;
 }
@@ -378,7 +398,7 @@ function clearHotkeyCaptureState() {
   captureTriggerModifiers = [];
 }
 
-function handleGlobalKeyDown(event) {
+async function handleGlobalKeyDown(event) {
   if (event.keycode === UiohookKey.Escape) {
     if (isSyntheticEscapeActive()) return;
     if (!isCapturingHotkey) cancelActiveActivity();
@@ -393,12 +413,24 @@ function handleGlobalKeyDown(event) {
     && requiredModifiersPressed
     && !isHotkeyRecording) {
     isHotkeyRecording = true;
-    const setupStatus = appService.getSetupStatus();
-    if (setupStatus.ready) {
-      const attempt = beginCaptureAttempt();
-      sendHotkeyAction("start", { captureId: attempt.id });
-    } else {
-      sendHotkeyAction("configuration-needed", { message: setupStatus.hotkeyMessage });
+    const intentGeneration = ++hotkeyIntentGeneration;
+    const isCurrentIntent = () => isHotkeyRecording && intentGeneration === hotkeyIntentGeneration;
+    try {
+      const setupStatus = await appService.getSetupStatus();
+      if (!isCurrentIntent()) return;
+      if (setupStatus.ready) {
+        const attempt = beginCaptureAttempt();
+        sendHotkeyAction("start", { captureId: attempt.id });
+      } else {
+        isHotkeyRecording = false;
+        sendHotkeyAction("configuration-needed", { message: setupStatus.hotkeyMessage });
+      }
+    } catch (error) {
+      if (!isCurrentIntent()) return;
+      isHotkeyRecording = false;
+      sendHotkeyAction("configuration-needed", {
+        message: error.message || "The Porvoz backend is unavailable."
+      });
     }
   }
 }
@@ -550,11 +582,21 @@ function setOverlayStatus(value) {
 
 function registerIpcHandlers() {
   ipcMain.handle("porvoz:get-app-version", () => app.getVersion());
-  ipcMain.handle("porvoz:get-runtime-config", () => appService.getRuntimeConfig());
+  ipcMain.handle("porvoz:get-runtime-config", async () => ({
+    ...(await appService.getRuntimeConfig()),
+    soundVolume: desktopPreferences.getSoundVolume()
+  }));
+  ipcMain.handle("porvoz:get-backend-settings", () => backendManager.getSettings());
+  ipcMain.handle("porvoz:save-backend-settings", async (_event, value) => {
+    const result = await backendManager.saveSettings(value);
+    appService = backendManager.getClient();
+    notifySetupUpdated();
+    return result;
+  });
   ipcMain.handle("porvoz:get-connection-settings", () => appService.getConnectionSettings());
   ipcMain.handle("porvoz:get-setup-status", () => appService.getSetupStatus());
-  ipcMain.handle("porvoz:save-connection", (_event, value) => {
-    const result = appService.saveConnection(value);
+  ipcMain.handle("porvoz:save-connection", async (_event, value) => {
+    const result = await appService.saveConnection(value);
     notifySetupUpdated();
     return result;
   });
@@ -568,60 +610,68 @@ function registerIpcHandlers() {
       throw error;
     }
   }));
-  ipcMain.handle("porvoz:save-model-selections", (_event, value) => {
-    const result = appService.saveModelSelections(value);
+  ipcMain.handle("porvoz:save-model-selections", async (_event, value) => {
+    const result = await appService.saveModelSelections(value);
     notifySetupUpdated();
     return result;
   });
-  ipcMain.handle("porvoz:create-profile", (_event, value) => {
-    const result = appService.createProfile(value);
+  ipcMain.handle("porvoz:create-profile", async (_event, value) => {
+    const result = await appService.createProfile(value);
     notifySetupUpdated();
     return result;
   });
   ipcMain.handle("porvoz:rename-profile", (_event, value) => appService.renameProfile(value));
-  ipcMain.handle("porvoz:delete-profile", (_event, value) => {
-    const result = appService.deleteProfile(value);
+  ipcMain.handle("porvoz:delete-profile", async (_event, value) => {
+    const result = await appService.deleteProfile(value);
     notifySetupUpdated();
     return result;
   });
-  ipcMain.handle("porvoz:set-active-profile", (_event, value) => {
-    const result = appService.setActiveProfile(value);
+  ipcMain.handle("porvoz:set-active-profile", async (_event, value) => {
+    const result = await appService.setActiveProfile(value);
     notifySetupUpdated();
     return result;
   });
   ipcMain.handle("porvoz:save-prompt", (_event, value) => appService.savePrompt(value));
   ipcMain.handle("porvoz:reset-prompt", () => appService.resetPrompt());
   ipcMain.handle("porvoz:save-prefix-settings", (_event, value) => appService.savePrefixSettings(value));
+  ipcMain.handle("porvoz:get-inference-key", () => appService.getInferenceKey());
+  ipcMain.handle("porvoz:rotate-inference-key", () => appService.rotateInferenceKey());
   ipcMain.handle("porvoz:write-clipboard-text", (_event, value) => {
     if (typeof value !== "string") throw new Error("Clipboard content must be text.");
     clipboard.writeText(value);
   });
   ipcMain.handle("porvoz:read-clipboard-text", () => clipboard.readText());
   ipcMain.handle("porvoz:get-logs", () => appService.getLogs());
-  ipcMain.handle("porvoz:log-error", (_event, value) => {
-    const result = appService.logError(value);
+  ipcMain.handle("porvoz:log-error", async (_event, value) => {
+    const result = await appService.logError(value);
     notifyLogsUpdated();
     return result;
   });
-  ipcMain.handle("porvoz:clear-logs", () => {
-    const logs = appService.clearLogs();
+  ipcMain.handle("porvoz:clear-logs", async () => {
+    const logs = await appService.clearLogs();
     notifyLogsUpdated(logs);
     return logs;
   });
-  ipcMain.handle("porvoz:reset-to-defaults", () => {
-    const runtimeConfig = appService.resetToDefaults();
+  ipcMain.handle("porvoz:reset-to-defaults", async () => {
+    const runtimeConfig = await appService.resetToDefaults();
+    const defaults = JSON.parse(await import("node:fs/promises").then(({ readFile }) =>
+      readFile(fileURLToPath(new URL("./defaults.json", import.meta.url)), "utf8")));
+    desktopPreferences.resetCaptureSettings(defaults);
     currentHotkey = loadHotkey();
     suppressedHotkeyKeyCode = undefined;
     tray?.setToolTip(`Porvoz · Hold ${currentHotkey.label} to transcribe`);
     notifyHotkeyUpdated();
     notifySetupUpdated();
     updateTrayMenu();
-    return runtimeConfig;
+    return { ...runtimeConfig, soundVolume: desktopPreferences.getSoundVolume() };
   });
   ipcMain.handle("porvoz:transcribe", (_event, value) => runActiveOperation(async (signal) => {
     setOverlayStatus({ message: "Transcribing…", state: "transcribing", stage: "transcription" });
     try {
-      const result = await appService.transcribe(value, { signal });
+      const result = await appService.transcribe({
+        ...value,
+        clipboardText: clipboard.readText()
+      }, { signal });
       notifyLogsUpdated();
       return result;
     } catch (error) {
@@ -634,29 +684,6 @@ function registerIpcHandlers() {
         message: error.message || "Could not transcribe the audio.",
         state: "error",
         stage: "transcription"
-      });
-      throw error;
-    }
-  }));
-  ipcMain.handle("porvoz:instruct", (_event, value) => runActiveOperation(async (signal) => {
-    setOverlayStatus({ message: "Applying instructions…", state: "processing", stage: "instruction" });
-    try {
-      const result = await appService.instruct(value, {
-        readClipboard: () => clipboard.readText(),
-        signal
-      });
-      notifyLogsUpdated();
-      return result;
-    } catch (error) {
-      if (isCancellationError(error)) {
-        setOverlayStatus({ state: "idle" });
-        throw error;
-      }
-      notifyLogsUpdated();
-      setOverlayStatus({
-        message: error.message || "Could not apply the instructions.",
-        state: "error",
-        stage: "instruction"
       });
       throw error;
     }
@@ -682,7 +709,7 @@ function registerIpcHandlers() {
     return saveHotkey(nextHotkey);
   });
   ipcMain.handle("porvoz:save-sound-volume", (_event, value) => {
-    const soundVolume = appService.saveSoundVolume(value);
+    const soundVolume = desktopPreferences.saveSoundVolume(value);
     notifySoundVolumeUpdated(soundVolume);
     return soundVolume;
   });
@@ -705,7 +732,7 @@ function registerIpcHandlers() {
         setOverlayStatus({ state: "idle" });
         throw error;
       }
-      appService.logError({ stage: "typing", error });
+      await appService.logError({ stage: "typing", error });
       notifyLogsUpdated();
       setOverlayStatus({
         message: error.message || "Could not place the text.",
@@ -720,7 +747,7 @@ function registerIpcHandlers() {
 function saveHotkey(nextHotkey) {
   clearHotkeyCaptureWatchdog();
   currentHotkey = nextHotkey;
-  settingsStore.saveHotkey(currentHotkey);
+  desktopPreferences.saveHotkey(currentHotkey);
   isCapturingHotkey = false;
   isHotkeyRecording = false;
   pressedKeys.clear();
@@ -777,7 +804,7 @@ function notifySoundVolumeUpdated(soundVolume) {
 }
 
 function notifyLogsUpdated(logs) {
-  const payload = { count: Array.isArray(logs) ? logs.length : appService.getLogs().length };
+  const payload = { count: Array.isArray(logs) ? logs.length : undefined };
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("porvoz:logs-updated", payload);
 }
 
@@ -923,6 +950,7 @@ function shutdownApplication() {
   statusOverlay = undefined;
   if (captureWindow && !captureWindow.isDestroyed()) captureWindow.destroy();
   captureWindow = undefined;
+  void backendManager?.stop();
 }
 
 function handleWindowError(error) {

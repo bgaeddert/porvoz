@@ -5,10 +5,12 @@ directories:
   output: release
 
 files:
-  - "**/*"
-  - "!test{,/**/*}"
-  - "!release{,/**/*}"
-  - "!dist{,/**/*}"
+  - "electron/**/*"
+  - "public/**/*"
+  - "server/**/*"
+  - "package.json"
+  - "README.md"
+  - "LICENSE.md"
 
 asar: true
 asarUnpack:

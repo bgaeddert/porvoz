@@ -859,6 +859,20 @@ kbd {
   border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 }
 
+.inference-key-field {
+  margin-top: 12px;
+}
+
+.inference-key-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+}
+
+.inference-key-row input {
+  border-right: 1px solid var(--n-500);
+  border-radius: var(--radius-sm);
+}
+
 .model-picker-button {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }

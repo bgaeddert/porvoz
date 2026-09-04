@@ -19,8 +19,8 @@ export function createAppService(settingsStore, logStore) {
   const maxPrefixInstructionCharacters = Number(limits.maxPrefixInstructionCharacters) || 4_000;
   const maxPrefixTotalCharacters = Number(limits.maxPrefixTotalCharacters) || 50_000;
   const responseLogStore = logStore || createNoopLogStore();
-  let openaiClient;
-  let transportAgent;
+  const openaiClients = new Map();
+  const transportAgents = new Map();
 
   return {
     getRuntimeConfig,
@@ -46,19 +46,20 @@ export function createAppService(settingsStore, logStore) {
     createPrefixFromVoice
   };
 
-  function getActiveProfile(settings) {
-    const profile = settings.profiles.find((candidate) => candidate.id === settings.activeProfileId);
-    if (!profile) throw new Error("The active connection profile could not be found.");
+  function getProfile(settings, profileId) {
+    const id = typeof profileId === "string" && profileId ? profileId : settings.activeProfileId;
+    const profile = settings.profiles.find((candidate) => candidate.id === id);
+    if (!profile) throw new Error("The requested connection profile could not be found.");
     return profile;
   }
 
-  function getRuntimeConfig() {
+  function getRuntimeConfig(profileId) {
     const settings = settingsStore.getSettings();
-    const activeProfile = getActiveProfile(settings);
+    const activeProfile = getProfile(settings, profileId);
     return {
       limits,
       profiles: settings.profiles.map(({ id, name }) => ({ id, name })),
-      activeProfileId: settings.activeProfileId,
+      activeProfileId: activeProfile.id,
       models: {
         available: activeProfile.models.available,
         selected: {
@@ -73,9 +74,9 @@ export function createAppService(settingsStore, logStore) {
     };
   }
 
-  function getConnectionSettings() {
+  function getConnectionSettings(profileId) {
     const settings = settingsStore.getSettings();
-    const activeProfile = getActiveProfile(settings);
+    const activeProfile = getProfile(settings, profileId);
     return {
       profileId: activeProfile.id,
       baseUrl: activeProfile.connection.baseUrl,
@@ -84,10 +85,10 @@ export function createAppService(settingsStore, logStore) {
     };
   }
 
-  function getSetupStatus() {
+  function getSetupStatus(profileId) {
     const settings = settingsStore.getSettings();
-    const activeProfile = getActiveProfile(settings);
-    const connection = getConnectionSettings();
+    const activeProfile = getProfile(settings, profileId);
+    const connection = getConnectionSettings(activeProfile.id);
     const missing = [];
     if (!connection.baseUrl) missing.push("API base URL");
     if (!connection.apiKeyConfigured) missing.push("API key");
@@ -107,7 +108,7 @@ export function createAppService(settingsStore, logStore) {
     };
   }
 
-  function saveConnection({ baseUrl: requestedBaseUrl, apiKey, verifyCertificate } = {}) {
+  function saveConnection({ profileId, baseUrl: requestedBaseUrl, apiKey, verifyCertificate } = {}) {
     const nextBaseUrl = typeof requestedBaseUrl === "string"
       ? requestedBaseUrl.trim().replace(/\/+$/, "")
       : "";
@@ -115,11 +116,11 @@ export function createAppService(settingsStore, logStore) {
       throw new Error("Enter a valid HTTP or HTTPS base URL.");
     }
 
-    const connection = { baseUrl: nextBaseUrl, verifyCertificate };
+    const connection = { profileId, baseUrl: nextBaseUrl, verifyCertificate };
     if (typeof apiKey === "string" && apiKey.trim()) connection.apiKey = apiKey;
     settingsStore.saveConnection(connection);
-    resetOpenAIClient();
-    return getConnectionSettings();
+    resetOpenAIClient(profileId);
+    return getConnectionSettings(profileId);
   }
 
   function createProfile(value) {
@@ -146,17 +147,17 @@ export function createAppService(settingsStore, logStore) {
     return getRuntimeConfig();
   }
 
-  async function populateModels({ signal } = {}) {
-    if (!hasApiConfig()) throw new Error("Enter the base URL and API key before loading models.");
-    const targetProfileId = getConnectionSettings().profileId;
+  async function populateModels({ profileId, signal } = {}) {
+    if (!hasApiConfig(profileId)) throw new Error("Enter the base URL and API key before loading models.");
+    const targetProfileId = getConnectionSettings(profileId).profileId;
 
     try {
       throwIfAborted(signal);
-      const modelListOptions = isOpenRouterEndpoint(getConnectionSettings().baseUrl)
+      const modelListOptions = isOpenRouterEndpoint(getConnectionSettings(targetProfileId).baseUrl)
         ? { query: { output_modalities: "all" } }
         : {};
       if (signal) modelListOptions.signal = signal;
-      const response = await getOpenAIClient().models.list(
+      const response = await getOpenAIClient(targetProfileId).models.list(
         Object.keys(modelListOptions).length ? modelListOptions : undefined
       );
       throwIfAborted(signal);
@@ -168,7 +169,7 @@ export function createAppService(settingsStore, logStore) {
       if (!models.length) throw new Error("The model endpoint returned no models.");
       throwIfAborted(signal);
       settingsStore.saveModelCatalog(targetProfileId, models);
-      return getRuntimeConfig();
+      return getRuntimeConfig(targetProfileId);
     } catch (error) {
       const canceled = cancellationErrorFor(error, signal);
       if (canceled) throw canceled;
@@ -185,9 +186,9 @@ export function createAppService(settingsStore, logStore) {
     }
   }
 
-  function saveModelSelections(value) {
-    settingsStore.saveModelSelections(undefined, value);
-    return getRuntimeConfig();
+  function saveModelSelections(value = {}) {
+    settingsStore.saveModelSelections(value.profileId, value);
+    return getRuntimeConfig(value.profileId);
   }
 
   function savePrompt(prompt) {
@@ -223,14 +224,14 @@ export function createAppService(settingsStore, logStore) {
     return getRuntimeConfig();
   }
 
-  async function transcribe({ audio, mimeType } = {}, { signal } = {}) {
+  async function transcribe({ audio, mimeType, profileId } = {}, { signal } = {}) {
     const normalizedMimeType = typeof mimeType === "string" ? mimeType.toLowerCase() : "";
     const audioBuffer = toBuffer(audio);
-    const selectedModel = getActiveProfile(settingsStore.getSettings()).models.transcription;
+    const selectedModel = getProfile(settingsStore.getSettings(), profileId).models.transcription;
 
     try {
       throwIfAborted(signal);
-      if (!hasApiConfig()) throw new Error("Enter the base URL and API key in Settings.");
+      if (!hasApiConfig(profileId)) throw new Error("Enter the base URL and API key in Settings.");
       if (!audioBuffer || !audioBuffer.length) {
         throw new Error("Provide audio before sending it for transcription.");
       }
@@ -250,7 +251,7 @@ export function createAppService(settingsStore, logStore) {
           { type: normalizedMimeType }
         );
       throwIfAborted(signal);
-      const result = await getOpenAIClient().audio.transcriptions.create({
+      const result = await getOpenAIClient(profileId).audio.transcriptions.create({
         file,
         model: selectedModel,
         response_format: "json"
@@ -296,16 +297,16 @@ export function createAppService(settingsStore, logStore) {
   }
 
   async function instruct(
-    { transcript, logGroupId } = {},
-    { readClipboard = () => "", signal } = {}
+    { transcript, logGroupId, profileId, clipboardText: suppliedClipboardText } = {},
+    { readClipboard = () => suppliedClipboardText || "", signal } = {}
   ) {
     const settings = settingsStore.getSettings();
-    const inputs = getInstructionInputs(transcript, settings);
+    const inputs = getInstructionInputs(transcript, settings, profileId);
     try {
       throwIfAborted(signal);
       if (inputs.error) throw new Error(inputs.error);
       if (!inputs.activePrefixes.length) return { transcript: inputs.transcript, instructionApplied: false };
-      if (!hasApiConfig()) throw new Error("Enter the base URL and API key in Settings.");
+      if (!hasApiConfig(profileId)) throw new Error("Enter the base URL and API key in Settings.");
       if (!inputs.model) throw new Error("Choose an instruction model in Settings after loading models.");
       const clipboardRequested = inputs.activePrefixes.some((prefix) => prefix.allowClipboard === true);
       const clipboardText = clipboardRequested
@@ -322,7 +323,8 @@ export function createAppService(settingsStore, logStore) {
           inputs.reasoning,
           clipboardText,
           logGroupId,
-          signal
+          signal,
+          profileId
         ),
         instructionApplied: true
       };
@@ -334,11 +336,11 @@ export function createAppService(settingsStore, logStore) {
     }
   }
 
-  async function createPrefixFromVoice({ audio, mimeType } = {}, { signal } = {}) {
+  async function createPrefixFromVoice({ audio, mimeType, profileId } = {}, { signal } = {}) {
     const settings = settingsStore.getSettings();
-    const activeProfile = getActiveProfile(settings);
+    const activeProfile = getProfile(settings, profileId);
     throwIfAborted(signal);
-    if (!hasApiConfig()) throw new Error("Enter the base URL and API key in Settings.");
+    if (!hasApiConfig(profileId)) throw new Error("Enter the base URL and API key in Settings.");
     if (!activeProfile.models.transcription) {
       throw new Error("Choose a transcription model in Settings after loading models.");
     }
@@ -346,7 +348,7 @@ export function createAppService(settingsStore, logStore) {
       throw new Error("Choose an instruction model in Settings after loading models.");
     }
 
-    const { transcript } = await transcribe({ audio, mimeType }, { signal });
+    const { transcript } = await transcribe({ audio, mimeType, profileId }, { signal });
     throwIfAborted(signal);
     if (transcript.length > maxTranscriptCharacters) {
       throw new Error("The spoken prefix description is too long. Please try a shorter recording.");
@@ -354,12 +356,12 @@ export function createAppService(settingsStore, logStore) {
 
     return {
       transcript,
-      prefix: await createPrefixWithModel(transcript, settings, signal)
+      prefix: await createPrefixWithModel(transcript, settings, signal, profileId)
     };
   }
 
-  async function createPrefixWithModel(transcript, settings, signal) {
-    const activeProfile = getActiveProfile(settings);
+  async function createPrefixWithModel(transcript, settings, signal, profileId) {
+    const activeProfile = getProfile(settings, profileId);
     const prefixes = normalizePrefixes(settings.prefixes);
     const prefixRegistry = prefixes.length
       ? prefixes.map(({ name, instruction, allowSearch, allowClipboard }) => [
@@ -401,7 +403,7 @@ export function createAppService(settingsStore, logStore) {
     let response;
     try {
       throwIfAborted(signal);
-      response = await getOpenAIClient().responses.create({
+      response = await getOpenAIClient(profileId).responses.create({
         model: activeProfile.models.instruction,
         reasoning: { effort: normalizeInstructionReasoning(activeProfile.models.instructionReasoning) },
         instructions,
@@ -476,7 +478,8 @@ export function createAppService(settingsStore, logStore) {
     reasoning,
     clipboardText,
     logGroupId,
-    signal
+    signal,
+    profileId
   ) {
     const searchRequested = activePrefixes.some((prefix) => prefix.allowSearch === true);
     const clipboardRequested = activePrefixes.some((prefix) => prefix.allowClipboard === true);
@@ -532,7 +535,7 @@ export function createAppService(settingsStore, logStore) {
 
     try {
       throwIfAborted(signal);
-      const response = await getOpenAIClient().responses.create(requestBody, requestOptions(signal));
+      const response = await getOpenAIClient(profileId).responses.create(requestBody, requestOptions(signal));
       throwIfAborted(signal);
       const instructionResponse = response.output_text;
       if (typeof instructionResponse !== "string" || !instructionResponse.trim()) {
@@ -601,8 +604,8 @@ export function createAppService(settingsStore, logStore) {
     return citations;
   }
 
-  function getInstructionInputs(value, settings) {
-    const activeProfile = getActiveProfile(settings);
+  function getInstructionInputs(value, settings, profileId) {
+    const activeProfile = getProfile(settings, profileId);
     const valueTranscript = typeof value === "string" ? value.trim() : "";
     const prompt = settings.prompt.trim();
     const prefixes = normalizePrefixes(settings.prefixes);
@@ -687,8 +690,8 @@ export function createAppService(settingsStore, logStore) {
     return prefixes;
   }
 
-  function hasApiConfig() {
-    const connection = getConnectionSettings();
+  function hasApiConfig(profileId) {
+    const connection = getConnectionSettings(profileId);
     return Boolean(connection.baseUrl && connection.apiKeyConfigured);
   }
 
@@ -724,29 +727,33 @@ export function createAppService(settingsStore, logStore) {
     }
   }
 
-  function getOpenAIClient() {
-    if (!hasApiConfig()) throw new Error("Enter the base URL and API key in Settings.");
-    if (!openaiClient) {
-      const connection = getConnectionSettings();
-      transportAgent = new Agent({
+  function getOpenAIClient(profileId) {
+    const connection = getConnectionSettings(profileId);
+    const resolvedProfileId = connection.profileId;
+    if (!hasApiConfig(resolvedProfileId)) throw new Error("Enter the base URL and API key in Settings.");
+    if (!openaiClients.has(resolvedProfileId)) {
+      const transportAgent = new Agent({
         connect: { rejectUnauthorized: connection.verifyCertificate }
       });
-      openaiClient = new OpenAI({
-        apiKey: settingsStore.getApiKey(),
+      transportAgents.set(resolvedProfileId, transportAgent);
+      openaiClients.set(resolvedProfileId, new OpenAI({
+        apiKey: settingsStore.getApiKey(resolvedProfileId),
         baseURL: getOpenAIBaseUrl(connection.baseUrl),
         timeout: API_REQUEST_TIMEOUT_MS,
         maxRetries: 0,
         fetchOptions: { dispatcher: transportAgent }
-      });
+      }));
     }
-    return openaiClient;
+    return openaiClients.get(resolvedProfileId);
   }
 
-  function resetOpenAIClient() {
-    openaiClient = undefined;
-    const previousAgent = transportAgent;
-    transportAgent = undefined;
-    if (previousAgent) {
+  function resetOpenAIClient(profileId) {
+    const ids = profileId ? [profileId] : [...transportAgents.keys()];
+    for (const id of ids) {
+      openaiClients.delete(id);
+      const previousAgent = transportAgents.get(id);
+      transportAgents.delete(id);
+      if (!previousAgent) continue;
       Promise.resolve(previousAgent.close()).catch((error) => {
         console.warn("Could not close the previous API transport:", error.message);
       });

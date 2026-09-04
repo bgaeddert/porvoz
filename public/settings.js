@@ -4,6 +4,12 @@ import { createButtonLabel, createIcon, setButtonLabel } from "./icons.js";
 import { getUniquePrefixName, parsePrefix, serializePrefix } from "./prefix-transfer.js";
 
 const profileSelect = document.querySelector("#profile-select");
+const backendForm = document.querySelector("#backend-form");
+const backendMode = document.querySelector("#backend-mode");
+const remoteBackendFields = document.querySelector("#remote-backend-fields");
+const remoteBackendUrl = document.querySelector("#remote-backend-url");
+const remoteAdminKey = document.querySelector("#remote-admin-key");
+const backendStatus = document.querySelector("#backend-status");
 const addProfileButton = document.querySelector("#add-profile");
 const renameProfileButton = document.querySelector("#rename-profile");
 const deleteProfileButton = document.querySelector("#delete-profile");
@@ -24,6 +30,9 @@ const apiKeyInput = document.querySelector("#api-key");
 const verifyCertificateInput = document.querySelector("#verify-certificate");
 const connectionForm = document.querySelector("#connection-form");
 const connectionStatus = document.querySelector("#connection-status");
+const inferenceApiKey = document.querySelector("#inference-api-key");
+const copyInferenceApiKeyButton = document.querySelector("#copy-inference-api-key");
+const rotateInferenceApiKeyButton = document.querySelector("#rotate-inference-api-key");
 const transcriptionModel = document.querySelector("#transcription-model");
 const instructionModel = document.querySelector("#instruction-model");
 const instructionReasoning = document.querySelector("#instruction-reasoning");
@@ -45,6 +54,7 @@ const promptStatus = document.querySelector("#prompt-status");
 const resetPromptButton = document.querySelector("#reset-prompt");
 const addPrefixButton = document.querySelector("#add-prefix");
 const importPrefixButton = document.querySelector("#import-prefix");
+const refreshPrefixesButton = document.querySelector("#refresh-prefixes");
 const prefixList = document.querySelector("#prefix-list");
 const prefixEmpty = document.querySelector("#prefix-empty");
 const prefixStatus = document.querySelector("#prefix-status");
@@ -97,8 +107,8 @@ const previewCueButton = document.querySelector("#preview-cue");
 const previewCueSound = new Audio("./assets/recording-start.mp3");
 const desktopBridge = window.porvozDesktop;
 
-let runtimeConfig = await loadRuntimeConfig();
-let prefixConfig = runtimeConfig.prefixes.map(normalizePrefix);
+let runtimeConfig;
+let prefixConfig = [];
 let isCapturingHotkey = false;
 let promptSaveTimer;
 let prefixSaveTimer;
@@ -117,80 +127,104 @@ let modelPickerTarget = "";
 let modelPickerSelection = "";
 let profileDialogMode = "add";
 
-baseUrlInput.maxLength = 2048;
-apiKeyInput.maxLength = 4096;
-profileNameInput.maxLength = runtimeConfig.limits.maxProfileNameCharacters;
-instructionPrompt.maxLength = runtimeConfig.limits.maxInstructionPromptCharacters;
-prefixEditName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
-prefixEditInstruction.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
-prefixPreviewName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
-prefixPreviewInstruction.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
+await initializeSettings();
 
-renderProfiles();
-loadConnectionSettings();
-renderModels();
-initializeInstructionPrompt();
-renderPrefixes();
-renderSoundVolume(runtimeConfig.soundVolume);
-await initializeHotkey();
+async function initializeSettings() {
+  backendMode.addEventListener("change", renderBackendMode);
+  backendForm.addEventListener("submit", saveBackendSettings);
+  const controls = [...document.querySelectorAll("input, select, textarea, button")]
+    .filter((control) => !control.closest("#backend"));
+  const disabledStates = controls.map((control) => control.disabled);
+  controls.forEach((control) => { control.disabled = true; });
+  await loadBackendSettings();
+  try {
+    runtimeConfig = await loadRuntimeConfig();
+  } catch (error) {
+    backendStatus.textContent = `Could not load server settings. Choose Local or update the remote connection above. ${error.message || ""}`;
+    backendStatus.dataset.state = "error";
+    return;
+  }
+  controls.forEach((control, index) => { control.disabled = disabledStates[index]; });
+  prefixConfig = runtimeConfig.prefixes.map(normalizePrefix);
 
-profileSelect.addEventListener("change", switchActiveProfile);
-addProfileButton.addEventListener("click", openAddProfileDialog);
-renameProfileButton.addEventListener("click", openRenameProfileDialog);
-deleteProfileButton.addEventListener("click", openDeleteProfileDialog);
-cancelProfileDialogButton.addEventListener("click", () => profileDialog.close());
-saveProfileDialogButton.addEventListener("click", saveProfileDialog);
-cancelDeleteProfileButton.addEventListener("click", () => deleteProfileDialog.close());
-confirmDeleteProfileButton.addEventListener("click", confirmDeleteProfile);
-connectionForm.addEventListener("submit", saveConnection);
-populateModelsButton.addEventListener("click", populateModels);
-transcriptionModel.addEventListener("input", handleModelInput);
-instructionModel.addEventListener("input", handleModelInput);
-instructionReasoning.addEventListener("change", saveModelSelections);
-openTranscriptionModelPickerButton.addEventListener("click", () => openModelPicker("transcription"));
-openInstructionModelPickerButton.addEventListener("click", () => openModelPicker("instruction"));
-modelPickerInput.addEventListener("input", () => {
-  modelPickerSelection = "";
-  renderModelPickerOptions();
-});
-modelPickerInput.addEventListener("keydown", handleModelPickerInputKeydown);
-modelPickerMenu.addEventListener("keydown", handleModelPickerOptionKeydown);
-closeModelPickerButton.addEventListener("click", () => modelPickerDialog.close());
-cancelModelPickerButton.addEventListener("click", () => modelPickerDialog.close());
-saveModelPickerButton.addEventListener("click", saveModelPickerSelection);
-modelPickerDialog.addEventListener("close", resetModelPicker);
-instructionPrompt.addEventListener("input", handlePromptInput);
-resetPromptButton.addEventListener("click", () => promptResetDialog.showModal());
-addPrefixButton.addEventListener("click", openPrefixDialog);
-importPrefixButton.addEventListener("click", importPrefixFromClipboard);
-closePrefixDialogButton.addEventListener("click", () => prefixDialog.close());
-voicePrefixOption.addEventListener("click", showVoicePrefixRecorder);
-manualPrefixOption.addEventListener("click", addPrefixManually);
-prefixRecordCancelButton.addEventListener("click", returnToPrefixChoices);
-prefixRecordStartButton.addEventListener("click", startPrefixRecording);
-prefixRecordStopButton.addEventListener("click", stopPrefixRecording);
-prefixPreviewCancelButton.addEventListener("click", () => prefixDialog.close());
-prefixPreviewAddButton.addEventListener("click", addPreviewPrefix);
-prefixEditInstruction.addEventListener("input", () => autoResizeTextarea(prefixEditInstruction));
-prefixEditCancelButton.addEventListener("click", () => prefixDialog.close());
-prefixEditSaveButton.addEventListener("click", savePrefixEdit);
-prefixEditRemoveButton.addEventListener("click", removeEditingPrefix);
-prefixDialog.addEventListener("close", resetPrefixDialog);
-resetDefaultsButton.addEventListener("click", () => resetDialog.showModal());
-confirmResetButton.addEventListener("click", resetToDefaults);
-confirmPromptResetButton.addEventListener("click", resetPromptToDefault);
-cancelResetButton.addEventListener("click", () => resetDialog.close());
-captureHotkeyButton.addEventListener("click", beginHotkeyCapture);
-cancelHotkeyButton.addEventListener("click", cancelHotkeyCapture);
-soundVolumeInput.addEventListener("input", updateSoundVolumePreview);
-soundVolumeInput.addEventListener("change", saveSoundVolume);
-previewCueButton?.addEventListener("click", playCuePreview);
+  baseUrlInput.maxLength = 2048;
+  apiKeyInput.maxLength = 4096;
+  profileNameInput.maxLength = runtimeConfig.limits.maxProfileNameCharacters;
+  instructionPrompt.maxLength = runtimeConfig.limits.maxInstructionPromptCharacters;
+  prefixEditName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
+  prefixEditInstruction.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
+  prefixPreviewName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
+  prefixPreviewInstruction.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
 
-if (desktopBridge?.isElectron) {
-  desktopBridge.onHotkeyUpdated(handleHotkeyUpdated);
-  desktopBridge.onHotkeyCaptureStatus(handleHotkeyCaptureStatus);
-  desktopBridge.onSoundVolumeUpdated(handleSoundVolumeUpdated);
-  desktopBridge.onActivityCanceled(handleActivityCanceled);
+  renderProfiles();
+  loadConnectionSettings();
+  renderModels();
+  initializeInstructionPrompt();
+  renderPrefixes();
+  renderSoundVolume(runtimeConfig.soundVolume);
+  await initializeHotkey();
+
+  profileSelect.addEventListener("change", switchActiveProfile);
+  addProfileButton.addEventListener("click", openAddProfileDialog);
+  renameProfileButton.addEventListener("click", openRenameProfileDialog);
+  deleteProfileButton.addEventListener("click", openDeleteProfileDialog);
+  cancelProfileDialogButton.addEventListener("click", () => profileDialog.close());
+  saveProfileDialogButton.addEventListener("click", saveProfileDialog);
+  cancelDeleteProfileButton.addEventListener("click", () => deleteProfileDialog.close());
+  confirmDeleteProfileButton.addEventListener("click", confirmDeleteProfile);
+  connectionForm.addEventListener("submit", saveConnection);
+  copyInferenceApiKeyButton.addEventListener("click", copyInferenceApiKey);
+  rotateInferenceApiKeyButton.addEventListener("click", rotateInferenceApiKey);
+  populateModelsButton.addEventListener("click", populateModels);
+  transcriptionModel.addEventListener("input", handleModelInput);
+  instructionModel.addEventListener("input", handleModelInput);
+  instructionReasoning.addEventListener("change", saveModelSelections);
+  openTranscriptionModelPickerButton.addEventListener("click", () => openModelPicker("transcription"));
+  openInstructionModelPickerButton.addEventListener("click", () => openModelPicker("instruction"));
+  modelPickerInput.addEventListener("input", () => {
+    modelPickerSelection = "";
+    renderModelPickerOptions();
+  });
+  modelPickerInput.addEventListener("keydown", handleModelPickerInputKeydown);
+  modelPickerMenu.addEventListener("keydown", handleModelPickerOptionKeydown);
+  closeModelPickerButton.addEventListener("click", () => modelPickerDialog.close());
+  cancelModelPickerButton.addEventListener("click", () => modelPickerDialog.close());
+  saveModelPickerButton.addEventListener("click", saveModelPickerSelection);
+  modelPickerDialog.addEventListener("close", resetModelPicker);
+  instructionPrompt.addEventListener("input", handlePromptInput);
+  resetPromptButton.addEventListener("click", () => promptResetDialog.showModal());
+  addPrefixButton.addEventListener("click", openPrefixDialog);
+  importPrefixButton.addEventListener("click", importPrefixFromClipboard);
+  refreshPrefixesButton.addEventListener("click", refreshPrefixes);
+  closePrefixDialogButton.addEventListener("click", () => prefixDialog.close());
+  voicePrefixOption.addEventListener("click", showVoicePrefixRecorder);
+  manualPrefixOption.addEventListener("click", addPrefixManually);
+  prefixRecordCancelButton.addEventListener("click", returnToPrefixChoices);
+  prefixRecordStartButton.addEventListener("click", startPrefixRecording);
+  prefixRecordStopButton.addEventListener("click", stopPrefixRecording);
+  prefixPreviewCancelButton.addEventListener("click", () => prefixDialog.close());
+  prefixPreviewAddButton.addEventListener("click", addPreviewPrefix);
+  prefixEditInstruction.addEventListener("input", () => autoResizeTextarea(prefixEditInstruction));
+  prefixEditCancelButton.addEventListener("click", () => prefixDialog.close());
+  prefixEditSaveButton.addEventListener("click", savePrefixEdit);
+  prefixEditRemoveButton.addEventListener("click", removeEditingPrefix);
+  prefixDialog.addEventListener("close", resetPrefixDialog);
+  resetDefaultsButton.addEventListener("click", () => resetDialog.showModal());
+  confirmResetButton.addEventListener("click", resetToDefaults);
+  confirmPromptResetButton.addEventListener("click", resetPromptToDefault);
+  cancelResetButton.addEventListener("click", () => resetDialog.close());
+  captureHotkeyButton.addEventListener("click", beginHotkeyCapture);
+  cancelHotkeyButton.addEventListener("click", cancelHotkeyCapture);
+  soundVolumeInput.addEventListener("input", updateSoundVolumePreview);
+  soundVolumeInput.addEventListener("change", saveSoundVolume);
+  previewCueButton?.addEventListener("click", playCuePreview);
+
+  if (desktopBridge?.isElectron) {
+    desktopBridge.onHotkeyUpdated(handleHotkeyUpdated);
+    desktopBridge.onHotkeyCaptureStatus(handleHotkeyCaptureStatus);
+    desktopBridge.onSoundVolumeUpdated(handleSoundVolumeUpdated);
+    desktopBridge.onActivityCanceled(handleActivityCanceled);
+  }
 }
 
 function handleActivityCanceled() {
@@ -228,6 +262,57 @@ function renderProfiles() {
 
 function getActiveProfileName() {
   return runtimeConfig.profiles.find((profile) => profile.id === runtimeConfig.activeProfileId)?.name || "";
+}
+
+async function loadBackendSettings() {
+  try {
+    const settings = await desktopBridge.getBackendSettings();
+    backendMode.value = settings.mode;
+    remoteBackendUrl.value = settings.remoteUrl || "";
+    remoteAdminKey.value = "";
+    remoteAdminKey.placeholder = settings.adminKeyConfigured
+      ? "Stored securely — enter a new key to replace it"
+      : "Paste the server admin key";
+    renderBackendMode();
+    if (settings.connectionError) {
+      backendStatus.textContent = `Remote server unavailable; using the local child for recovery. ${settings.connectionError}`;
+      backendStatus.dataset.state = "error";
+    } else {
+      backendStatus.textContent = settings.connectedMode === "local"
+        ? "Using the private child server on this computer."
+        : `Connected to ${settings.remoteUrl}.`;
+      backendStatus.dataset.state = "success";
+    }
+  } catch (error) {
+    backendStatus.textContent = error.message || "Could not load the server configuration.";
+    backendStatus.dataset.state = "error";
+  }
+}
+
+function renderBackendMode() {
+  const remote = backendMode.value === "remote";
+  remoteBackendFields.hidden = !remote;
+  remoteBackendUrl.required = remote;
+}
+
+async function saveBackendSettings(event) {
+  event.preventDefault();
+  const submit = backendForm.querySelector("button[type=submit]");
+  submit.disabled = true;
+  backendStatus.textContent = "Connecting to the Porvoz server…";
+  backendStatus.dataset.state = "saving";
+  try {
+    await desktopBridge.saveBackendSettings({
+      mode: backendMode.value,
+      remoteUrl: remoteBackendUrl.value,
+      adminKey: remoteAdminKey.value
+    });
+    window.location.reload();
+  } catch (error) {
+    backendStatus.textContent = error.message || "Could not connect to the Porvoz server.";
+    backendStatus.dataset.state = "error";
+    submit.disabled = false;
+  }
 }
 
 async function switchActiveProfile() {
@@ -350,9 +435,33 @@ async function loadConnectionSettings() {
     if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
     const result = await desktopBridge.getConnectionSettings();
     renderConnectionSettings(result);
+    const inference = await desktopBridge.getInferenceKey();
+    inferenceApiKey.value = inference.apiKey || "";
   } catch (error) {
     connectionStatus.textContent = error.message;
     connectionStatus.dataset.state = "error";
+  }
+}
+
+async function copyInferenceApiKey() {
+  if (!inferenceApiKey.value) return;
+  await desktopBridge.writeClipboardText(inferenceApiKey.value);
+  connectionStatus.textContent = "Inference API key copied.";
+  connectionStatus.dataset.state = "success";
+}
+
+async function rotateInferenceApiKey() {
+  rotateInferenceApiKeyButton.disabled = true;
+  try {
+    const result = await desktopBridge.rotateInferenceKey();
+    inferenceApiKey.value = result.apiKey || "";
+    connectionStatus.textContent = "A new inference API key was generated. The previous key no longer works.";
+    connectionStatus.dataset.state = "success";
+  } catch (error) {
+    connectionStatus.textContent = error.message || "Could not regenerate the inference API key.";
+    connectionStatus.dataset.state = "error";
+  } finally {
+    rotateInferenceApiKeyButton.disabled = false;
   }
 }
 
@@ -857,6 +966,7 @@ function addPastedPrefix(prefix) {
 
 function queuePrefixSave({ immediate = false } = {}) {
   clearTimeout(prefixSaveTimer);
+  refreshPrefixesButton.disabled = true;
   prefixStatus.textContent = "Saving prefix changes…";
   prefixStatus.dataset.state = "saving";
 
@@ -873,6 +983,7 @@ function queuePrefixSave({ immediate = false } = {}) {
 function persistPrefixes() {
   const validationError = getPrefixValidationError();
   if (validationError) {
+    refreshPrefixesButton.disabled = false;
     prefixStatus.textContent = validationError;
     prefixStatus.dataset.state = "error";
     return Promise.resolve();
@@ -890,9 +1001,32 @@ function persistPrefixes() {
       console.error("Could not save instruction prefixes:", error);
       prefixStatus.textContent = error.message || "Could not save prefix changes.";
       prefixStatus.dataset.state = "error";
+    } finally {
+      refreshPrefixesButton.disabled = false;
     }
   });
   return prefixSaveQueue;
+}
+
+async function refreshPrefixes() {
+  refreshPrefixesButton.disabled = true;
+  prefixStatus.textContent = "Refreshing prefixes from the server…";
+  prefixStatus.dataset.state = "saving";
+  try {
+    await prefixSaveQueue.catch(() => {});
+    const refreshedRuntime = await loadRuntimeConfig();
+    prefixConfig = refreshedRuntime.prefixes.map(normalizePrefix);
+    runtimeConfig.prefixes = prefixConfig.map((prefix) => ({ ...prefix }));
+    renderPrefixes();
+    prefixStatus.textContent = "Prefixes refreshed from the server.";
+    prefixStatus.dataset.state = "success";
+  } catch (error) {
+    console.error("Could not refresh instruction prefixes:", error);
+    prefixStatus.textContent = error.message || "Could not refresh prefixes from the server.";
+    prefixStatus.dataset.state = "error";
+  } finally {
+    refreshPrefixesButton.disabled = false;
+  }
 }
 
 function openPrefixDialog() {

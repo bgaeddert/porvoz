@@ -1,0 +1,14 @@
+.git
+.github
+.agents
+.codex-model-check
+.tmp-ui-smoke
+node_modules
+release
+dist
+data
+test
+.env
+.env.*
+!.env.example
+*.log

@@ -4,14 +4,20 @@ const pageDetails = {
     summary: "Manage the API connection and choose the models Porvoz uses."
   },
   capture: {
-    title: "Capture & instructions",
-    summary: "Set the hotkey and cue volume, then manage how transcripts are processed."
+    title: "Prefixes & instructions",
+    summary: "Manage the instruction prompt, reusable prefixes, and reset controls."
+  },
+  keyboard: {
+    title: "Keyboard",
+    summary: "Choose the global shortcut Porvoz listens for on this computer."
+  },
+  sound: {
+    title: "Sound",
+    summary: "Set the playback level for recording start and stop cues."
   }
 };
 
 const legacyPageAliases = new Map([
-  ["keyboard", "capture"],
-  ["sound", "capture"],
   ["instructions", "capture"],
   ["advanced", "capture"]
 ]);
@@ -24,7 +30,7 @@ const pageSummary = document.querySelector("#settings-page-summary");
 function getRequestedPage() {
   const requestedPage = window.location.hash.slice(1);
   return legacyPageAliases.get(requestedPage)
-    || (Object.hasOwn(pageDetails, requestedPage) ? requestedPage : "provider");
+    || (Object.hasOwn(pageDetails, requestedPage) ? requestedPage : "capture");
 }
 
 function showRequestedPage() {
@@ -55,11 +61,11 @@ function showRequestedPage() {
 
 const initialHash = window.location.hash.slice(1);
 if (!initialHash) {
-  window.history.replaceState(null, "", "#provider");
+  window.history.replaceState(null, "", "#capture");
 } else if (legacyPageAliases.has(initialHash)) {
   window.history.replaceState(null, "", `#${legacyPageAliases.get(initialHash)}`);
 } else if (!Object.hasOwn(pageDetails, initialHash)) {
-  window.history.replaceState(null, "", "#provider");
+  window.history.replaceState(null, "", "#capture");
 }
 
 window.addEventListener("hashchange", showRequestedPage);
