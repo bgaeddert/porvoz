@@ -8,7 +8,8 @@ import {
   nativeImage,
   session,
   ipcMain,
-  safeStorage
+  safeStorage,
+  shell
 } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -18,6 +19,7 @@ import { createSettingsStore } from "./settings-store.js";
 import { createBackendManager } from "./backend-manager.js";
 import { createDesktopPreferences } from "./desktop-preferences.js";
 import { createStatusOverlay } from "./status-overlay.js";
+import { createSelectedTextReader } from "./selected-text.js";
 import {
   captureTextInputTarget,
   disposeTextInput,
@@ -83,6 +85,7 @@ const CAPTURE_ATTEMPT_MAX_AGE_MS = 120_000;
 const ACTIVE_ACTIVITY_STATES = new Set(["recording", "transcribing", "processing", "typing"]);
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
+const selectedTextReader = createSelectedTextReader();
 
 let appService;
 let mainWindow;
@@ -412,14 +415,16 @@ async function handleGlobalKeyDown(event) {
   if (event.keycode === hotkeyKeyCode
     && requiredModifiersPressed
     && !isHotkeyRecording) {
+    statusOverlay?.prepareForCapture();
     isHotkeyRecording = true;
+    const selectedTextPromise = selectedTextReader.read();
     const intentGeneration = ++hotkeyIntentGeneration;
     const isCurrentIntent = () => isHotkeyRecording && intentGeneration === hotkeyIntentGeneration;
     try {
       const setupStatus = await appService.getSetupStatus();
       if (!isCurrentIntent()) return;
       if (setupStatus.ready) {
-        const attempt = beginCaptureAttempt();
+        const attempt = beginCaptureAttempt(selectedTextPromise);
         sendHotkeyAction("start", { captureId: attempt.id });
       } else {
         isHotkeyRecording = false;
@@ -449,7 +454,8 @@ function handleGlobalKeyUp(event) {
     for (const attempt of captureAttempts.values()) {
       if (attempt.state === "recording") attempt.state = "processing";
     }
-    sendHotkeyAction("stop");
+    const responseHeld = statusOverlay?.holdIfHovered() === true;
+    sendHotkeyAction("stop", { responseHeld });
   }
 }
 
@@ -512,7 +518,9 @@ function sendHotkeyAction(action, value) {
   if (action === "start") {
     setOverlayStatus({ message: "Recording…", state: "recording", stage: "recording" });
   } else if (action === "stop") {
-    setOverlayStatus({ message: "Finishing recording…", state: "processing", stage: "recording" });
+    setOverlayStatus(value?.responseHeld
+      ? { message: "Waiting for response…", state: "waiting", stage: "recording" }
+      : { message: "Finishing recording…", state: "processing", stage: "recording" });
   } else if (action === "configuration-needed") {
     setOverlayStatus({
       message: value?.message || "Setup is required before recording.",
@@ -668,9 +676,12 @@ function registerIpcHandlers() {
   ipcMain.handle("porvoz:transcribe", (_event, value) => runActiveOperation(async (signal) => {
     setOverlayStatus({ message: "Transcribing…", state: "transcribing", stage: "transcription" });
     try {
+      const attempt = getCaptureAttempt(value?.captureId);
+      const selectedText = await (attempt?.selectedTextPromise || selectedTextReader.read());
       const result = await appService.transcribe({
         ...value,
-        clipboardText: clipboard.readText()
+        clipboardText: clipboard.readText(),
+        ...(selectedText ? { selectedText } : {})
       }, { signal });
       notifyLogsUpdated();
       return result;
@@ -719,9 +730,35 @@ function registerIpcHandlers() {
     else rendererActivities.delete(_event.sender.id);
     setOverlayStatus(value);
   });
+  ipcMain.on("porvoz:overlay-hover", (event, value) => {
+    if (statusOverlay?.isSender(event.sender)) statusOverlay.setPointerOver(value);
+  });
+  ipcMain.on("porvoz:overlay-dismiss", (event) => {
+    if (statusOverlay?.isSender(event.sender)) statusOverlay.dismiss();
+  });
+  ipcMain.handle("porvoz:overlay-copy", (event) => {
+    if (!statusOverlay?.isSender(event.sender)) return false;
+    const response = statusOverlay.getResponse();
+    if (!response) return false;
+    clipboard.writeText(response);
+    return true;
+  });
+  ipcMain.handle("porvoz:overlay-open-external", async (event, value) => {
+    if (!statusOverlay?.isSender(event.sender) || typeof value !== "string") return false;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+      await shell.openExternal(url.href);
+      return true;
+    } catch {
+      return false;
+    }
+  });
   ipcMain.handle("porvoz:type-text", (_event, value) => runActiveOperation(async (signal) => {
     const request = normalizeTypingRequest(value);
-    if (!request.text) return false;
+    const responseText = sanitizeText(request.text);
+    if (!responseText) return false;
+    statusOverlay?.setResponse(responseText);
     setOverlayStatus({ message: "Placing text…", state: "typing", stage: "typing" });
     try {
       await typeTextAtCursor(request, signal);
@@ -869,12 +906,13 @@ function normalizeTypingRequest(value) {
   };
 }
 
-function beginCaptureAttempt() {
+function beginCaptureAttempt(selectedTextPromise = selectedTextReader.read()) {
   const attempt = {
     id: randomUUID(),
     createdAt: Date.now(),
     state: "recording",
-    targetWindow: captureTextInputTarget()
+    targetWindow: captureTextInputTarget(),
+    selectedTextPromise
   };
   captureAttempts.set(attempt.id, attempt);
   const cleanupTimer = setTimeout(() => {
@@ -945,6 +983,7 @@ function shutdownApplication() {
     hookStarted = false;
   }
   disposeTextInput();
+  selectedTextReader.dispose();
   captureAttempts.clear();
   statusOverlay?.destroy();
   statusOverlay = undefined;

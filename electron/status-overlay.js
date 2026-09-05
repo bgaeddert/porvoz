@@ -1,19 +1,27 @@
-import { BrowserWindow, screen } from "electron";
+import electron from "electron";
 
-const OVERLAY_WIDTH = 320;
-const OVERLAY_HEIGHT = 44;
+const { BrowserWindow, screen } = electron;
+
+const OVERLAY_WIDTH = 360;
+const PILL_HEIGHT = 44;
+const PANEL_HEIGHT = 238;
 const OVERLAY_BOTTOM_MARGIN = 12;
 const SUCCESS_DISPLAY_MS = 500;
 const ERROR_DISPLAY_MS = 4200;
 const FADE_OUT_MS = 100;
 
 /**
- * Creates the non-activating status pill shown above the active display's
- * work-area edge. The overlay is intentionally kept separate from the main
- * application window so it remains available while Porvoz is hidden to the
- * tray and can never become the typing target.
+ * Creates the non-activating status pill and its optional response panel. The
+ * window accepts pointer input but never focus, so hovering or copying a held
+ * response does not replace the application that owns the typing target.
  */
-export async function createStatusOverlay({ overlayPath, preloadPath, secureWindow } = {}) {
+export async function createStatusOverlay({
+  overlayPath,
+  preloadPath,
+  secureWindow,
+  BrowserWindowImpl = BrowserWindow,
+  screenApi = screen
+} = {}) {
   if (typeof overlayPath !== "string" || !overlayPath) {
     throw new Error("The status overlay page path is required.");
   }
@@ -26,10 +34,14 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
   let hideTimer;
   let fadeTimer;
   let currentStatus = { state: "idle", message: "" };
+  let lastResponse = "";
+  let isPointerOver = false;
+  let isResponseHeld = false;
+  let suppressUntilNextRecording = false;
 
-  overlayWindow = new BrowserWindow({
+  overlayWindow = new BrowserWindowImpl({
     width: OVERLAY_WIDTH,
-    height: OVERLAY_HEIGHT,
+    height: PILL_HEIGHT,
     useContentSize: true,
     frame: false,
     transparent: true,
@@ -54,7 +66,7 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
 
   secureWindow?.(overlayWindow);
   overlayWindow.setAlwaysOnTop(true);
-  overlayWindow.setIgnoreMouseEvents(true);
+  overlayWindow.setIgnoreMouseEvents(false);
   try {
     overlayWindow.setFocusable(false);
   } catch {
@@ -63,19 +75,31 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
 
   const reposition = () => {
     if (!overlayWindow || overlayWindow.isDestroyed()) return;
-
     let display;
     try {
-      display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+      display = screenApi.getDisplayNearestPoint(screenApi.getCursorScreenPoint());
     } catch {
-      display = screen.getPrimaryDisplay();
+      display = screenApi.getPrimaryDisplay();
     }
-
     const workArea = display.workArea;
     const [width, height] = overlayWindow.getContentSize();
     const x = Math.round(workArea.x + (workArea.width - width) / 2);
     const y = Math.round(workArea.y + workArea.height - height - OVERLAY_BOTTOM_MARGIN);
     overlayWindow.setPosition(x, y, false);
+  };
+
+  const resize = (expanded) => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) return;
+    overlayWindow.setContentSize(OVERLAY_WIDTH, expanded ? PANEL_HEIGHT : PILL_HEIGHT, false);
+    reposition();
+  };
+
+  const sendPanelState = () => {
+    if (!isLoaded || !overlayWindow || overlayWindow.isDestroyed()) return;
+    overlayWindow.webContents.send("porvoz:overlay-response", {
+      open: isResponseHeld,
+      text: lastResponse
+    });
   };
 
   const hide = () => {
@@ -85,22 +109,23 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
   };
 
   const fadeAndHide = () => {
-    if (!overlayWindow || overlayWindow.isDestroyed()) return;
+    if (!overlayWindow || overlayWindow.isDestroyed() || isResponseHeld) return;
     overlayWindow.webContents.send("porvoz:overlay-hide");
     fadeTimer = setTimeout(hide, FADE_OUT_MS);
     fadeTimer.unref?.();
   };
 
   const showCurrentStatus = () => {
-    if (!isLoaded || !overlayWindow || overlayWindow.isDestroyed()) return;
+    if (!isLoaded || !overlayWindow || overlayWindow.isDestroyed() || suppressUntilNextRecording) return;
     clearTimeout(hideTimer);
     clearTimeout(fadeTimer);
     reposition();
     overlayWindow.webContents.send("porvoz:overlay-status", currentStatus);
+    sendPanelState();
     overlayWindow.setAlwaysOnTop(true);
     overlayWindow.showInactive();
 
-    if (currentStatus.state === "success" || currentStatus.state === "error") {
+    if (!isResponseHeld && (currentStatus.state === "success" || currentStatus.state === "error")) {
       const delay = currentStatus.state === "error" ? ERROR_DISPLAY_MS : SUCCESS_DISPLAY_MS;
       hideTimer = setTimeout(fadeAndHide, delay);
       hideTimer.unref?.();
@@ -108,35 +133,56 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
   };
 
   const setStatus = (value = {}) => {
-    const state = ["recording", "transcribing", "processing", "typing", "success", "error"].includes(value.state)
-      ? value.state
-      : "idle";
+    const state = ["recording", "waiting", "transcribing", "processing", "typing", "success", "error"]
+      .includes(value.state) ? value.state : "idle";
     const sourceMessage = typeof value.message === "string" ? value.message.trim() : "";
     const stage = typeof value.stage === "string" ? value.stage.trim().toLocaleLowerCase() : "";
-    const message = compactStatusMessage(state, sourceMessage, stage);
-    currentStatus = { state, message };
 
-    if (state === "idle" || !message) {
+    if (state === "recording") suppressUntilNextRecording = false;
+    currentStatus = { state, message: compactStatusMessage(state, sourceMessage, stage) };
+    if (suppressUntilNextRecording) return;
+
+    if (state === "idle" || !currentStatus.message) {
       clearTimeout(hideTimer);
-      hide();
+      if (isResponseHeld) {
+        currentStatus = { state: "waiting", message: "Waiting…" };
+        showCurrentStatus();
+      } else {
+        hide();
+      }
       return;
     }
     showCurrentStatus();
   };
 
-  const onDisplayChanged = () => {
-    if (currentStatus.state !== "idle") reposition();
+  const holdResponsePanel = () => {
+    if (!isPointerOver
+      || suppressUntilNextRecording
+      || currentStatus.state === "idle"
+      || !currentStatus.message
+      || !overlayWindow
+      || overlayWindow.isDestroyed()) return false;
+    isResponseHeld = true;
+    clearTimeout(hideTimer);
+    clearTimeout(fadeTimer);
+    resize(true);
+    showCurrentStatus();
+    return true;
   };
-  screen.on("display-added", onDisplayChanged);
-  screen.on("display-removed", onDisplayChanged);
-  screen.on("display-metrics-changed", onDisplayChanged);
+
+  const onDisplayChanged = () => {
+    if (currentStatus.state !== "idle" || isResponseHeld) reposition();
+  };
+  screenApi.on("display-added", onDisplayChanged);
+  screenApi.on("display-removed", onDisplayChanged);
+  screenApi.on("display-metrics-changed", onDisplayChanged);
 
   overlayWindow.on("closed", () => {
     clearTimeout(hideTimer);
     clearTimeout(fadeTimer);
-    screen.off("display-added", onDisplayChanged);
-    screen.off("display-removed", onDisplayChanged);
-    screen.off("display-metrics-changed", onDisplayChanged);
+    screenApi.off("display-added", onDisplayChanged);
+    screenApi.off("display-removed", onDisplayChanged);
+    screenApi.off("display-metrics-changed", onDisplayChanged);
     overlayWindow = undefined;
   });
 
@@ -145,10 +191,50 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
 
   return {
     setStatus,
+    setResponse(value) {
+      if (typeof value !== "string" || !value.trim()) return;
+      lastResponse = value;
+      sendPanelState();
+    },
+    getResponse: () => lastResponse,
+    setPointerOver(value) {
+      isPointerOver = value === true;
+      if (isPointerOver) holdResponsePanel();
+    },
+    isPointerOver: () => isPointerOver,
+    isSender(sender) {
+      return Boolean(overlayWindow && !overlayWindow.isDestroyed() && sender === overlayWindow.webContents);
+    },
+    holdIfHovered() {
+      return holdResponsePanel();
+    },
+    prepareForCapture() {
+      suppressUntilNextRecording = false;
+      if (!isResponseHeld || isPointerOver) return;
+      isResponseHeld = false;
+      resize(false);
+      hide();
+    },
+    dismiss() {
+      isResponseHeld = false;
+      isPointerOver = false;
+      suppressUntilNextRecording = true;
+      currentStatus = { state: "idle", message: "" };
+      clearTimeout(hideTimer);
+      clearTimeout(fadeTimer);
+      resize(false);
+      sendPanelState();
+      hide();
+    },
     clear() {
+      isResponseHeld = false;
+      isPointerOver = false;
+      suppressUntilNextRecording = false;
       clearTimeout(hideTimer);
       clearTimeout(fadeTimer);
       currentStatus = { state: "idle", message: "" };
+      resize(false);
+      sendPanelState();
       hide();
     },
     destroy() {
@@ -160,6 +246,7 @@ export async function createStatusOverlay({ overlayPath, preloadPath, secureWind
 }
 
 function compactStatusMessage(state, sourceMessage, stage) {
+  if (state === "waiting") return sourceMessage || "Waiting for response…";
   if (!sourceMessage) return "";
   if (state === "recording") return "Recording…";
   if (state === "transcribing") return "Transcribing…";

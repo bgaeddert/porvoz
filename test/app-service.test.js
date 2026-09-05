@@ -119,6 +119,39 @@ test("a transcript without a prefix bypasses the instruction endpoint", async ()
   assert.deepEqual(result, { transcript: "ordinary dictated text", instructionApplied: false });
 });
 
+test("selected text invokes the instruction model without a prefix", async () => {
+  let requestBody;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      requestBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ output_text: "selection result" }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const { service } = createService({ availableModels: ["instruction-model"] });
+    const address = server.address();
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret" });
+    service.saveModelSelections({ instruction: "instruction-model" });
+
+    const result = await service.instruct({
+      transcript: "rewrite this clearly",
+      selectedText: "rough selected sentence"
+    });
+
+    assert.deepEqual(result, { transcript: "selection result", instructionApplied: true });
+    assert.match(requestBody.input, /rough selected sentence/);
+    assert.match(requestBody.instructions, /Selected-text routing exception/);
+    assert.doesNotMatch(requestBody.instructions, /Clipboard access is enabled/);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
 test("every prefix entry is active when it exists", async () => {
   const { service } = createService({
     prefixes: [prefix("digits", "Return digits.")]
@@ -219,7 +252,11 @@ test("chained prefixes are detected together and use per-prefix access permissio
     service.saveModelSelections({ instruction: "instruction-model", instructionReasoning: "high" });
 
     const result = await service.instruct(
-      { transcript: "search clipboard summarize this", logGroupId: "chain-1" },
+      {
+        transcript: "search clipboard summarize this",
+        logGroupId: "chain-1",
+        selectedText: "selected application text"
+      },
       { readClipboard: () => "reference text" }
     );
 
@@ -230,6 +267,8 @@ test("chained prefixes are detected together and use per-prefix access permissio
     assert.match(requestBody.instructions, /Prefix Clipboard access: yes/);
     assert.match(requestBody.instructions, /at least one matched prefix grants it/);
     assert.match(requestBody.input, /reference text/);
+    assert.match(requestBody.instructions, /user had text selected in the focused application/);
+    assert.match(requestBody.input, /\[BEGIN SELECTED TEXT\][\s\S]*selected application text[\s\S]*\[END SELECTED TEXT\]/);
     assert.deepEqual(requestBody.reasoning, { effort: "high" });
     assert.deepEqual(requestBody.tools, [{ type: "web_search" }]);
   } finally {

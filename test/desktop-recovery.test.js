@@ -17,6 +17,8 @@ function createHotkeyHarness() {
     isSyntheticEscapeActive: () => false, isModifierPressed: () => true,
     createOperationCanceledError: () => new Error("Canceled by user."),
     setOverlayStatus: () => {}, notifyActivityCanceled: () => {},
+    statusOverlay: { prepareForCapture() {}, holdIfHovered: () => false },
+    selectedTextReader: { read: async () => "" },
     appService: {
       getSetupStatus: () => new Promise((resolve, reject) => requests.push({ resolve, reject }))
     },

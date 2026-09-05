@@ -12,5 +12,23 @@ contextBridge.exposeInMainWorld("porvozOverlay", {
     const listener = () => callback();
     ipcRenderer.on("porvoz:overlay-hide", listener);
     return () => ipcRenderer.removeListener("porvoz:overlay-hide", listener);
+  },
+  onResponse(callback) {
+    if (typeof callback !== "function") return () => {};
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on("porvoz:overlay-response", listener);
+    return () => ipcRenderer.removeListener("porvoz:overlay-response", listener);
+  },
+  setHovered(value) {
+    ipcRenderer.send("porvoz:overlay-hover", value === true);
+  },
+  copyResponse() {
+    return ipcRenderer.invoke("porvoz:overlay-copy");
+  },
+  openExternal(url) {
+    return ipcRenderer.invoke("porvoz:overlay-open-external", url);
+  },
+  dismiss() {
+    ipcRenderer.send("porvoz:overlay-dismiss");
   }
 });

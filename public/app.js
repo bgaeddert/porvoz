@@ -244,7 +244,8 @@ async function processTranscription() {
     if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
     const result = await desktopBridge.transcribe({
       audio: await audio.arrayBuffer(),
-      mimeType: audio.type
+      mimeType: audio.type,
+      captureId
     });
     if (generation !== activityGeneration) return;
     if (!result?.transcript) throw new Error("Could not transcribe the audio.");

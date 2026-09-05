@@ -73,7 +73,8 @@ export function createPorvozHttpServer({ store, adminKey, host = "127.0.0.1", po
         transcript: transcription.transcript,
         logGroupId: transcription.logGroupId,
         profileId,
-        clipboardText: context.clipboard
+        clipboardText: context.clipboard,
+        selectedText: context.selectedText
       }, { signal: controller.signal });
       return sendJson(response, 200, {
         text: instruction.transcript,
@@ -272,10 +273,13 @@ function readMultipart(request, maxFileBytes) {
 }
 
 function parseContext(value) {
-  if (!value) return { clipboard: "" };
+  if (!value) return { clipboard: "", selectedText: "" };
   try {
     const parsed = JSON.parse(value);
-    return { clipboard: typeof parsed?.clipboard === "string" ? parsed.clipboard : "" };
+    return {
+      clipboard: typeof parsed?.clipboard === "string" ? parsed.clipboard : "",
+      selectedText: typeof parsed?.selectedText === "string" ? parsed.selectedText : ""
+    };
   } catch {
     throw httpError(400, "porvoz_context must contain valid JSON.");
   }

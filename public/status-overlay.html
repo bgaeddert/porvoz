@@ -7,10 +7,22 @@
     <link rel="stylesheet" href="./status-overlay.css">
   </head>
   <body>
-    <div id="status-pill" class="status-pill" role="status" aria-live="polite">
-      <span id="status-indicator" class="status-indicator" aria-hidden="true"></span>
-      <span id="status-message" class="status-message"></span>
-    </div>
-    <script src="./status-overlay.js"></script>
+    <main id="overlay-surface" class="overlay-surface">
+      <section id="response-panel" class="response-panel" aria-label="Last Porvoz response" hidden>
+        <header class="response-header">
+          <span class="response-label">Last output</span>
+          <div class="response-actions">
+            <button id="copy-response" class="response-button copy-button" type="button">Copy</button>
+            <button id="dismiss-response" class="response-button close-button" type="button" aria-label="Dismiss response">×</button>
+          </div>
+        </header>
+        <div id="response-text" class="response-text" role="textbox" aria-readonly="true"></div>
+      </section>
+      <div id="status-pill" class="status-pill" role="status" aria-live="polite">
+        <span id="status-indicator" class="status-indicator" aria-hidden="true"></span>
+        <span id="status-message" class="status-message"></span>
+      </div>
+    </main>
+    <script type="module" src="./status-overlay.js"></script>
   </body>
 </html>

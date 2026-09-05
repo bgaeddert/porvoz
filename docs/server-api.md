@@ -36,9 +36,11 @@ Send `multipart/form-data` with:
 - `file`: required audio file.
 - `model`: ignored for an inference key; required as a profile ID for the admin key.
 - `response_format`: optional, but only `json` is supported.
-- `porvoz_context`: optional JSON used by the first-party desktop, currently `{"clipboard":"..."}`.
+- `porvoz_context`: optional JSON used by the first-party desktop. It can contain `clipboard` and `selectedText` strings. The desktop omits `selectedText` when the focused application reports no selection.
 
 The server transcribes the audio, detects the configured prefix chain, optionally calls the instruction model, and returns the final text:
+
+Clipboard context is included only when a matched prefix grants Clipboard access. Non-empty `selectedText` always invokes the instruction model and is included automatically; it does not require a matched prefix or access flag. Both values are treated as untrusted reference material.
 
 ```json
 {
@@ -53,7 +55,7 @@ The server transcribes the audio, detects the configured prefix chain, optionall
 
 The `porvoz` object is additional first-party metadata. Generic clients can ignore it. Clipboard text is accepted on every desktop request but is included in the instruction-model prompt only when a matched prefix grants Clipboard access.
 
-The packaged upload limit is 25 MiB per audio file. Oversized audio returns HTTP 413; malformed multipart input or context JSON returns HTTP 400. The desktop bounds clipboard context to fit the server's 300,000-byte multipart field limit, accounting for JSON escaping and UTF-8 encoding. Larger clipboard content is truncated before transmission.
+The packaged upload limit is 25 MiB per audio file. Oversized audio returns HTTP 413; malformed multipart input or context JSON returns HTTP 400. The desktop bounds the combined clipboard and selected-text context to fit the server's 300,000-byte multipart field limit, accounting for JSON escaping and UTF-8 encoding. Larger context values are truncated before transmission.
 
 ## Administrative routes
 

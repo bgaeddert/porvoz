@@ -120,12 +120,12 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
     return getRuntimeConfig();
   }
 
-  async function transcribe({ audio, mimeType, clipboardText = "" } = {}, { signal } = {}) {
+  async function transcribe({ audio, mimeType, clipboardText = "", selectedText = "" } = {}, { signal } = {}) {
     const profileId = await activeProfileId();
     const form = new FormData();
     form.set("model", profileId);
     form.set("response_format", "json");
-    form.set("porvoz_context", serializeClipboardContext(clipboardText));
+    form.set("porvoz_context", serializeContext({ clipboardText, selectedText }));
     form.set("file", new Blob([audio], { type: mimeType }), audioFileName(mimeType));
     const result = await request("/v1/audio/transcriptions", { method: "POST", body: form, signal });
     return {
@@ -185,27 +185,52 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
   }
 }
 
-function serializeClipboardContext(value) {
+function serializeContext({ clipboardText, selectedText }) {
   // Stay below the server's 300,000-byte multipart field limit, including
-  // JSON escaping and UTF-8 encoding rather than just clipboard characters.
+  // JSON escaping and UTF-8 encoding rather than just source characters.
   const maxBytes = 299_999;
-  const clipboard = typeof value === "string" ? value : "";
-  const candidate = JSON.stringify({ clipboard: clipboard.slice(0, maxBytes) });
-  if (clipboard.length <= maxBytes && Buffer.byteLength(candidate) <= maxBytes) return candidate;
+  const context = { clipboard: "" };
+  const selection = typeof selectedText === "string" && selectedText.trim() ? selectedText : "";
+  if (selection) {
+    context.selectedText = fitContextField(
+      context,
+      "selectedText",
+      selection,
+      "\n[Selected text truncated to fit the request.]",
+      maxBytes
+    );
+  }
+  context.clipboard = fitContextField(
+    context,
+    "clipboard",
+    typeof clipboardText === "string" ? clipboardText : "",
+    "\n[Clipboard context truncated to fit the request.]",
+    maxBytes
+  );
+  return JSON.stringify(context);
+}
 
-  const suffix = "\n[Clipboard context truncated to fit the request.]";
+function fitContextField(context, key, value, suffix, maxBytes) {
+  context[key] = value;
+  if (Buffer.byteLength(JSON.stringify(context)) <= maxBytes) return value;
+
   let low = 0;
-  let high = Math.min(clipboard.length, maxBytes);
+  let high = Math.min(value.length, maxBytes);
   while (low < high) {
     const middle = Math.ceil((low + high) / 2);
-    const json = JSON.stringify({ clipboard: clipboard.slice(0, middle) + suffix });
-    if (Buffer.byteLength(json) <= maxBytes) low = middle;
+    context[key] = value.slice(0, safeUtf16Boundary(value, middle)) + suffix;
+    if (Buffer.byteLength(JSON.stringify(context)) <= maxBytes) low = middle;
     else high = middle - 1;
   }
-  // Avoid cutting an astral character between its UTF-16 surrogate halves.
-  const lastCodeUnit = clipboard.charCodeAt(low - 1);
-  if (lastCodeUnit >= 0xD800 && lastCodeUnit <= 0xDBFF) low -= 1;
-  return JSON.stringify({ clipboard: clipboard.slice(0, low) + suffix });
+  const boundary = safeUtf16Boundary(value, low);
+  context[key] = value.slice(0, boundary) + suffix;
+  if (Buffer.byteLength(JSON.stringify(context)) <= maxBytes) return context[key];
+  return "";
+}
+
+function safeUtf16Boundary(value, boundary) {
+  const lastCodeUnit = value.charCodeAt(boundary - 1);
+  return lastCodeUnit >= 0xD800 && lastCodeUnit <= 0xDBFF ? boundary - 1 : boundary;
 }
 
 function audioFileName(mimeType = "") {

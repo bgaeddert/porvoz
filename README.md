@@ -6,28 +6,28 @@ Instead of forcing you into a fixed vocabulary or workflow, Porvoz adapts to the
 
 ## Download and install
 
-The current release is [Porvoz v2.0.0](https://github.com/bgaeddert/porvoz/releases/tag/v2.0.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
+The current release is [Porvoz v2.1.0](https://github.com/bgaeddert/porvoz/releases/tag/v2.1.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v2.0.0/Porvoz-2.0.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v2.1.0/Porvoz-2.1.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v2.0.0/Porvoz-2.0.0-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v2.1.0/Porvoz-2.1.0-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-2.0.0-linux-x86_64.AppImage
-./Porvoz-2.0.0-linux-x86_64.AppImage
+chmod +x Porvoz-2.1.0-linux-x86_64.AppImage
+./Porvoz-2.1.0-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to start the local backend and protect its encryption key. On Ubuntu/Debian, install missing runtime services and libraries with:
 
 ```bash
-sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6
+sudo apt install gnome-keyring libsecret-1-0 libatspi2.0-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v2.0.0/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v2.1.0/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -46,7 +46,7 @@ The endpoint must provide the OpenAI-compatible audio transcription and Response
 
 ## Instruction prefixes
 
-Prefixes are reusable voice triggers. A transcript reaches the instruction model when it begins with a prefix in the registry; matching is case-insensitive. Porvoz can recognize a chain of consecutive prefixes from left to right, remove the matched trigger phrases, and apply every matched instruction in order. If no registered prefix matches, the transcription is returned without calling the instruction model.
+Prefixes are reusable voice triggers. A transcript reaches the instruction model when it begins with a prefix in the registry; matching is case-insensitive. Porvoz can recognize a chain of consecutive prefixes from left to right, remove the matched trigger phrases, and apply every matched instruction in order. If no registered prefix matches and the focused application reports no selected text, the transcription is returned without calling the instruction model.
 
 The **Instruction prefix registry** in Settings shows every entry at the same level with its trigger name and instruction. Select **Edit** to change the name, instruction, access, or remove the prefix. Every saved prefix is active immediately. Use **Refresh prefixes** to load changes made by another desktop connected to the same server. Settings opens **Prefixes & instructions** by default; **Provider & models**, **Keyboard**, and **Sound** have separate pages.
 
@@ -75,11 +75,11 @@ Prefix names must be unique, ignoring case. Use **Remove prefix** to delete any 
 
 Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe and type the result into the application that owns the cursor. Use **Settings → Keyboard → Set hotkey** to choose another key or combination, such as **Ctrl + Shift + F12**; changes take effect immediately.
 
-While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. The pill is visual-only: it ignores mouse input and does not become the active typing window.
+While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. Hover over the pill at any point before it disappears to hold it open and reveal the latest Porvoz output in a dark response panel. The panel safely renders common Markdown—including headings, lists, emphasis, links, quotes, and code—while **Copy** preserves the original response. It also provides a **×** control; a discarded short tap shows the previous output and waits to be dismissed. The non-activating overlay does not become the typing target.
 
-The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. If a transcript begins with a registered instruction prefix, Porvoz sends it with the editable instruction prompt and prefix registry to the selected instruction model using the configured reasoning level. Transcripts without a registered prefix bypass the instruction model.
+The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. If a transcript begins with a registered instruction prefix, Porvoz sends it with the editable instruction prompt and prefix registry to the selected instruction model using the configured reasoning level. A non-empty selection also invokes the instruction model even when the transcript has no prefix. Transcripts without a registered prefix and without selected text bypass the instruction model.
 
-When Search access is enabled for a matched prefix, Porvoz enables the hosted `web_search` tool and appends discovered sources to the result. When Clipboard access is enabled for a matched prefix, the current clipboard is included as untrusted reference context for that request. **Activity** stores the 200 most recent transcript, instruction, and error entries on the selected server. Desktops using the same remote server share that history.
+When Search access is enabled for a matched prefix, Porvoz enables the hosted `web_search` tool and appends discovered sources to the result. When Clipboard access is enabled for a matched prefix, the current clipboard is included as untrusted reference context for that request. Porvoz also asks the focused application for its current text selection when recording starts. A non-empty selection is automatically included as untrusted context for any matched instruction; when nothing is selected, the field is omitted. Windows uses UI Automation and Linux uses AT-SPI for this query—Porvoz does not simulate Copy or alter the clipboard to discover selected text. The target control must expose its selection through the platform accessibility API. Linux desktops must have toolkit accessibility enabled; on GNOME, run `gsettings set org.gnome.desktop.interface toolkit-accessibility true` and restart target applications after changing it. **Activity** stores the 200 most recent transcript, instruction, and error entries on the selected server. Desktops using the same remote server share that history.
 
 When a typed response needs a keyboard action, the instruction model can return bracketed key notation such as `[Enter]`, `[Control+F]`, or `[Control+Shift+ArrowDown]`. Put modifier names first, separate keys with `+`, and use one notation per action; Porvoz parses the notation and sends the corresponding key press or combination. Linux typing uses X11 for the global hotkey and simulated paste input. macOS is not supported in the current release.
 
@@ -96,7 +96,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `2.0.0` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
+Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `2.1.0` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
 
 To build the image from the current source checkout instead, run `docker compose up -d --build`.
 

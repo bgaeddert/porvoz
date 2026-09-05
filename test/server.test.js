@@ -115,7 +115,10 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
   transcript = "clipboard summarize this";
   const instructedForm = new FormData();
   instructedForm.set("model", profileId);
-  instructedForm.set("porvoz_context", JSON.stringify({ clipboard: "desktop clipboard text" }));
+  instructedForm.set("porvoz_context", JSON.stringify({
+    clipboard: "desktop clipboard text",
+    selectedText: "desktop selected text"
+  }));
   instructedForm.set("file", new Blob([Buffer.from("audio")], { type: "audio/wav" }), "test.wav");
   const instructed = await api(baseUrl, "/v1/audio/transcriptions", {
     method: "POST",
@@ -126,6 +129,7 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
   assert.equal(instructed.porvoz.raw_transcript, "clipboard summarize this");
   assert.equal(instructed.porvoz.instruction_applied, true);
   assert.match(responseRequestBody, /desktop clipboard text/);
+  assert.match(responseRequestBody, /desktop selected text/);
 
   const desktopClient = createBackendClient({
     baseUrl,
@@ -133,6 +137,16 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
     getActiveProfileId: () => profileId,
     setActiveProfileId: () => {}
   });
+  transcript = "ordinary dictation with selected context";
+  const desktopSelectedTextResult = await desktopClient.transcribe({
+    audio: Buffer.from("audio"),
+    mimeType: "audio/wav",
+    selectedText: "selection sent by the desktop client"
+  });
+  assert.equal(desktopSelectedTextResult.instructionApplied, true);
+  assert.match(responseRequestBody, /selection sent by the desktop client/);
+  assert.match(responseRequestBody, /Selected-text routing exception/);
+
   for (const clipboardText of ["x".repeat(300_001), "漢😀".repeat(100_000), "\u0000\n\"\\".repeat(100_000)]) {
     for (const withPrefix of [false, true]) {
       await context.test(`oversized clipboard (${clipboardText.codePointAt(0)}) with prefix=${withPrefix}`, async () => {
