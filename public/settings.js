@@ -2,6 +2,8 @@ import { loadRuntimeConfig } from "./runtime-config.js";
 import { isRecordingTooShort } from "./capture-policy.js";
 import { createButtonLabel, createIcon, setButtonLabel } from "./icons.js";
 import { getUniquePrefixName, parsePrefix, serializePrefix } from "./prefix-transfer.js";
+import { bridge } from "./app-bridge.js";
+import { createRecorder, getRecordingSupport } from "./media-support.js";
 
 const profileSelect = document.querySelector("#profile-select");
 const backendForm = document.querySelector("#backend-form");
@@ -100,8 +102,10 @@ const consoleSelectionInput = document.querySelector("#console-selection-enabled
 const consoleSelectionStatus = document.querySelector("#console-selection-status");
 let savedConsoleSelectionEnabled = false;
 const previewCueButton = document.querySelector("#preview-cue");
-const previewCueSound = new Audio("./assets/recording-start.mp3");
-const desktopBridge = window.porvozDesktop;
+// Desktop-only cards are absent from the browser document, so their cue audio
+// is never created and its file is never requested.
+const previewCueSound = previewCueButton ? new Audio("./assets/recording-start.mp3") : null;
+const recordingSupport = getRecordingSupport();
 
 let runtimeConfig;
 let prefixConfig = [];
@@ -125,18 +129,17 @@ let profileDialogMode = "add";
 await initializeSettings();
 
 async function initializeSettings() {
-  backendMode.addEventListener("change", renderBackendMode);
-  backendForm.addEventListener("submit", saveBackendSettings);
+  backendMode?.addEventListener("change", renderBackendMode);
+  backendForm?.addEventListener("submit", saveBackendSettings);
   const controls = [...document.querySelectorAll("input, select, textarea, button")]
     .filter((control) => !control.closest("#backend"));
   const disabledStates = controls.map((control) => control.disabled);
   controls.forEach((control) => { control.disabled = true; });
-  await loadBackendSettings();
+  if (backendForm) await loadBackendSettings();
   try {
     runtimeConfig = await loadRuntimeConfig();
   } catch (error) {
-    backendStatus.textContent = `Could not load server settings. Choose Local or update the remote connection above. ${error.message || ""}`;
-    backendStatus.dataset.state = "error";
+    setStartupError(error);
     return;
   }
   controls.forEach((control, index) => { control.disabled = disabledStates[index]; });
@@ -154,9 +157,10 @@ async function initializeSettings() {
   loadConnectionSettings();
   renderModels();
   renderPrefixes();
-  renderSoundVolume(runtimeConfig.soundVolume);
-  renderConsoleSelection(runtimeConfig.consoleSelectionEnabled);
-  await initializeHotkey();
+  renderVoicePrefixSupport();
+  if (soundVolumeInput) renderSoundVolume(runtimeConfig.soundVolume);
+  if (consoleSelectionInput) renderConsoleSelection(runtimeConfig.consoleSelectionEnabled);
+  if (hotkeyDisplay) await initializeHotkey();
 
   profileSelect.addEventListener("change", switchActiveProfile);
   addProfileButton.addEventListener("click", openAddProfileDialog);
@@ -204,19 +208,39 @@ async function initializeSettings() {
   resetDefaultsButton.addEventListener("click", () => resetDialog.showModal());
   confirmResetButton.addEventListener("click", resetToDefaults);
   cancelResetButton.addEventListener("click", () => resetDialog.close());
-  captureHotkeyButton.addEventListener("click", beginHotkeyCapture);
-  cancelHotkeyButton.addEventListener("click", cancelHotkeyCapture);
-  soundVolumeInput.addEventListener("input", updateSoundVolumePreview);
-  soundVolumeInput.addEventListener("change", saveSoundVolume);
-  consoleSelectionInput.addEventListener("change", saveConsoleSelection);
+  captureHotkeyButton?.addEventListener("click", beginHotkeyCapture);
+  cancelHotkeyButton?.addEventListener("click", cancelHotkeyCapture);
+  soundVolumeInput?.addEventListener("input", updateSoundVolumePreview);
+  soundVolumeInput?.addEventListener("change", saveSoundVolume);
+  consoleSelectionInput?.addEventListener("change", saveConsoleSelection);
   previewCueButton?.addEventListener("click", playCuePreview);
 
-  if (desktopBridge?.isElectron) {
-    desktopBridge.onHotkeyUpdated(handleHotkeyUpdated);
-    desktopBridge.onHotkeyCaptureStatus(handleHotkeyCaptureStatus);
-    desktopBridge.onSoundVolumeUpdated(handleSoundVolumeUpdated);
-    desktopBridge.onActivityCanceled(handleActivityCanceled);
+  if (bridge.features.hotkeys) {
+    bridge.onHotkeyUpdated(handleHotkeyUpdated);
+    bridge.onHotkeyCaptureStatus(handleHotkeyCaptureStatus);
   }
+  if (bridge.features.sounds) bridge.onSoundVolumeUpdated(handleSoundVolumeUpdated);
+  if (bridge.features.activityEvents) bridge.onActivityCanceled(handleActivityCanceled);
+}
+
+// The server card is where the desktop reports a connection failure. The
+// website administers one server and has no such card, so the same failure is
+// reported beside the provider form instead.
+function setStartupError(error) {
+  const target = backendStatus || connectionStatus;
+  target.textContent = backendStatus
+    ? `Could not load server settings. Choose Local or update the remote connection above. ${error.message || ""}`
+    : `Could not load this server's settings. ${error.message || ""}`;
+  target.dataset.state = "error";
+}
+
+// Capture and voice prefix creation share one capability check, so a browser
+// that cannot record explains itself the same way in both places.
+function renderVoicePrefixSupport() {
+  if (recordingSupport.supported) return;
+  voicePrefixOption.disabled = true;
+  voicePrefixOption.title = recordingSupport.message;
+  prefixRecordStartButton.disabled = true;
 }
 
 function handleActivityCanceled() {
@@ -233,7 +257,7 @@ function handleActivityCanceled() {
     prefixRecordStartButton.disabled = false;
     prefixRecordStopButton.disabled = false;
     prefixRecordStopButton.hidden = true;
-    desktopBridge.setStatus({ state: "idle" });
+    bridge.setStatus?.({ state: "idle" });
   }
   if (modelsActive) {
     modelStatus.textContent = "Model loading canceled.";
@@ -258,7 +282,7 @@ function getActiveProfileName() {
 
 async function loadBackendSettings() {
   try {
-    const settings = await desktopBridge.getBackendSettings();
+    const settings = await bridge.getBackendSettings();
     backendMode.value = settings.mode;
     remoteBackendUrl.value = settings.remoteUrl || "";
     remoteAdminKey.value = "";
@@ -294,7 +318,7 @@ async function saveBackendSettings(event) {
   backendStatus.textContent = "Connecting to the Porvoz server…";
   backendStatus.dataset.state = "saving";
   try {
-    await desktopBridge.saveBackendSettings({
+    await bridge.saveBackendSettings({
       mode: backendMode.value,
       remoteUrl: remoteBackendUrl.value,
       adminKey: remoteAdminKey.value
@@ -314,8 +338,7 @@ async function switchActiveProfile() {
   profileStatus.textContent = "Switching connection profile…";
   profileStatus.dataset.state = "saving";
   try {
-    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
-    runtimeConfig = await desktopBridge.setActiveProfile({ id: nextProfileId });
+    runtimeConfig = await bridge.setActiveProfile({ id: nextProfileId });
     renderProfiles();
     await loadConnectionSettings();
     renderModels();
@@ -376,10 +399,9 @@ async function saveProfileDialog() {
   profileDialogStatus.textContent = "Saving…";
   profileDialogStatus.dataset.state = "saving";
   try {
-    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
     runtimeConfig = profileDialogMode === "add"
-      ? await desktopBridge.createProfile({ name })
-      : await desktopBridge.renameProfile({ id: runtimeConfig.activeProfileId, name });
+      ? await bridge.createProfile({ name })
+      : await bridge.renameProfile({ id: runtimeConfig.activeProfileId, name });
     renderProfiles();
     await loadConnectionSettings();
     renderModels();
@@ -406,8 +428,7 @@ async function confirmDeleteProfile() {
   confirmDeleteProfileButton.disabled = true;
   const deletedName = getActiveProfileName();
   try {
-    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
-    runtimeConfig = await desktopBridge.deleteProfile({ id: runtimeConfig.activeProfileId });
+    runtimeConfig = await bridge.deleteProfile({ id: runtimeConfig.activeProfileId });
     renderProfiles();
     await loadConnectionSettings();
     renderModels();
@@ -424,10 +445,9 @@ async function confirmDeleteProfile() {
 
 async function loadConnectionSettings() {
   try {
-    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
-    const result = await desktopBridge.getConnectionSettings();
+    const result = await bridge.getConnectionSettings();
     renderConnectionSettings(result);
-    const inference = await desktopBridge.getInferenceKey();
+    const inference = await bridge.getInferenceKey();
     inferenceApiKey.value = inference.apiKey || "";
   } catch (error) {
     connectionStatus.textContent = error.message;
@@ -437,15 +457,23 @@ async function loadConnectionSettings() {
 
 async function copyInferenceApiKey() {
   if (!inferenceApiKey.value) return;
-  await desktopBridge.writeClipboardText(inferenceApiKey.value);
-  connectionStatus.textContent = "Inference API key copied.";
-  connectionStatus.dataset.state = "success";
+  try {
+    await writeClipboardText(inferenceApiKey.value);
+    connectionStatus.textContent = "Inference API key copied.";
+    connectionStatus.dataset.state = "success";
+  } catch (error) {
+    console.error("Could not copy the inference API key:", error);
+    // The field stays selectable, so a denied clipboard is a nuisance, not a wall.
+    inferenceApiKey.select();
+    connectionStatus.textContent = "Could not reach the clipboard. The key is selected; copy it manually.";
+    connectionStatus.dataset.state = "error";
+  }
 }
 
 async function rotateInferenceApiKey() {
   rotateInferenceApiKeyButton.disabled = true;
   try {
-    const result = await desktopBridge.rotateInferenceKey();
+    const result = await bridge.rotateInferenceKey();
     inferenceApiKey.value = result.apiKey || "";
     connectionStatus.textContent = "A new inference API key was generated. The previous key no longer works.";
     connectionStatus.dataset.state = "success";
@@ -476,14 +504,13 @@ async function saveConnection(event) {
   connectionStatus.dataset.state = "saving";
 
   try {
-    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
-    const result = await desktopBridge.saveConnection({
+    const result = await bridge.saveConnection({
       baseUrl: baseUrlInput.value,
       apiKey: apiKeyInput.value,
       verifyCertificate: verifyCertificateInput.checked
     });
     renderConnectionSettings(result);
-    runtimeConfig = await desktopBridge.getRuntimeConfig();
+    runtimeConfig = await bridge.getRuntimeConfig();
     renderModels();
     connectionStatus.textContent = "Connection saved securely.";
     connectionStatus.dataset.state = "success";
@@ -522,8 +549,7 @@ async function populateModels() {
   modelStatus.textContent = "Loading every model from the endpoint…";
   modelStatus.dataset.state = "loading";
   try {
-    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
-    runtimeConfig = await desktopBridge.populateModels();
+    runtimeConfig = await bridge.populateModels();
     renderModels();
   } catch (error) {
     if (isCancellationError(error)) {
@@ -550,7 +576,7 @@ function saveModelSelections() {
   modelStatus.dataset.state = "saving";
   const saveOperation = modelSaveQueue.catch(() => {}).then(async () => {
     try {
-      runtimeConfig = await desktopBridge.saveModelSelections(selections);
+      runtimeConfig = await bridge.saveModelSelections(selections);
       transcriptionModel.value = runtimeConfig.models.selected.transcription || "";
       instructionModel.value = runtimeConfig.models.selected.instruction || "";
       instructionReasoning.value = runtimeConfig.models.selected.instructionReasoning || "low";
@@ -559,7 +585,7 @@ function saveModelSelections() {
       return true;
     } catch (error) {
       try {
-        runtimeConfig = await desktopBridge.getRuntimeConfig();
+        runtimeConfig = await bridge.getRuntimeConfig();
         renderModels();
       } catch (refreshError) {
         console.error("Could not restore model selections:", refreshError);
@@ -588,7 +614,7 @@ function openModelPicker(target) {
   document.documentElement.classList.add("model-picker-open");
   document.body.classList.add("model-picker-open");
   modelPickerHeading.textContent = `Browse ${target} models`;
-  modelPickerDescription.textContent = `Type to filter the loaded catalog, choose a ${target} model, then save it into the ${target} model field.`;
+  modelPickerDescription.textContent = `Filter the catalog, choose a ${target} model, then save it.`;
   modelPickerInput.value = "";
   renderModelPickerOptions();
   modelPickerDialog.showModal();
@@ -820,8 +846,8 @@ async function copyPrefix(prefix, button) {
 }
 
 async function writeClipboardText(text) {
-  if (desktopBridge?.writeClipboardText) {
-    await desktopBridge.writeClipboardText(text);
+  if (bridge.writeClipboardText) {
+    await bridge.writeClipboardText(text);
     return;
   }
   if (navigator.clipboard?.writeText) {
@@ -845,7 +871,7 @@ async function writeClipboardText(text) {
 }
 
 async function readClipboardText() {
-  if (desktopBridge?.readClipboardText) return desktopBridge.readClipboardText();
+  if (bridge.readClipboardText) return bridge.readClipboardText();
   if (navigator.clipboard?.readText) return navigator.clipboard.readText();
   throw new Error("Clipboard access is unavailable.");
 }
@@ -941,7 +967,7 @@ function persistPrefixes() {
   prefixSaveQueue = prefixSaveQueue.catch(() => {}).then(async () => {
     try {
       const nextPrefixes = prefixConfig.map((prefix) => ({ ...prefix }));
-      await desktopBridge.savePrefixSettings({
+      await bridge.savePrefixSettings({
         prefixes: nextPrefixes
       });
       prefixStatus.textContent = "Prefix settings saved.";
@@ -1065,7 +1091,7 @@ function showVoicePrefixRecorder() {
   prefixRecordOrb.dataset.state = "idle";
   prefixRecordStartButton.disabled = false;
   prefixRecordStopButton.hidden = true;
-  desktopBridge?.setStatus?.({ state: "idle" });
+  bridge.setStatus?.({ state: "idle" });
   prefixRecordStartButton.focus();
 }
 
@@ -1073,18 +1099,15 @@ function returnToPrefixChoices() {
   prefixFlowToken += 1;
   abortPrefixRecording();
   showPrefixDialogView(prefixChoiceView);
-  desktopBridge?.setStatus?.({ state: "idle" });
+  bridge.setStatus?.({ state: "idle" });
   voicePrefixOption.focus();
 }
 
 async function startPrefixRecording() {
   if (prefixRecorder || !prefixDialog.open) return;
-  if (!desktopBridge?.isElectron) {
-    setPrefixRecordError("Voice prefix creation is available in the Electron app.");
-    return;
-  }
-  if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) {
-    setPrefixRecordError("This Electron build does not support microphone recording.");
+  if (!recordingSupport.supported) {
+    setPrefixRecordError(recordingSupport.message);
+    prefixRecordStartButton.disabled = true;
     return;
   }
 
@@ -1095,7 +1118,7 @@ async function startPrefixRecording() {
   prefixRecordStatus.textContent = "Requesting microphone access…";
   prefixRecordStatus.dataset.state = "processing";
   prefixRecordOrb.dataset.state = "processing";
-  desktopBridge.setStatus({ message: "Preparing prefix recording…", state: "processing", stage: "recording" });
+  bridge.setStatus?.({ message: "Preparing prefix recording…", state: "processing", stage: "recording" });
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1105,7 +1128,7 @@ async function startPrefixRecording() {
     }
     prefixRecordingStream = stream;
     prefixRecordedChunks = [];
-    prefixRecorder = new MediaRecorder(stream);
+    prefixRecorder = createRecorder(stream, recordingSupport.mimeType);
     prefixRecorder.addEventListener("dataavailable", (event) => {
       if (event.data.size) prefixRecordedChunks.push(event.data);
     });
@@ -1120,7 +1143,7 @@ async function startPrefixRecording() {
     prefixRecordStatus.textContent = "Listening… Describe the trigger and the result you want.";
     prefixRecordStatus.dataset.state = "recording";
     prefixRecordOrb.dataset.state = "recording";
-    desktopBridge.setStatus({ message: "Recording…", state: "recording", stage: "recording" });
+    bridge.setStatus?.({ message: "Recording…", state: "recording", stage: "recording" });
   } catch (error) {
     if (flowToken !== prefixFlowToken) return;
     console.error("Could not start prefix recording:", error);
@@ -1139,7 +1162,7 @@ function stopPrefixRecording() {
     : "Transcribing and drafting your prefix…";
   prefixRecordStatus.dataset.state = "processing";
   prefixRecordOrb.dataset.state = "processing";
-  desktopBridge.setStatus({ message: "Creating prefix…", state: "processing", stage: "instruction" });
+  bridge.setStatus?.({ message: "Creating prefix…", state: "processing", stage: "instruction" });
   try {
     prefixRecorder.stop();
   } catch (error) {
@@ -1168,7 +1191,7 @@ function handlePrefixRecorderStop(flowToken) {
 
 async function createPrefixFromVoice(audio, flowToken) {
   try {
-    const result = await desktopBridge.createPrefixFromVoice({
+    const result = await bridge.createPrefixFromVoice({
       audio: await audio.arrayBuffer(),
       mimeType: audio.type
     });
@@ -1224,7 +1247,7 @@ function preparePrefixDialog(mode, index) {
   abortPrefixRecording();
   editingPrefixIndex = index;
   prefixDialogKicker.textContent = mode === "edit" ? "Prefix settings" : "New instruction prefix";
-  prefixDialogHeading.textContent = mode === "edit" ? "Edit prefix" : "Add a prefix to your voice";
+  prefixDialogHeading.textContent = mode === "edit" ? "Edit prefix" : "Add a prefix";
   prefixEditRemoveButton.hidden = mode !== "edit";
   setButtonLabel(prefixEditSaveButton, mode === "edit" ? "Save changes" : "Add prefix");
   prefixEditStatus.textContent = "";
@@ -1237,7 +1260,7 @@ function resetPrefixDialog() {
   prefixFlowToken += 1;
   abortPrefixRecording();
   editingPrefixIndex = -1;
-  desktopBridge?.setStatus?.({ state: "idle" });
+  bridge.setStatus?.({ state: "idle" });
   prefixPreviewTranscript.textContent = "";
   prefixPreviewName.value = "";
   prefixPreviewInstruction.value = "";
@@ -1256,7 +1279,7 @@ function resetPrefixDialog() {
   prefixEditStatus.textContent = "";
   prefixEditStatus.dataset.state = "idle";
   prefixDialogKicker.textContent = "New instruction prefix";
-  prefixDialogHeading.textContent = "Add a prefix to your voice";
+  prefixDialogHeading.textContent = "Add a prefix";
   prefixEditRemoveButton.hidden = true;
   setButtonLabel(prefixEditSaveButton, "Add prefix");
   showPrefixDialogView(prefixChoiceView);
@@ -1289,7 +1312,7 @@ function setPrefixRecordError(message) {
   prefixRecordOrb.dataset.state = "error";
   prefixRecordStartButton.disabled = false;
   prefixRecordStopButton.hidden = true;
-  desktopBridge?.setStatus?.({ message, state: "error", stage: "instruction" });
+  bridge.setStatus?.({ message, state: "error", stage: "instruction" });
 }
 
 function getAudioFileName(mimeType) {
@@ -1354,14 +1377,16 @@ async function resetToDefaults(event) {
   try {
     await prefixSaveQueue.catch(() => {});
     await modelSaveQueue.catch(() => {});
-    runtimeConfig = await desktopBridge.resetToDefaults();
+    runtimeConfig = await bridge.resetToDefaults();
     prefixConfig = runtimeConfig.prefixes.map(normalizePrefix);
     renderProfiles();
     renderModels();
     renderPrefixes();
-    renderSoundVolume(runtimeConfig.soundVolume);
-    renderConsoleSelection(runtimeConfig.consoleSelectionEnabled);
-    consoleSelectionStatus.textContent = "";
+    if (soundVolumeInput) renderSoundVolume(runtimeConfig.soundVolume);
+    if (consoleSelectionInput) {
+      renderConsoleSelection(runtimeConfig.consoleSelectionEnabled);
+      consoleSelectionStatus.textContent = "";
+    }
     await loadConnectionSettings();
     resetDialog.close();
     resetStatus.textContent = "Settings reset to defaults.";
@@ -1376,7 +1401,7 @@ async function resetToDefaults(event) {
 
 async function initializeHotkey() {
   try {
-    const hotkey = await desktopBridge.getHotkey();
+    const hotkey = await bridge.getHotkey();
     renderHotkey(hotkey);
   } catch (error) {
     console.error("Could not load the desktop hotkey:", error);
@@ -1399,7 +1424,7 @@ async function saveConsoleSelection() {
   consoleSelectionStatus.textContent = "Saving…";
   consoleSelectionStatus.dataset.state = "saving";
   try {
-    const saved = await desktopBridge.saveConsoleSelectionEnabled(nextValue);
+    const saved = await bridge.saveConsoleSelectionEnabled(nextValue);
     renderConsoleSelection(saved);
     consoleSelectionStatus.textContent = saved ? "Console selection is on." : "Console selection is off.";
     consoleSelectionStatus.dataset.state = "success";
@@ -1422,6 +1447,7 @@ function renderSoundVolume(value) {
 
 // You cannot judge a cue volume you have never heard, so let it be heard.
 async function playCuePreview() {
+  if (!previewCueSound) return;
   previewCueSound.pause();
   previewCueSound.currentTime = 0;
   previewCueSound.volume = normalizeSoundVolume(Number(soundVolumeInput.value) / 100);
@@ -1448,8 +1474,7 @@ function saveSoundVolume() {
   soundVolumeStatus.dataset.state = "saving";
   soundVolumeSaveTimer = setTimeout(async () => {
     try {
-      if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
-      const savedVolume = await desktopBridge.saveSoundVolume(nextVolume);
+      const savedVolume = await bridge.saveSoundVolume(nextVolume);
       runtimeConfig.soundVolume = normalizeSoundVolume(savedVolume);
       renderSoundVolume(runtimeConfig.soundVolume);
       soundVolumeStatus.textContent = "Cue volume saved.";
@@ -1492,7 +1517,7 @@ async function beginHotkeyCapture() {
   cancelHotkeyButton.hidden = false;
   hotkeyStatus.textContent = "Press one Control/Alt key, a modifier combination, or hold modifiers and press a trigger; release to save. Escape cancels.";
   try {
-    await desktopBridge.beginHotkeyCapture();
+    await bridge.beginHotkeyCapture();
   } catch (error) {
     finishHotkeyCapture();
     hotkeyStatus.textContent = error.message || "Could not capture the hotkey.";
@@ -1500,7 +1525,7 @@ async function beginHotkeyCapture() {
 }
 
 function cancelHotkeyCapture() {
-  desktopBridge.cancelHotkeyCapture();
+  bridge.cancelHotkeyCapture();
   finishHotkeyCapture();
   hotkeyStatus.textContent = "Hotkey capture canceled.";
 }

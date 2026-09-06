@@ -1,29 +1,29 @@
-const desktopBridge = window.porvozDesktop;
+import { bridge } from "./app-bridge.js";
+
 const warning = document.querySelector("#setup-warning");
 const warningMessage = document.querySelector("#setup-warning-message");
 
-if (desktopBridge?.isElectron) {
-  desktopBridge.onSetupUpdated(() => {
-    void refreshSetupWarning();
-  });
-}
+// Only the desktop pushes setup changes; the browser refreshes on navigation.
+bridge.onSetupUpdated?.(() => {
+  void refreshSetupWarning();
+});
 
 export async function refreshSetupWarning() {
   if (!warning) return null;
-  if (!desktopBridge?.isElectron) {
+  if (!bridge.isAvailable) {
     warning.hidden = true;
     return null;
   }
 
   try {
-    const setupStatus = await desktopBridge.getSetupStatus();
+    const setupStatus = await bridge.getSetupStatus();
     renderSetupWarning(setupStatus);
     return setupStatus;
   } catch (error) {
     console.error("Could not check Porvoz setup:", error);
     renderSetupWarning({
       ready: false,
-      warningMessage: "Open Settings to check the API credentials and selected models before recording."
+      warningMessage: "Open Provider & models to check the API credentials and selected models before recording."
     });
     return null;
   }
@@ -34,7 +34,7 @@ function renderSetupWarning(setupStatus) {
   warning.hidden = isReady;
   if (!isReady) {
     warningMessage.textContent = setupStatus?.warningMessage
-      || "Open Settings to finish configuring Porvoz before recording.";
+      || "Open Provider & models to finish configuring Porvoz before using the recorder.";
   }
 }
 

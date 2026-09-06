@@ -97,7 +97,10 @@ export function createBackendManager({ app, safeStorage, preferences, userDataPa
         PORVOZ_DATABASE_PATH: localDatabasePath,
         PORVOZ_DEFAULTS_PATH: defaultsPath,
         PORVOZ_HOST: "127.0.0.1",
-        PORVOZ_PORT: "0"
+        PORVOZ_PORT: "0",
+        // The desktop renderer reaches this child over IPC. It must never
+        // publish the browser administration site, even on loopback.
+        PORVOZ_WEB_ADMIN: "off"
       },
       stdio: ["ignore", "pipe", "pipe", "ipc"]
     });

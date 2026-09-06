@@ -100,7 +100,7 @@ test("setup status names missing credentials and model selections", () => {
 
   assert.equal(status.ready, false);
   assert.deepEqual(status.missing, ["API base URL", "API key", "transcription model", "instruction model"]);
-  assert.match(status.warningMessage, /Open Settings/);
+  assert.match(status.warningMessage, /Open Provider & models/);
   assert.match(status.hotkeyMessage, /before using the hotkey/);
 });
 

@@ -4,42 +4,56 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0c0f13" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" />
     <title>Porvoz · Settings</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="app-sidebar">
-        <a class="brand" href="index.html">
-          <img class="brand-icon" src="../electron/assets/icon.png?v=21c0d164" alt="" aria-hidden="true" />
+        <a class="brand" href="settings.html#provider">
+          <img class="brand-icon" src="./assets/icon.svg" alt="" aria-hidden="true" />
           <span class="brand-copy"><span class="brand-name">Porvoz</span><span class="brand-kind">Voice utility</span></span>
         </a>
         <nav class="main-nav" aria-label="Primary navigation">
-          <a class="nav-link" href="index.html" title="Capture">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V5"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg><span>Capture</span>
+          <a class="nav-link" href="settings.html#provider" title="Provider">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M6 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M15 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0"/><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h11M19 18h1"/></svg>
+            <span>Provider</span>
+          </a>
+          <a class="nav-link" href="settings.html#prefixes" title="Prefixes">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2-2a2 2 0 0 1-2-2a2 2 0 0 1-2 2m0-12a2 2 0 0 1 2 2a2 2 0 0 1 2-2a2 2 0 0 1-2-2a2 2 0 0 1-2 2m-7 12a6 6 0 0 1 6-6a6 6 0 0 1-6-6a6 6 0 0 1-6 6a6 6 0 0 1 6 6"/></svg>
+            <span>Prefixes</span>
+          </a>
+          <a class="nav-link" href="settings.html#keyboard" title="Keyboard" data-desktop-only>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M10 14h4"/></svg>
+            <span>Keyboard</span>
+          </a>
+          <a class="nav-link" href="settings.html#sound" title="Sound" data-desktop-only>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5a.8.8 0 0 1 1.5.5v14a.8.8 0 0 1-1.5.5z"/><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14"/></svg>
+            <span>Sound</span>
+          </a>
+          <hr class="nav-divider" />
+          <a class="nav-link" href="index.html" title="Test">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V5"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg>
+            <span>Test</span>
           </a>
           <a class="nav-link" href="logs.html" title="Activity">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg><span>Activity</span>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg>
+            <span>Activity</span>
           </a>
-          <a class="nav-link nav-link-active" href="settings.html" aria-current="page" title="Settings">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15.03 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15"/></svg><span>Settings</span>
-          </a>
-        </nav>
-        <nav class="section-nav" aria-label="Settings sections">
-          <p>Configure</p>
-          <a href="#capture">Prefixes</a>
-          <a href="#provider">Provider &amp; models</a>
-          <a href="#keyboard">Keyboard</a>
-          <a href="#sound">Sound</a>
+          <hr class="nav-divider" data-web-only hidden />
+          <button id="sign-out" class="nav-link" type="button" data-web-only hidden title="Log out">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2"/><path d="M9 12h12M18 9l3 3-3 3"/></svg>
+            <span>Log out</span>
+          </button>
         </nav>
         <div class="sidebar-meta" aria-label="Application version"><span class="sidebar-meta-name">Porvoz</span><span data-app-version>Version unavailable</span></div>
       </aside>
 
       <div class="app-workspace">
         <header class="workspace-header">
-          <div><p id="settings-page-kicker" class="workspace-kicker">Settings</p><h1 id="settings-page-title">Prefixes</h1></div>
-          <p id="settings-page-summary" class="workspace-summary">Manage reusable voice prefixes and reset controls.</p>
+          <div><p id="settings-page-kicker" class="workspace-kicker">Server settings</p><h1 id="settings-page-title">Provider &amp; models</h1></div>
+          <p id="settings-page-summary" class="workspace-summary">API connection and model routing.</p>
         </header>
 
       <main class="page-main settings-main">
@@ -53,17 +67,16 @@
           </span>
           <div class="setup-warning-copy">
             <p id="setup-warning-label" class="panel-kicker">Configuration needed</p>
-            <p id="setup-warning-message" class="setup-warning-message">Open Settings to finish configuring Porvoz.</p>
+            <p id="setup-warning-message" class="setup-warning-message">Open Provider &amp; models to finish configuring Porvoz.</p>
           </div>
-          <a class="setup-warning-link" href="settings.html">Open Settings</a>
+          <a class="setup-warning-link" href="settings.html#provider">Open Provider &amp; models</a>
         </aside>
         <div class="settings-stack">
-          <section id="backend" class="settings-card connection-card" data-settings-page="provider" aria-labelledby="backend-heading" hidden>
+          <section data-desktop-only id="backend" class="settings-card connection-card" data-settings-page="provider" aria-labelledby="backend-heading" hidden>
             <div class="settings-heading">
               <div>
-                <p class="panel-kicker">Backend</p>
                 <h2 id="backend-heading">Porvoz server</h2>
-                <p class="section-description">Use the private server started with this desktop app, or connect to a remote Porvoz server.</p>
+                <p class="section-description">Use this app's private server, or connect to a shared one.</p>
               </div>
             </div>
             <form id="backend-form" class="connection-form">
@@ -94,9 +107,7 @@
           <section id="connection" class="settings-card connection-card" data-settings-page="provider" aria-labelledby="connection-heading" hidden>
             <div class="settings-heading">
               <div>
-                <p class="panel-kicker">Connection</p>
                 <h2 id="connection-heading">API provider</h2>
-                <p class="section-description">Save a named profile for each endpoint and switch between them here.</p>
               </div>
             </div>
             <div class="profile-switcher">
@@ -131,7 +142,7 @@
                 </button>
               </div>
             </div>
-            <p id="profile-status" class="field-note" aria-live="polite">Each profile keeps its own base URL, key, and model choices.</p>
+            <p id="profile-status" class="field-note" aria-live="polite">Each profile keeps its own URL, key, and models.</p>
             <form id="connection-form" class="connection-form">
               <label class="field-label" for="base-url">
                 Base URL
@@ -147,7 +158,7 @@
                   <input id="verify-certificate" type="checkbox" checked />
                   <span>Verify certificate</span>
                 </span>
-                <small>Keep enabled for normal HTTPS endpoints. Uncheck only when the endpoint uses a trusted self-signed certificate.</small>
+                <small>Uncheck only for a trusted self-signed certificate. Doing so exposes HTTPS to interception.</small>
               </label>
               <div class="form-actions">
                 <p id="connection-status" class="field-note" aria-live="polite">Loading connection settings…</p>
@@ -168,17 +179,15 @@
                 <button id="copy-inference-api-key" class="button-secondary" type="button">Copy</button>
                 <button id="rotate-inference-api-key" class="button-secondary" type="button">Regenerate</button>
               </div>
-              <small>OpenAI-compatible clients use this key for the selected profile. It is intentionally visible and copyable.</small>
+              <small>OpenAI-compatible clients use this key for the selected profile.</small>
             </div>
-            <p class="security-note">The provider key is encrypted in the Porvoz server database and is never returned to this page. Disabling certificate verification makes HTTPS vulnerable to interception.</p>
+            <p class="security-note">Provider keys are encrypted on the server and never returned to this page.</p>
           </section>
 
           <section id="models" class="settings-card" data-settings-page="provider" aria-labelledby="models-heading" hidden>
             <div class="settings-heading">
               <div>
-                <p class="panel-kicker">Models</p>
                 <h2 id="models-heading">Request routing</h2>
-                <p class="section-description">Load the complete model catalog from the configured endpoint, then choose one model for each job.</p>
               </div>
             </div>
             <div class="model-grid">
@@ -214,7 +223,6 @@
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
                 </select>
-                <small>Controls reasoning effort for instruction-model requests.</small>
               </label>
               <div class="form-actions model-actions">
                 <p id="model-status" class="field-note" aria-live="polite">No models loaded yet.</p>
@@ -227,15 +235,13 @@
                 </button>
               </div>
             </div>
-            <p class="field-note">Type or paste a model ID to save it directly, or browse the loaded catalog and apply a selection.</p>
           </section>
 
-          <section id="keyboard" class="settings-card" data-settings-page="keyboard" aria-labelledby="hotkey-heading" hidden>
+          <section data-desktop-only id="keyboard" class="settings-card" data-settings-page="keyboard" aria-labelledby="hotkey-heading" hidden>
             <div class="settings-heading">
               <div>
-                <p class="panel-kicker">Keyboard</p>
                 <h2 id="hotkey-heading">Global hotkey</h2>
-                <p class="section-description">Hold this combination anywhere to record. You can also choose a single left or right Ctrl or Alt key.</p>
+                <p class="section-description">Hold this anywhere to record. A single Ctrl or Alt key also works.</p>
               </div>
             </div>
             <div class="hotkey-setting">
@@ -266,31 +272,29 @@
                 </button>
               </div>
             </div>
-            <p id="hotkey-status" class="field-note" aria-live="polite">Click Set hotkey, then press one Control/Alt key, a modifier combination, or a combination with a trigger key. Release to save; Escape cancels.</p>
+            <p id="hotkey-status" class="field-note" aria-live="polite">Choose Set hotkey, then press your combination. Release to save; Escape cancels.</p>
           </section>
 
-          <section id="console-selection" class="settings-card" data-settings-page="keyboard" aria-labelledby="console-selection-heading" hidden>
+          <section data-desktop-only id="console-selection" class="settings-card" data-settings-page="keyboard" aria-labelledby="console-selection-heading" hidden>
             <div class="settings-heading">
               <div>
                 <h2 id="console-selection-heading">Console selection</h2>
-                <p class="section-description">Choose whether Porvoz copies selected text from recognized terminals. Off by default. Dictation and selection copying in other applications are unaffected.</p>
+                <p class="section-description">Copy selected text from recognized terminals. Off by default; other applications are unaffected.</p>
               </div>
             </div>
             <label class="checkbox-line">
               <input id="console-selection-enabled" type="checkbox" aria-describedby="console-selection-warning console-selection-scope" />
               <span>Enable selection copy in recognized terminals</span>
             </label>
-            <p id="console-selection-warning" class="console-selection-warning"><strong>Warning:</strong> If nothing is selected, the terminal may pass the copy shortcut through as Control-C, likely canceling or exiting running terminal applications or commands. When enabled, Porvoz attempts Control-Shift-C to copy the selection.</p>
-            <p id="console-selection-scope" class="field-note">This setting applies only to recognized terminal windows. Unknown terminals and terminal panes inside editors are not covered.</p>
+            <p id="console-selection-warning" class="console-selection-warning"><strong>Warning:</strong> Porvoz sends Control-Shift-C. With nothing selected, a terminal may pass it through as Control-C and cancel whatever is running.</p>
+            <p id="console-selection-scope" class="field-note">Unknown terminals and editor terminal panes are not covered.</p>
             <p id="console-selection-status" class="field-note" aria-live="polite"></p>
           </section>
 
-          <section id="sound" class="settings-card" data-settings-page="sound" aria-labelledby="sound-heading" hidden>
+          <section data-desktop-only id="sound" class="settings-card" data-settings-page="sound" aria-labelledby="sound-heading" hidden>
             <div class="settings-heading">
               <div>
-                <p class="panel-kicker">Sound</p>
                 <h2 id="sound-heading">Recording cues</h2>
-                <p class="section-description">Control the audible feedback played when recording starts and stops.</p>
               </div>
             </div>
             <div class="sound-setting">
@@ -321,15 +325,14 @@
                 </button>
               </div>
             </div>
-            <p id="sound-volume-status" class="field-note" aria-live="polite">Cue volume is saved automatically.</p>
+            <p id="sound-volume-status" class="field-note" aria-live="polite">Saved automatically.</p>
           </section>
 
-          <section id="prefixes" class="settings-card" data-settings-page="capture" aria-labelledby="prefixes-heading">
+          <section id="prefixes" class="settings-card" data-settings-page="prefixes" aria-labelledby="prefixes-heading">
             <div class="settings-heading settings-heading-actions">
               <div>
-                <p class="panel-kicker">Prefixes</p>
                 <h2 id="prefixes-heading">Instruction shortcuts</h2>
-                <p class="section-description">A transcript reaches the instruction model when it begins with a prefix in this list. Select a row to edit it, or copy its JSON to move it between Porvoz installs.</p>
+                <p class="section-description">Start a transcript with one of these names and the rest goes to the instruction model. Select a row to edit it.</p>
               </div>
               <div class="prefix-heading-actions">
                 <button id="refresh-prefixes" class="button-secondary button-with-icon" type="button">
@@ -356,16 +359,15 @@
               </div>
             </div>
             <div id="prefix-list" class="prefix-list"></div>
-            <p id="prefix-empty" class="field-note" hidden>No instruction prefixes configured.</p>
-            <p id="prefix-status" class="field-note" aria-live="polite">Changes save as you make them. Use Import from clipboard to add a copied prefix.</p>
+            <p id="prefix-empty" class="field-note" hidden>No prefixes yet.</p>
+            <p id="prefix-status" class="field-note" aria-live="polite">Changes save as you make them.</p>
           </section>
 
-          <section id="advanced" class="settings-card settings-card-reset" data-settings-page="capture" aria-labelledby="reset-heading">
+          <section id="advanced" class="settings-card settings-card-reset" data-settings-page="prefixes" aria-labelledby="reset-heading">
             <div class="settings-heading settings-heading-actions">
               <div>
-                <p class="panel-kicker">Advanced</p>
                 <h2 id="reset-heading">Reset all settings</h2>
-                <p class="section-description">Clear every connection profile, loaded model, prefix, and capture setting, then rebuild the page from the packaged defaults.</p>
+                <p class="section-description" data-shared-server-text="Restore the packaged defaults, clearing every profile, model, and prefix on this server — for every client connected to it.">Restore the packaged defaults, clearing every profile, model, and prefix.</p>
               </div>
               <button id="reset-defaults" class="button-danger button-with-icon" type="button">
                 <svg class="icon icon-tabler icon-tabler-restore" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -376,7 +378,7 @@
                 <span class="button-label">Reset to defaults</span>
               </button>
             </div>
-            <p id="reset-status" class="field-note" aria-live="polite">Your current settings stay unchanged until you confirm the reset.</p>
+            <p id="reset-status" class="field-note" aria-live="polite" data-shared-server-text="Nothing changes until you confirm. A reset affects every client of this server.">Nothing changes until you confirm.</p>
           </section>
         </div>
       </main>
@@ -385,9 +387,8 @@
     </div>
     <dialog id="reset-dialog" class="reset-dialog" aria-labelledby="reset-dialog-heading">
       <form method="dialog" class="reset-dialog-card">
-        <p class="panel-kicker">Confirm reset</p>
-        <h2 id="reset-dialog-heading">Start with a clean slate?</h2>
-        <p>This removes every connection profile, its saved API key, and every editable setting. The packaged defaults will be loaded again.</p>
+        <h2 id="reset-dialog-heading">Reset all settings?</h2>
+        <p data-shared-server-text="This removes every connection profile, its saved API key, and every prefix on this server, for every client connected to it. Each desktop keeps its own hotkey, sound, and console-selection preferences.">This removes every connection profile, its saved API key, and every editable setting. The packaged defaults are loaded again.</p>
         <div class="dialog-actions">
           <button id="cancel-reset" class="button-secondary" value="cancel" type="submit">Keep settings</button>
           <button id="confirm-reset" class="button-danger button-with-icon" value="confirm" type="button">
@@ -425,7 +426,6 @@
     </dialog>
     <dialog id="delete-profile-dialog" class="reset-dialog" aria-labelledby="delete-profile-dialog-heading">
       <form method="dialog" class="reset-dialog-card">
-        <p class="panel-kicker">Confirm delete</p>
         <h2 id="delete-profile-dialog-heading">Delete this connection profile?</h2>
         <p id="delete-profile-dialog-message">This removes its base URL, key, and model choices. This cannot be undone.</p>
         <div class="dialog-actions">
@@ -448,7 +448,7 @@
         <div class="prefix-dialog-header">
           <div>
             <p id="prefix-dialog-kicker" class="panel-kicker">New instruction prefix</p>
-            <h2 id="prefix-dialog-heading">Add a prefix to your voice</h2>
+            <h2 id="prefix-dialog-heading">Add a prefix</h2>
           </div>
           <button id="close-prefix-dialog" class="dialog-close" type="button" aria-label="Close prefix dialog">
             <svg class="icon icon-tabler icon-tabler-x" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -459,7 +459,6 @@
         </div>
 
         <section id="prefix-choice-view" class="prefix-dialog-view" aria-label="Choose how to add a prefix">
-          <p class="prefix-dialog-lede">Give Porvoz a phrase to listen for, and it will turn your idea into a reusable instruction.</p>
           <div class="prefix-creation-options">
             <button id="voice-prefix-option" class="prefix-voice-option" type="button">
               <span class="prefix-option-mark" aria-hidden="true">
@@ -469,7 +468,7 @@
               </span>
               <span class="prefix-option-copy">
                 <strong>Create a new prefix with your voice</strong>
-                <small>Describe what you want the prefix to do. AI will use the existing prefixes to draft the trigger and instruction.</small>
+                <small>Describe what it should do; Porvoz drafts the name and instruction.</small>
               </span>
               <span class="prefix-ai-badge">AI</span>
             </button>
@@ -482,14 +481,14 @@
               </span>
               <span class="prefix-option-copy">
                 <strong>Add a prefix manually</strong>
-                <small>Start with a blank row and write the name and instruction yourself.</small>
+                <small>Write the name and instruction yourself.</small>
               </span>
             </button>
           </div>
         </section>
 
         <section id="prefix-edit-view" class="prefix-dialog-view" aria-label="Edit prefix settings" hidden>
-          <p class="prefix-dialog-lede">Set the phrase, instruction, and whether this prefix receives clipboard context.</p>
+          <p class="prefix-dialog-lede">Set the name, instruction, and clipboard context.</p>
           <div class="prefix-edit-fields">
             <label class="field-label" for="prefix-edit-name">
               Prefix name
@@ -532,9 +531,8 @@
         </section>
 
         <section id="prefix-record-view" class="prefix-dialog-view" aria-labelledby="prefix-record-heading" hidden>
-          <p class="panel-kicker">Voice brief</p>
           <h3 id="prefix-record-heading">Tell Porvoz what this prefix should do</h3>
-          <p class="prefix-dialog-lede">Say the trigger phrase and explain the result you want. For example: “When I say tidy, rewrite the next message to be concise and professional.”</p>
+          <p class="prefix-dialog-lede">For example: “When I say tidy, rewrite the next message to be concise and professional.”</p>
           <div id="prefix-record-orb" class="prefix-record-orb" data-state="idle" aria-hidden="true"><span></span></div>
           <p id="prefix-record-status" class="prefix-record-status" aria-live="polite">Ready when you are.</p>
           <div class="dialog-actions prefix-record-actions">
@@ -555,13 +553,12 @@
               <span class="button-label">Stop and create</span>
             </button>
           </div>
-          <p class="prefix-dialog-footnote">Your recording is sent to the configured transcription and instruction models. Nothing is saved until you approve the preview.</p>
+          <p class="prefix-dialog-footnote">Your recording goes to the configured models. Nothing is saved until you approve the draft.</p>
         </section>
 
         <section id="prefix-preview-view" class="prefix-dialog-view" aria-labelledby="prefix-preview-heading" hidden>
-          <p class="panel-kicker">AI draft</p>
           <h3 id="prefix-preview-heading">Review your new prefix</h3>
-          <p class="prefix-dialog-lede">Edit anything you like, choose whether to include clipboard context, then add it to the registry.</p>
+          <p class="prefix-dialog-lede">Edit anything, then add it.</p>
           <div class="prefix-preview-source">
             <span>Heard from you</span>
             <p id="prefix-preview-transcript"></p>
@@ -599,7 +596,6 @@
       <div class="model-picker-card">
         <div class="model-picker-header">
           <div>
-            <p class="panel-kicker">Loaded catalog</p>
             <h2 id="model-picker-heading">Browse models</h2>
           </div>
           <button id="close-model-picker" class="dialog-close" type="button" aria-label="Close model picker">
@@ -610,9 +606,9 @@
           </button>
         </div>
         <div class="model-picker-body">
-          <p id="model-picker-description" class="model-picker-lede">Type to filter the loaded catalog, choose a model, then save it into the field.</p>
+          <p id="model-picker-description" class="model-picker-lede">Filter the catalog, choose a model, then save it.</p>
           <div class="model-picker-combobox">
-            <label class="field-label" for="model-picker-input">Search and choose a model</label>
+            <label class="field-label" for="model-picker-input">Search</label>
             <input id="model-picker-input" type="search" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="model-picker-menu" placeholder="Type to filter model IDs" />
             <div id="model-picker-menu" class="model-picker-menu" role="listbox" aria-label="Available models"></div>
           </div>
@@ -624,6 +620,24 @@
         </div>
       </div>
     </dialog>
+
+    <dialog id="sign-out-dialog" class="reset-dialog" aria-labelledby="sign-out-dialog-heading" data-web-only hidden>
+      <form method="dialog" class="reset-dialog-card">
+        <h2 id="sign-out-dialog-heading">Log out?</h2>
+        <p>You will need this server's admin key to sign in again.</p>
+        <div class="dialog-actions">
+          <button id="cancel-sign-out" class="button-secondary" value="cancel" type="submit">Stay signed in</button>
+          <button id="confirm-sign-out" class="button-danger button-with-icon" value="confirm" type="button">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M14 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2" />
+              <path d="M9 12h12M18 9l3 3-3 3" />
+            </svg>
+            <span class="button-label">Log out</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <script type="module" src="./environment-chrome.js"></script>
     <script type="module" src="./app-version.js"></script>
     <script type="module" src="./setup-warning.js"></script>
     <script type="module" src="./settings-navigation.js"></script>

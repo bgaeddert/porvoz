@@ -96,10 +96,10 @@ export function createAppService(settingsStore, logStore) {
       ready: missing.length === 0,
       missing,
       warningMessage: missing.length
-        ? `Open Settings to finish configuring Porvoz. Missing: ${missingItems}.`
+        ? `Open Provider & models to finish configuring Porvoz. Missing: ${missingItems}.`
         : "",
       hotkeyMessage: missing.length
-        ? `Open Porvoz Settings and finish setup before using the hotkey. Missing: ${missingItems}.`
+        ? `Open Porvoz and finish setup in Provider & models before using the hotkey. Missing: ${missingItems}.`
         : ""
     };
   }

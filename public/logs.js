@@ -1,6 +1,6 @@
 import { createIcon } from "./icons.js";
+import { bridge } from "./app-bridge.js";
 
-const desktopBridge = window.porvozDesktop;
 const logCount = document.querySelector("#log-count");
 const logCountLabel = document.querySelector("#log-count-label");
 const clearLogsButton = document.querySelector("#clear-logs");
@@ -15,16 +15,14 @@ const logFilter = document.querySelector("#log-filter");
 let logs = [];
 let filterTerm = "";
 
-if (desktopBridge?.isElectron) {
-  desktopBridge.onLogsUpdated(() => refreshLogs("Updated just now"));
-  window.addEventListener("focus", () => refreshLogs("Updated just now"));
-  window.addEventListener("pageshow", () => refreshLogs("Updated just now"));
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) refreshLogs("Updated just now");
-  });
-} else {
-  setArchiveStatus("Logs are available in the Electron app.", "error");
-}
+// The desktop pushes updates as they happen. The browser has no such channel,
+// so returning to the tab is what refreshes the shared server's history.
+bridge.onLogsUpdated?.(() => refreshLogs("Updated just now"));
+window.addEventListener("focus", () => refreshLogs("Updated just now"));
+window.addEventListener("pageshow", () => refreshLogs("Updated just now"));
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshLogs("Updated just now");
+});
 
 clearLogsButton.addEventListener("click", () => clearLogsDialog.showModal());
 cancelClearLogsButton.addEventListener("click", () => clearLogsDialog.close());
@@ -37,13 +35,14 @@ logFilter?.addEventListener("input", () => {
 await refreshLogs();
 
 async function refreshLogs(statusMessage = "Activity loaded") {
-  if (!desktopBridge?.isElectron) {
+  if (!bridge.isAvailable) {
     renderLogs([]);
+    setArchiveStatus("Activity is unavailable in this environment.", "error");
     return;
   }
 
   try {
-    logs = (await desktopBridge.getLogs()).map(normalizeLog).filter(Boolean);
+    logs = (await bridge.getLogs()).map(normalizeLog).filter(Boolean);
     renderLogs(logs);
     setArchiveStatus(statusMessage, "success");
   } catch (error) {
@@ -86,11 +85,11 @@ function setEmptyStateCopy(isFilteredOut) {
   if (!heading || !body) return;
   if (isFilteredOut) {
     heading.textContent = "Nothing matches that filter";
-    body.textContent = "No stored transcript, response, or error contains that text. Clear the filter to see everything again.";
+    body.textContent = "Clear the filter to see everything again.";
     return;
   }
   heading.textContent = "No activity yet";
-  body.textContent = "Start a transcription to place the first event here. Successful responses and operational errors are saved automatically.";
+  body.textContent = "Transcripts, responses, and errors are saved here automatically.";
 }
 
 function buildLogGroups(orderedLogs) {
@@ -248,7 +247,7 @@ function createStageActions(log) {
     const recovery = document.createElement("a");
     recovery.className = "log-recovery-link";
     recovery.href = "settings.html#provider";
-    recovery.textContent = "Open provider settings";
+    recovery.textContent = "Open Provider & models";
     actions.append(recovery);
   }
 
@@ -273,7 +272,7 @@ function createButtonLabel(text) {
 async function copyStageText(text, button) {
   const label = button.querySelector(".button-label");
   try {
-    if (desktopBridge?.writeClipboardText) await desktopBridge.writeClipboardText(text);
+    if (bridge.writeClipboardText) await bridge.writeClipboardText(text);
     else if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
     else throw new Error("Clipboard access is unavailable.");
     label.textContent = "Copied";
@@ -322,8 +321,7 @@ async function clearAllLogs() {
   cancelClearLogsButton.disabled = true;
   setArchiveStatus("Clearing response archive…", "loading");
   try {
-    if (!desktopBridge?.isElectron) throw new Error("Logs are available in the Electron app.");
-    logs = await desktopBridge.clearLogs();
+    logs = await bridge.clearLogs();
     renderLogs(logs);
     clearLogsDialog.close();
     setArchiveStatus("Archive cleared", "success");

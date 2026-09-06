@@ -273,25 +273,40 @@ test("Settings keeps backend recovery usable while runtime loading is pending or
   let reloads = 0;
   let saved;
   const runtimeRequest = new Promise((_resolve, reject) => { rejectRuntime = reject; });
+  const window = {
+    isSecureContext: true,
+    location: { reload: () => { reloads += 1; } },
+    MediaRecorder: class { static isTypeSupported() { return true; } },
+    localStorage: { getItem: () => "", setItem() {}, removeItem() {} },
+    porvozDesktop: {
+      isElectron: true,
+      getRuntimeConfig: () => runtimeRequest,
+      getBackendSettings: async () => ({ mode: "remote", connectedMode: "remote",
+        remoteUrl: "https://unavailable.example", adminKeyConfigured: true }),
+      saveBackendSettings: async (value) => { saved = value; }
+    }
+  };
   const context = vm.createContext({
     Audio: class {},
     document: { querySelector: element, querySelectorAll: () => [...elements.values()] },
-    window: {
-      location: { reload: () => { reloads += 1; } },
-      porvozDesktop: {
-        isElectron: true,
-        getRuntimeConfig: () => runtimeRequest,
-        getBackendSettings: async () => ({ mode: "remote", connectedMode: "remote",
-          remoteUrl: "https://unavailable.example", adminKeyConfigured: true }),
-        saveBackendSettings: async (value) => { saved = value; }
-      }
-    }
+    navigator: { mediaDevices: { getUserMedia: async () => ({}) } },
+    MediaRecorder: window.MediaRecorder,
+    window
   });
-  const runtimeSource = readFileSync(new URL("../public/runtime-config.js", import.meta.url), "utf8")
-    .replace("export async function", "async function");
-  const settingsSource = readFileSync(new URL("../public/settings.js", import.meta.url), "utf8")
-    .replace(/^import .*;\r?\n/gm, "");
-  const initialization = vm.runInContext(`(async () => {\n${runtimeSource}\n${settingsSource}\n})()`, context);
+  // The shared bridge and its capability check are inlined so this exercises
+  // the real desktop path rather than a stand-in for it.
+  const moduleSource = (name, extra = (value) => value) => extra(
+    readFileSync(new URL(`../public/${name}`, import.meta.url), "utf8")
+      .replace(/^import .*;\r?\n/gm, "")
+      .replace(/^export /gm, ""));
+  const bridgeSource = `const request = async () => ({}); const signOut = async () => {};\n`
+    + moduleSource("app-bridge.js");
+  const mediaSource = moduleSource("media-support.js");
+  const runtimeSource = moduleSource("runtime-config.js");
+  const settingsSource = moduleSource("settings.js");
+  const initialization = vm.runInContext(
+    `(async () => {\n${bridgeSource}\n${mediaSource}\n${runtimeSource}\n${settingsSource}\n})()`,
+    context);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(typeof element("#backend-form").listeners.get("submit"), "function");
   assert.equal(element("#backend-mode").disabled, false);

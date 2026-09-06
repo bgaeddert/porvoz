@@ -1,36 +1,54 @@
 const pageDetails = {
   provider: {
+    kicker: "Server settings",
     title: "Provider & models",
-    summary: "Manage the API connection and choose the models Porvoz uses."
+    summary: "API connection and model routing."
   },
-  capture: {
+  prefixes: {
+    kicker: "Server settings",
     title: "Prefixes",
-    summary: "Manage reusable voice prefixes and reset controls."
+    summary: "Voice prefixes and reset."
   },
   keyboard: {
+    kicker: "This computer",
     title: "Keyboard",
-    summary: "Choose the global shortcut and selection-copy behavior for recognized terminals on this computer."
+    summary: "Global shortcut and terminal selection copying."
   },
   sound: {
+    kicker: "This computer",
     title: "Sound",
-    summary: "Set the playback level for recording start and stop cues."
+    summary: "Recording cue volume."
   }
 };
 
+// Older links and bookmarks keep working. "capture" named this page before the
+// recorder page took that name.
 const legacyPageAliases = new Map([
-  ["instructions", "capture"],
-  ["advanced", "capture"]
+  ["capture", "prefixes"],
+  ["instructions", "prefixes"],
+  ["advanced", "prefixes"]
 ]);
 
-const links = [...document.querySelectorAll(".section-nav a[href^='#']")];
+const links = [...document.querySelectorAll(".main-nav a[href*='#']")];
 const sections = [...document.querySelectorAll(".settings-stack > .settings-card[data-settings-page]")];
+const pageKicker = document.querySelector("#settings-page-kicker");
 const pageTitle = document.querySelector("#settings-page-title");
 const pageSummary = document.querySelector("#settings-page-summary");
+// Desktop-only pages are removed from the browser document, so the set of
+// destinations comes from the sections this page actually has. A link or hash
+// naming a page that is not here falls back to the default below.
+const availablePages = new Set(sections.map((section) => section.dataset.settingsPage));
+
+// Whatever sits at the top of the navigation is where Porvoz opens.
+const DEFAULT_PAGE = "provider";
+
+function resolvePage(requestedPage) {
+  const page = legacyPageAliases.get(requestedPage) || requestedPage;
+  return availablePages.has(page) && Object.hasOwn(pageDetails, page) ? page : DEFAULT_PAGE;
+}
 
 function getRequestedPage() {
-  const requestedPage = window.location.hash.slice(1);
-  return legacyPageAliases.get(requestedPage)
-    || (Object.hasOwn(pageDetails, requestedPage) ? requestedPage : "capture");
+  return resolvePage(window.location.hash.slice(1));
 }
 
 function showRequestedPage() {
@@ -45,6 +63,7 @@ function showRequestedPage() {
     else link.removeAttribute("aria-current");
   });
 
+  if (pageKicker) pageKicker.textContent = details.kicker;
   pageTitle.textContent = details.title;
   pageSummary.textContent = details.summary;
   document.title = `Porvoz · ${details.title}`;
@@ -60,13 +79,8 @@ function showRequestedPage() {
 }
 
 const initialHash = window.location.hash.slice(1);
-if (!initialHash) {
-  window.history.replaceState(null, "", "#capture");
-} else if (legacyPageAliases.has(initialHash)) {
-  window.history.replaceState(null, "", `#${legacyPageAliases.get(initialHash)}`);
-} else if (!Object.hasOwn(pageDetails, initialHash)) {
-  window.history.replaceState(null, "", "#capture");
-}
+const initialPage = resolvePage(initialHash);
+if (initialHash !== initialPage) window.history.replaceState(null, "", `#${initialPage}`);
 
 window.addEventListener("hashchange", showRequestedPage);
 showRequestedPage();

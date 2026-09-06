@@ -3,11 +3,19 @@ import { timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import { createAppService } from "../electron/app-service.js";
 import { createDatabaseLogStore } from "./database-log-store.js";
+import { createWebAdmin } from "./web-admin.js";
 
 const JSON_LIMIT_BYTES = 2 * 1024 * 1024;
 
-export function createPorvozHttpServer({ store, adminKey, host = "127.0.0.1", port = 0 }) {
+export function createPorvozHttpServer({
+  store,
+  adminKey,
+  host = "127.0.0.1",
+  port = 0,
+  webAdmin: webAdminOptions = {}
+}) {
   if (!adminKey) throw new Error("PORVOZ_ADMIN_KEY is required.");
+  const webAdmin = createWebAdmin({ adminKey, ...webAdminOptions });
   const logStore = createDatabaseLogStore(store.getDatabase(), {
     maxEntries: store.getLimits().maxLogEntries
   });
@@ -26,9 +34,11 @@ export function createPorvozHttpServer({ store, adminKey, host = "127.0.0.1", po
     },
     async close() {
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      webAdmin.sessions.destroyAll();
       store.close();
     },
-    server
+    server,
+    webAdmin
   };
 
   async function handleRequest(request, response) {
@@ -37,16 +47,27 @@ export function createPorvozHttpServer({ store, adminKey, host = "127.0.0.1", po
     response.once("close", () => {
       if (!response.writableEnded) controller.abort();
     });
+    webAdmin.applySecurityHeaders(response);
     if (request.method === "GET" && url.pathname === "/health") {
       return sendJson(response, 200, { status: "ok" });
     }
 
+    if (await webAdmin.handleWebRequest(request, response, url)) return;
+
     const auth = authenticate(request);
+    if (auth?.type === "forgery") {
+      return sendOpenAiError(
+        response,
+        403,
+        "This browser request did not carry its Porvoz request token. Reload the page and sign in again.",
+        "invalid_request_token"
+      );
+    }
     if (!auth) return sendOpenAiError(response, 401, "Invalid or missing API key.", "invalid_api_key");
 
     if (request.method === "GET" && url.pathname === "/v1/models") {
       const settings = store.getSettings();
-      const profiles = auth.type === "admin"
+      const profiles = isAdministrative(auth)
         ? settings.profiles
         : settings.profiles.filter((profile) => profile.id === auth.profileId);
       return sendJson(response, 200, {
@@ -57,8 +78,8 @@ export function createPorvozHttpServer({ store, adminKey, host = "127.0.0.1", po
 
     if (request.method === "POST" && url.pathname === "/v1/audio/transcriptions") {
       const multipart = await readMultipart(request, store.getLimits().maxUploadBytes);
-      const profileId = auth.type === "admin" ? multipart.fields.model : auth.profileId;
-      if (!profileId) return sendOpenAiError(response, 400, "The desktop client must send a profile ID in model.", "invalid_request_error");
+      const profileId = auth.type === "inference" ? auth.profileId : multipart.fields.model;
+      if (!profileId) return sendOpenAiError(response, 400, "The client must send a profile ID in model.", "invalid_request_error");
       if (multipart.fields.response_format && multipart.fields.response_format !== "json") {
         return sendOpenAiError(response, 400, "Porvoz supports only the json transcription response format.", "invalid_request_error");
       }
@@ -86,7 +107,7 @@ export function createPorvozHttpServer({ store, adminKey, host = "127.0.0.1", po
       });
     }
 
-    if (auth.type !== "admin") {
+    if (!isAdministrative(auth)) {
       return sendOpenAiError(response, 403, "This endpoint requires the admin API key.", "permission_denied");
     }
 
@@ -170,11 +191,21 @@ export function createPorvozHttpServer({ store, adminKey, host = "127.0.0.1", po
   function authenticate(request) {
     const match = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || "");
     const key = match?.[1]?.trim();
-    if (!key) return null;
-    if (secureEqual(key, adminKey)) return { type: "admin" };
-    const profileId = store.resolveInferenceKey(key);
-    return profileId ? { type: "inference", profileId } : null;
+    if (key) {
+      if (secureEqual(key, adminKey)) return { type: "admin" };
+      const profileId = store.resolveInferenceKey(key);
+      return profileId ? { type: "inference", profileId } : null;
+    }
+    // An inference key can never reach this branch: it authenticates as a
+    // bearer key above and never establishes a browser session.
+    const browserSession = webAdmin.resolveRequestSession(request);
+    if (!browserSession) return null;
+    return browserSession.csrfValid ? { type: "web" } : { type: "forgery" };
   }
+}
+
+function isAdministrative(auth) {
+  return auth.type === "admin" || auth.type === "web";
 }
 
 function publicModel(profile) {

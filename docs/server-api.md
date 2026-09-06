@@ -7,6 +7,8 @@ See [server setup and migration](server-setup.md) for deployment, desktop connec
 - The admin key comes from `PORVOZ_ADMIN_KEY`. It permits all settings and activity operations. On transcription requests it treats `model` as an internal profile ID.
 - Every profile has one readable inference key. It permits only `/v1/models` and `/v1/audio/transcriptions` for its bound profile. The submitted `model` value is accepted for client compatibility and ignored.
 
+A third mode serves the browser administration website only. It uses a session cookie rather than a bearer key and is described under [Browser administration routes](#browser-administration-routes). Inference keys cannot obtain a session.
+
 `GET /health` is unauthenticated and returns `{"status":"ok"}`.
 
 ## OpenAI-compatible routes
@@ -59,7 +61,7 @@ The packaged upload limit is 25 MiB per audio file. Oversized audio returns HTTP
 
 ## Administrative routes
 
-All routes below require the admin key.
+All routes below require the admin key, or an authenticated browser session carrying its request token.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
@@ -82,3 +84,19 @@ All routes below require the admin key.
 | `POST` | `/v1/porvoz/reset` | Reset server-owned configuration and activity |
 
 The local desktop additionally uses `/v1/porvoz/import` once when migrating a pre-server installation. It is an internal migration route and should not be used by third-party clients.
+
+## Browser administration routes
+
+These exist only when the website is enabled (`PORVOZ_WEB_ADMIN` is not `off`). They are for the site's own pages, not for API clients.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/web/login` | Exchange `{"adminKey":"…"}` for a session; requires an `application/json` body |
+| `POST` | `/api/web/logout` | End the session and clear its cookies |
+| `GET` | `/api/web/session` | Report sign-in state, server version, secure-context status, and session timeouts |
+
+Sign-in sets two cookies: `porvoz_session` (HttpOnly, SameSite=Strict, `Secure` over HTTPS) and `porvoz_csrf`. Every session-authenticated request to `/v1/...` and `/api/web/logout` must repeat the `porvoz_csrf` value in an `x-porvoz-csrf` header; without it the server answers `403` with code `invalid_request_token`. Requests carrying a bearer key are unaffected.
+
+Sign-in is refused with `403` when the browser reached the server over plain HTTP at a host that is not a localhost address, unless `PORVOZ_WEB_ALLOW_INSECURE=true`. Repeated failures are rate limited with `429` and a `Retry-After` header.
+
+The website's pages and assets are served from an explicit allowlist: `/` (sign-in), `/index.html` (Test), `/settings.html`, `/logs.html`, and the scripts and styles those pages need. `/test`, `/activity`, `/settings`, `/prefixes`, and `/provider` redirect to their pages, and `/capture` still reaches Test for older links. A request for an administration page without a session redirects to `/` with a `reason` explaining whether sign-in is required or a session expired. Desktop overlay pages and recording cue audio are not served.

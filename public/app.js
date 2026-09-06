@@ -1,6 +1,8 @@
 import { loadRuntimeConfig } from "./runtime-config.js";
 import { MINIMUM_RECORDING_DURATION_MS, isRecordingTooShort } from "./capture-policy.js";
 import { setButtonIcon, setButtonLabel } from "./icons.js";
+import { bridge } from "./app-bridge.js";
+import { createRecorder, getRecordingSupport } from "./media-support.js";
 
 const transcribeButton = document.querySelector("#transcribe");
 const clearButton = document.querySelector("#clear");
@@ -9,11 +11,12 @@ const transcript = document.querySelector("#transcript");
 const instructionResponse = document.querySelector("#instruction-response");
 const hotkeyHint = document.querySelector("#hotkey-hint");
 const captureSignal = document.querySelector("#capture-signal");
-const desktopBridge = window.porvozDesktop;
+const recordingNotice = document.querySelector("#recording-unavailable");
 const MICROPHONE_REQUEST_TIMEOUT_MS = 10_000;
 
 const runtimeConfig = await loadRuntimeConfig();
-let hotkeySoundVolume = runtimeConfig.soundVolume;
+const recordingSupport = getRecordingSupport();
+let hotkeySoundVolume = normalizeSoundVolume(runtimeConfig.soundVolume);
 
 let isTranscribing = false;
 let isTranscriptionProcessing = false;
@@ -27,11 +30,15 @@ let recordingStartedAt = 0;
 let mediaRecorder;
 let transcriptionStream;
 let recordedChunks = [];
-const hotkeySounds = {
-  start: createHotkeySound("./assets/recording-start.mp3"),
-  stop: createHotkeySound("./assets/recording-stop.mp3"),
-  failure: createHotkeySound("./assets/text-input-failure.mp3")
-};
+// Recording cues are a desktop affordance; the browser site never plays them
+// and never requests their audio files.
+const hotkeySounds = bridge.features.sounds
+  ? {
+      start: createHotkeySound("./assets/recording-start.mp3"),
+      stop: createHotkeySound("./assets/recording-stop.mp3"),
+      failure: createHotkeySound("./assets/text-input-failure.mp3")
+    }
+  : {};
 
 transcribeButton.addEventListener("click", () => {
   if (isTranscribing) {
@@ -43,9 +50,9 @@ transcribeButton.addEventListener("click", () => {
 
 clearButton.addEventListener("click", clearTranscript);
 
-if (desktopBridge?.isElectron) {
+if (bridge.features.hotkeys) {
   hotkeyHint.hidden = false;
-  desktopBridge.onHotkey((action, payload) => {
+  bridge.onHotkey((action, payload) => {
     if (action === "start" && !isTranscribing && !isTranscriptionProcessing) {
       startTranscription({
         typeResultAtCursor: true,
@@ -61,7 +68,7 @@ if (desktopBridge?.isElectron) {
       stopTranscription();
     }
   });
-  desktopBridge.onActivityCanceled(() => {
+  bridge.onActivityCanceled(() => {
     const hadActivity = isTranscribing || isTranscriptionProcessing || isTypingResponse || stopRequested;
     if (!hadActivity) return;
     activityGeneration += 1;
@@ -75,10 +82,10 @@ if (desktopBridge?.isElectron) {
     });
     setStatus("Canceled.", "idle");
   });
-  desktopBridge.onHotkeyUpdated((hotkey) => {
+  bridge.onHotkeyUpdated((hotkey) => {
     hotkeyHint.textContent = `Hold ${hotkey.label} to record. Double-tap to view the last response.`;
   });
-  desktopBridge.onSoundVolumeUpdated((soundVolume) => {
+  bridge.onSoundVolumeUpdated((soundVolume) => {
     hotkeySoundVolume = normalizeSoundVolume(soundVolume);
   });
   initializeDesktopHotkeyHint();
@@ -86,7 +93,19 @@ if (desktopBridge?.isElectron) {
 
 autoResizeTextarea(transcript);
 autoResizeTextarea(instructionResponse);
+renderRecordingSupport();
 updateActionButtons();
+
+// Both recording entry points share one capability check and one explanation.
+// The page stays usable with recording turned off rather than hiding itself.
+function renderRecordingSupport() {
+  if (!recordingNotice) return;
+  recordingNotice.hidden = recordingSupport.supported;
+  if (!recordingSupport.supported) {
+    recordingNotice.textContent = recordingSupport.message;
+    setStatus("Recording is unavailable on this connection.", "error");
+  }
+}
 
 async function startTranscription({
   typeResultAtCursor = false,
@@ -94,10 +113,9 @@ async function startTranscription({
   playStartCue = false
 } = {}) {
   const generation = activityGeneration;
-  if (!window.MediaRecorder) {
-    const error = new Error("This Electron build does not support audio recording.");
-    logClientError("recording", error);
-    setStatus(error.message, "error", "recording");
+  if (!recordingSupport.supported) {
+    logClientError("recording", new Error(recordingSupport.message));
+    setStatus(recordingSupport.message, "error", "recording");
     return;
   }
 
@@ -134,7 +152,7 @@ async function startTranscription({
       }
     }
     recordedChunks = [];
-    mediaRecorder = new MediaRecorder(transcriptionStream);
+    mediaRecorder = createRecorder(transcriptionStream, recordingSupport.mimeType);
     mediaRecorder.addEventListener("dataavailable", (event) => {
       if (event.data.size) recordedChunks.push(event.data);
     });
@@ -241,8 +259,7 @@ async function processTranscription() {
 
   let processStage = "transcription";
   try {
-    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
-    const result = await desktopBridge.transcribe({
+    const result = await bridge.transcribe({
       audio: await audio.arrayBuffer(),
       mimeType: audio.type,
       captureId
@@ -354,7 +371,7 @@ function setStatus(message, state = "idle", stage = "") {
     const recovery = document.createElement("a");
     recovery.className = "status-recovery";
     recovery.href = "settings.html#provider";
-    recovery.textContent = "Open provider settings";
+    recovery.textContent = "Open Provider & models";
     status.append(recovery);
   }
   captureSignal.dataset.state = state;
@@ -365,22 +382,22 @@ function setStatus(message, state = "idle", stage = "") {
       : state === "error"
         ? "Action needs attention"
         : "System ready");
-  desktopBridge?.setStatus?.({ message, state, stage });
+  bridge.setStatus?.({ message, state, stage });
 }
 
 function logClientError(stage, error, metadata = {}) {
-  if (!desktopBridge?.isElectron || typeof desktopBridge.logError !== "function") return;
+  if (typeof bridge.logError !== "function") return;
   const message = typeof error?.message === "string" && error.message.trim()
     ? error.message
     : String(error || "Unknown error.");
-  void desktopBridge.logError({ stage, message, ...metadata }).catch((logError) => {
+  void bridge.logError({ stage, message, ...metadata }).catch((logError) => {
     console.warn("Could not save client error log:", logError);
   });
 }
 
 async function initializeDesktopHotkeyHint() {
   try {
-    const hotkey = await desktopBridge.getHotkey();
+    const hotkey = await bridge.getHotkey();
     if (hotkey?.label) hotkeyHint.textContent = `Hold ${hotkey.label} to record. Double-tap to view the last response.`;
   } catch (error) {
     console.error(error);
@@ -388,11 +405,12 @@ async function initializeDesktopHotkeyHint() {
 }
 
 async function typeFinalResponse(text, captureId = "", purpose = "transcription") {
-  if (!desktopBridge?.isElectron || !text) return;
+  // The website displays results in the page; it never types into other apps.
+  if (!bridge.features.typing || !text) return;
   const generation = activityGeneration;
   isTypingResponse = true;
   try {
-    await desktopBridge.typeText({ text, captureId, purpose });
+    await bridge.typeText({ text, captureId, purpose });
   } catch (error) {
     if (generation !== activityGeneration || isCancellationError(error)) return;
     console.error(error);
@@ -406,7 +424,7 @@ async function typeFinalResponse(text, captureId = "", purpose = "transcription"
 async function typeConfigurationWarning(message) {
   const warningMessage = typeof message === "string" && message.trim()
     ? message
-    : "Open Porvoz Settings and finish setup before using the hotkey.";
+    : "Open Porvoz and finish setup in Provider & models before using the hotkey.";
   setStatus(warningMessage, "error");
   await typeFinalResponse(warningMessage, "", "configuration-warning");
 }
@@ -414,7 +432,7 @@ async function typeConfigurationWarning(message) {
 function updateActionButtons() {
   const audioBusy = isTranscribing || isTranscriptionProcessing;
   clearButton.disabled = audioBusy;
-  transcribeButton.disabled = isTranscriptionProcessing;
+  transcribeButton.disabled = isTranscriptionProcessing || !recordingSupport.supported;
 }
 
 function createHotkeySound(source) {

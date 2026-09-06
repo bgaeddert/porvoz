@@ -85,7 +85,6 @@
   --radius-lg: 6px;
   --control-h: 32px;
   --sidebar-w: 196px;
-  --sidebar-w-collapsed: 64px;
 
   --shadow-card: 0 2px 5px rgb(0 0 0 / 24%);
   --shadow-pop: 0 8px 22px rgb(0 0 0 / 36%);
@@ -252,6 +251,10 @@ button,
 .nav-link {
   display: flex;
   align-items: center;
+  /* Buttons centre their contents by default, and Log out is a button. Stating
+     the alignment here keeps every entry on the same line as its icon, while
+     the collapsed rail below still overrides it. */
+  justify-content: flex-start;
   gap: 10px;
   min-height: 32px;
   padding: 0 10px;
@@ -277,49 +280,32 @@ button,
 }
 
 .nav-link-active,
+.nav-link[aria-current="page"],
 .nav-link-active:hover,
-.nav-link-active:focus-visible {
+.nav-link[aria-current="page"]:hover,
+.nav-link-active:focus-visible,
+.nav-link[aria-current="page"]:focus-visible {
   border-color: var(--n-500);
   background: var(--n-700);
   color: var(--n-050);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.section-nav {
-  display: grid;
-  gap: 1px;
-  margin: 18px 8px 0;
-  padding-top: 14px;
+/* Log out is an action rather than a destination, so it is a button that has
+   to be told to look like the links beside it. */
+button.nav-link {
+  width: 100%;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Separates what you configure from what you use to check it. */
+.nav-divider {
+  width: auto;
+  margin: 8px 6px;
+  border: 0;
   border-top: 1px solid var(--n-600);
-}
-
-.section-nav p {
-  margin: 0 0 6px;
-  color: var(--n-300);
-  font-size: var(--fs-100);
-  font-weight: 650;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-}
-
-.section-nav a {
-  padding: 6px 7px;
-  border-radius: var(--radius-sm);
-  color: var(--n-200);
-  font-size: var(--fs-300);
-  text-decoration: none;
-}
-
-.section-nav a:hover,
-.section-nav a:focus-visible {
-  background: var(--n-650);
-  color: var(--n-050);
-}
-
-.section-nav a[aria-current="page"] {
-  background: var(--n-700);
-  color: var(--n-050);
-  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .sidebar-meta {
@@ -581,7 +567,6 @@ textarea:focus-visible,
 button:focus-visible,
 .brand:focus-visible,
 .nav-link:focus-visible,
-.section-nav a:focus-visible,
 .setup-warning-link:focus-visible,
 .log-prompt-details summary:focus-visible,
 .prefix-row:focus-visible {
@@ -2054,34 +2039,79 @@ kbd {
    ========================================================================== */
 
 @media (max-width: 820px) {
+  /* Navigation crosses the bottom of the window, within thumb reach on a
+     phone, and the content gets the whole width. */
   .app-shell {
-    grid-template-columns: var(--sidebar-w-collapsed) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .app-sidebar {
-    padding-inline: 7px;
+    position: fixed;
+    z-index: 20;
+    inset: auto 0 0;
+    height: auto;
+    flex-direction: row;
+    padding: 5px 6px;
+    padding-bottom: calc(5px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--n-600);
+    border-right: 0;
   }
 
-  .brand {
-    justify-content: center;
-    padding-inline: 0;
-  }
-
-  .brand-copy,
-  .nav-link span,
-  .section-nav {
+  /* The brand mark and version have no room here; the version stays reachable
+     through the brand's tooltip on wider windows. */
+  .brand,
+  .sidebar-meta,
+  .nav-divider {
     display: none;
   }
 
-  /* Nothing legible fits in a 64px rail; the version lives in the brand's
-     tooltip instead of overflowing off the left edge of the window. */
-  .sidebar-meta {
-    display: none;
+  .main-nav {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    margin-top: 0;
+    gap: 3px;
   }
 
   .nav-link {
+    /* Equal shares of the bar, each a comfortable touch target. */
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 46px;
+    flex-direction: column;
     justify-content: center;
-    padding: 0;
+    gap: 3px;
+    padding: 0 2px;
+    box-shadow: none;
+  }
+
+  /* Every entry is one short word, so the label comes along rather than
+     leaving a row of unexplained icons. */
+  .nav-link span {
+    display: block;
+    overflow: hidden;
+    max-width: 100%;
+    font-size: var(--fs-100);
+    font-weight: 600;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav-link .icon {
+    width: 19px;
+    height: 19px;
+    flex: 0 0 19px;
+  }
+
+  .nav-link-active,
+  .nav-link[aria-current="page"] {
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+
+  .app-workspace {
+    /* Clears the fixed bar so the last control is never trapped behind it. */
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
   }
 
   .profile-switcher,
@@ -2114,6 +2144,7 @@ kbd {
 
 @media (max-width: 560px) {
   .workspace-header {
+    min-height: 0;
     padding-inline: 15px;
   }
 
@@ -2135,12 +2166,132 @@ kbd {
     margin-left: 0;
   }
 
+  /* Name and Copy share the top line; the instruction gets the width beneath,
+     so a list of prefixes stays scannable instead of three lines each. */
   .prefix-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 4px 10px;
+  }
+
+  .prefix-row-name {
+    grid-area: 1 / 1;
+    align-self: center;
+  }
+
+  .prefix-row-actions {
+    grid-area: 1 / 2;
+  }
+
+  .prefix-row-instruction {
+    grid-column: 1 / -1;
+  }
+
+  /* Status text and its button stop competing for one line. */
+  .form-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .sound-volume-control {
     width: 100%;
+  }
+
+  /* A phone has no room for a row of side-by-side buttons; each one takes the
+     width so its label stays readable. */
+  .settings-heading-actions > button,
+  .prefix-heading-actions,
+  .prefix-heading-actions > button,
+  .dialog-actions,
+  .dialog-actions > button,
+  .capture-controls,
+  .capture-controls > button,
+  .inference-key-row {
+    width: 100%;
+  }
+
+  /* A flex-basis meant for a row becomes a height once the toolbar stacks, so
+     these children size to their content instead. */
+  .logs-filter,
+  .log-counter {
+    flex: 0 0 auto;
+  }
+
+  .logs-toolbar-actions {
+    justify-content: space-between;
+  }
+
+  .prefix-heading-actions,
+  .dialog-actions,
+  .capture-controls,
+  .inference-key-row {
+    display: grid;
+    gap: 8px;
+  }
+
+  /* A single full-width column. Without it the row's flex alignment survives
+     into grid, packing the buttons to one side at their natural width. */
+  .prefix-heading-actions,
+  .dialog-actions,
+  .capture-controls {
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+    justify-items: stretch;
+  }
+
+  .settings-card {
+    padding: 13px 14px;
+  }
+
+  /* Full-bleed strips inside a card are cut to the card's padding, which is
+     tighter here than on a wide window. */
+  .settings-heading {
+    margin: -13px -14px 12px;
+    padding: 10px 14px;
+  }
+
+  .security-note {
+    margin: 12px -14px -13px;
+    padding: 9px 14px;
+  }
+
+  .capture-panel {
+    padding: 13px 14px;
+  }
+
+  .capture-header {
+    margin: -13px -14px 12px;
+    padding: 10px 14px;
+  }
+
+  /* The key needs the full width to be readable, so its two actions share the
+     row beneath it. */
+  .inference-key-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .inference-key-row input {
+    grid-column: 1 / -1;
+  }
+
+  .log-stage {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A phone in portrait: the sidebar keeps its bar, and text sizes hold rather
+   than shrinking below what is comfortable to read. */
+@media (max-width: 380px) {
+  .nav-link span {
+    font-size: 10px;
+  }
+
+  .workspace-header h1 {
+    font-size: var(--fs-500);
+  }
+
+  .page-main {
+    padding: 10px;
   }
 }
 
@@ -2162,4 +2313,110 @@ kbd {
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
+}
+
+/* ============================================================================
+   Sign in (browser administration)
+   ========================================================================== */
+
+.login-body {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--n-950);
+}
+
+.login-shell {
+  width: 100%;
+  max-width: 420px;
+}
+
+.login-card {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid var(--n-600);
+  border-radius: var(--radius-md);
+  background: var(--n-850);
+  box-shadow: var(--shadow-card);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--n-600);
+}
+
+.login-brand-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+
+.login-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.login-copy h1 {
+  margin: 0;
+  font-size: var(--fs-500);
+  font-weight: 650;
+}
+
+.login-lede {
+  margin: 0;
+  color: var(--n-300);
+  font-size: var(--fs-200);
+}
+
+.login-notice {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--accent-line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+  font-size: var(--fs-200);
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.login-submit {
+  justify-content: center;
+  width: 100%;
+}
+
+.login-footnote,
+.login-version {
+  margin: 0;
+  color: var(--n-400);
+  font-size: var(--fs-100);
+}
+
+.login-version {
+  padding-top: 14px;
+  border-top: 1px solid var(--n-600);
+}
+
+/* ============================================================================
+   Browser administration chrome
+   ========================================================================== */
+
+.recording-unavailable {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius-sm);
+  background: var(--warning-tint);
+  color: var(--warning-text);
+  font-size: var(--fs-200);
 }

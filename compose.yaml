@@ -9,6 +9,14 @@ services:
       PORVOZ_DATABASE_PATH: /data/porvoz.db
       PORVOZ_HOST: 0.0.0.0
       PORVOZ_PORT: 8080
+      # Browser administration. Sign-in is refused over plain HTTP unless the
+      # request reaches the server at a localhost address, or this is "true"
+      # for a trusted network. Recording still needs HTTPS or localhost.
+      PORVOZ_WEB_ADMIN: ${PORVOZ_WEB_ADMIN:-on}
+      PORVOZ_WEB_ALLOW_INSECURE: ${PORVOZ_WEB_ALLOW_INSECURE:-false}
+      # Addresses whose X-Forwarded-Proto and X-Forwarded-Host are believed,
+      # for example an HTTPS terminating reverse proxy: "172.18.0.0/16".
+      PORVOZ_TRUSTED_PROXIES: ${PORVOZ_TRUSTED_PROXIES:-}
     ports:
       - "${PORVOZ_PORT:-8080}:8080"
     volumes:

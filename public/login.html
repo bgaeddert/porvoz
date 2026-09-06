@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0c0f13" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" />
+    <title>Porvoz · Sign in</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="login-body">
+    <main class="login-shell">
+      <section class="login-card" aria-labelledby="login-heading">
+        <div class="login-brand">
+          <img class="login-brand-icon" src="/assets/icon.svg" alt="" aria-hidden="true" />
+          <div class="brand-copy">
+            <span class="brand-name">Porvoz</span>
+            <span class="brand-kind">Server administration</span>
+          </div>
+        </div>
+
+        <div class="login-copy">
+          <h1 id="login-heading">Administer this Porvoz server</h1>
+          <p class="login-lede">Enter this server's admin key. There is no user name.</p>
+        </div>
+
+        <p id="login-notice" class="login-notice" role="status" hidden></p>
+
+        <form id="login-form" class="login-form" novalidate>
+          <label class="field-label" for="admin-key">
+            Admin key
+            <input
+              id="admin-key"
+              name="adminKey"
+              type="password"
+              autocomplete="current-password"
+              spellcheck="false"
+              required
+              placeholder="Paste the server admin key"
+            />
+          </label>
+          <button id="sign-in" class="button-primary login-submit" type="submit">Sign in</button>
+          <p id="login-status" class="field-note" aria-live="polite"></p>
+        </form>
+
+        <p class="login-footnote">
+          Administers only this server. Recording needs HTTPS or a localhost address.
+        </p>
+        <p class="login-version"><span data-app-version>Version unavailable</span></p>
+      </section>
+    </main>
+    <script type="module" src="/login.js"></script>
+  </body>
+</html>

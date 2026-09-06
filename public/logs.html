@@ -4,30 +4,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0c0f13" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" />
     <title>Porvoz · Activity</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="app-sidebar">
-        <a class="brand" href="index.html">
-          <img class="brand-icon" src="../electron/assets/icon.png?v=21c0d164" alt="" aria-hidden="true" />
+        <a class="brand" href="settings.html#provider">
+          <img class="brand-icon" src="./assets/icon.svg" alt="" aria-hidden="true" />
           <span class="brand-copy"><span class="brand-name">Porvoz</span><span class="brand-kind">Voice utility</span></span>
         </a>
         <nav class="main-nav" aria-label="Primary navigation">
-          <a class="nav-link" href="index.html" title="Capture">
+          <a class="nav-link" href="settings.html#provider" title="Provider">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M6 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M15 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0"/><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h11M19 18h1"/></svg>
+            <span>Provider</span>
+          </a>
+          <a class="nav-link" href="settings.html#prefixes" title="Prefixes">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2-2a2 2 0 0 1-2-2a2 2 0 0 1-2 2m0-12a2 2 0 0 1 2 2a2 2 0 0 1 2-2a2 2 0 0 1-2-2a2 2 0 0 1-2 2m-7 12a6 6 0 0 1 6-6a6 6 0 0 1-6-6a6 6 0 0 1-6 6a6 6 0 0 1 6 6"/></svg>
+            <span>Prefixes</span>
+          </a>
+          <a class="nav-link" href="settings.html#keyboard" title="Keyboard" data-desktop-only>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M10 14h4"/></svg>
+            <span>Keyboard</span>
+          </a>
+          <a class="nav-link" href="settings.html#sound" title="Sound" data-desktop-only>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5a.8.8 0 0 1 1.5.5v14a.8.8 0 0 1-1.5.5z"/><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14"/></svg>
+            <span>Sound</span>
+          </a>
+          <hr class="nav-divider" />
+          <a class="nav-link" href="index.html" title="Test">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0V5"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg>
-            <span>Capture</span>
+            <span>Test</span>
           </a>
           <a class="nav-link nav-link-active" href="logs.html" aria-current="page" title="Activity">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg>
             <span>Activity</span>
           </a>
-          <a class="nav-link" href="settings.html" title="Settings">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15.03 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15"/></svg>
-            <span>Settings</span>
-          </a>
+          <hr class="nav-divider" data-web-only hidden />
+          <button id="sign-out" class="nav-link" type="button" data-web-only hidden title="Log out">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2"/><path d="M9 12h12M18 9l3 3-3 3"/></svg>
+            <span>Log out</span>
+          </button>
         </nav>
         <div class="sidebar-meta" aria-label="Application version"><span class="sidebar-meta-name">Porvoz</span><span data-app-version>Version unavailable</span></div>
       </aside>
@@ -49,9 +67,9 @@
           </span>
           <div class="setup-warning-copy">
             <p id="setup-warning-label" class="panel-kicker">Configuration needed</p>
-            <p id="setup-warning-message" class="setup-warning-message">Open Settings to finish configuring Porvoz.</p>
+            <p id="setup-warning-message" class="setup-warning-message">Open Provider &amp; models to finish configuring Porvoz.</p>
           </div>
-          <a class="setup-warning-link" href="settings.html">Open Settings</a>
+          <a class="setup-warning-link" href="settings.html#provider">Open Provider &amp; models</a>
         </aside>
         <section class="logs-toolbar" aria-label="Activity controls">
           <div class="logs-filter">
@@ -82,7 +100,6 @@
         <section class="logs-ledger" aria-labelledby="ledger-heading">
           <div class="logs-section-heading">
             <div>
-              <p class="panel-kicker">History</p>
               <h2 id="ledger-heading">Recent activity</h2>
             </div>
             <span id="logs-status" class="logs-status" aria-live="polite">Loading activity…</span>
@@ -99,7 +116,7 @@
             </span>
             <div>
               <h2>No activity yet</h2>
-              <p>Start a transcription to place the first event here. Successful responses and operational errors are saved automatically.</p>
+              <p>Transcripts, responses, and errors are saved here automatically.</p>
             </div>
           </div>
         </section>
@@ -110,9 +127,8 @@
 
     <dialog id="clear-logs-dialog" class="reset-dialog logs-clear-dialog" aria-labelledby="clear-logs-heading">
       <form method="dialog" class="reset-dialog-card">
-        <p class="panel-kicker">Confirm clear</p>
-        <h2 id="clear-logs-heading">Erase the response trail?</h2>
-        <p>This permanently removes every transcript, instruction response, and error saved in Porvoz. Your settings and API connection will stay untouched.</p>
+        <h2 id="clear-logs-heading">Clear all activity?</h2>
+        <p data-shared-server-text="Permanently removes every transcript, response, and error on this server, for every client connected to it. Settings and API connections are untouched.">Permanently removes every transcript, response, and error. Settings and API connections are untouched.</p>
         <div class="dialog-actions">
           <button id="cancel-clear-logs" class="button-secondary" value="cancel" type="submit">Keep logs</button>
           <button id="confirm-clear-logs" class="button-danger button-with-icon" value="confirm" type="button">
@@ -128,6 +144,24 @@
         </div>
       </form>
     </dialog>
+
+    <dialog id="sign-out-dialog" class="reset-dialog" aria-labelledby="sign-out-dialog-heading" data-web-only hidden>
+      <form method="dialog" class="reset-dialog-card">
+        <h2 id="sign-out-dialog-heading">Log out?</h2>
+        <p>You will need this server's admin key to sign in again.</p>
+        <div class="dialog-actions">
+          <button id="cancel-sign-out" class="button-secondary" value="cancel" type="submit">Stay signed in</button>
+          <button id="confirm-sign-out" class="button-danger button-with-icon" value="confirm" type="button">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M14 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2" />
+              <path d="M9 12h12M18 9l3 3-3 3" />
+            </svg>
+            <span class="button-label">Log out</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <script type="module" src="./environment-chrome.js"></script>
     <script type="module" src="./app-version.js"></script>
     <script type="module" src="./setup-warning.js"></script>
     <script type="module" src="./logs.js"></script>

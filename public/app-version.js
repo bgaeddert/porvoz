@@ -1,10 +1,11 @@
-const desktopBridge = window.porvozDesktop;
+import { bridge } from "./app-bridge.js";
+
 const versionTargets = document.querySelectorAll("[data-app-version]");
 const brand = document.querySelector(".brand");
 
-if (desktopBridge?.isElectron && versionTargets.length) {
+if (bridge.isAvailable && versionTargets.length) {
   try {
-    const version = await desktopBridge.getAppVersion();
+    const version = await bridge.getAppVersion();
     if (typeof version === "string" && version.trim()) {
       versionTargets.forEach((target) => {
         target.textContent = `v${version.trim()}`;
