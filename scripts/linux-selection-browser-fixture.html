@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Porvoz Chrome selection fixture</title>
+<h1>Disposable Porvoz selection test</h1>
+<textarea id="editor" autofocus rows="8" cols="60">Before ORIGINAL after</textarea>
+<script>
+  const editor = document.getElementById('editor');
+  setTimeout(() => { editor.focus(); editor.setSelectionRange(7, 15); }, 500);
+  editor.addEventListener('input', () => {
+    document.title = editor.value === 'Before REPLACED café 日本語 after'
+      ? 'Porvoz Chrome selection fixture PASS' : 'Porvoz Chrome selection fixture FAIL';
+  });
+</script>

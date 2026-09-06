@@ -49,9 +49,6 @@ const modelPickerStatus = document.querySelector("#model-picker-status");
 const closeModelPickerButton = document.querySelector("#close-model-picker");
 const cancelModelPickerButton = document.querySelector("#cancel-model-picker");
 const saveModelPickerButton = document.querySelector("#save-model-picker");
-const instructionPrompt = document.querySelector("#instruction-prompt");
-const promptStatus = document.querySelector("#prompt-status");
-const resetPromptButton = document.querySelector("#reset-prompt");
 const addPrefixButton = document.querySelector("#add-prefix");
 const importPrefixButton = document.querySelector("#import-prefix");
 const refreshPrefixesButton = document.querySelector("#refresh-prefixes");
@@ -76,14 +73,12 @@ const prefixRecordStopButton = document.querySelector("#prefix-record-stop");
 const prefixPreviewTranscript = document.querySelector("#prefix-preview-transcript");
 const prefixPreviewName = document.querySelector("#prefix-preview-name");
 const prefixPreviewInstruction = document.querySelector("#prefix-preview-instruction");
-const prefixPreviewSearch = document.querySelector("#prefix-preview-search");
 const prefixPreviewClipboard = document.querySelector("#prefix-preview-clipboard");
 const prefixPreviewStatus = document.querySelector("#prefix-preview-status");
 const prefixPreviewCancelButton = document.querySelector("#prefix-preview-cancel");
 const prefixPreviewAddButton = document.querySelector("#prefix-preview-add");
 const prefixEditName = document.querySelector("#prefix-edit-name");
 const prefixEditInstruction = document.querySelector("#prefix-edit-instruction");
-const prefixEditSearch = document.querySelector("#prefix-edit-search");
 const prefixEditClipboard = document.querySelector("#prefix-edit-clipboard");
 const prefixEditStatus = document.querySelector("#prefix-edit-status");
 const prefixEditRemoveButton = document.querySelector("#prefix-edit-remove");
@@ -94,8 +89,6 @@ const resetDialog = document.querySelector("#reset-dialog");
 const confirmResetButton = document.querySelector("#confirm-reset");
 const cancelResetButton = document.querySelector("#cancel-reset");
 const resetStatus = document.querySelector("#reset-status");
-const promptResetDialog = document.querySelector("#prompt-reset-dialog");
-const confirmPromptResetButton = document.querySelector("#confirm-prompt-reset");
 const captureHotkeyButton = document.querySelector("#capture-hotkey");
 const cancelHotkeyButton = document.querySelector("#cancel-hotkey");
 const hotkeyDisplay = document.querySelector("#hotkey-display");
@@ -110,7 +103,6 @@ const desktopBridge = window.porvozDesktop;
 let runtimeConfig;
 let prefixConfig = [];
 let isCapturingHotkey = false;
-let promptSaveTimer;
 let prefixSaveTimer;
 let prefixSaveQueue = Promise.resolve();
 let modelSaveQueue = Promise.resolve();
@@ -150,7 +142,6 @@ async function initializeSettings() {
   baseUrlInput.maxLength = 2048;
   apiKeyInput.maxLength = 4096;
   profileNameInput.maxLength = runtimeConfig.limits.maxProfileNameCharacters;
-  instructionPrompt.maxLength = runtimeConfig.limits.maxInstructionPromptCharacters;
   prefixEditName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
   prefixEditInstruction.maxLength = runtimeConfig.limits.maxPrefixInstructionCharacters;
   prefixPreviewName.maxLength = runtimeConfig.limits.maxPrefixNameCharacters;
@@ -159,7 +150,6 @@ async function initializeSettings() {
   renderProfiles();
   loadConnectionSettings();
   renderModels();
-  initializeInstructionPrompt();
   renderPrefixes();
   renderSoundVolume(runtimeConfig.soundVolume);
   await initializeHotkey();
@@ -191,8 +181,6 @@ async function initializeSettings() {
   cancelModelPickerButton.addEventListener("click", () => modelPickerDialog.close());
   saveModelPickerButton.addEventListener("click", saveModelPickerSelection);
   modelPickerDialog.addEventListener("close", resetModelPicker);
-  instructionPrompt.addEventListener("input", handlePromptInput);
-  resetPromptButton.addEventListener("click", () => promptResetDialog.showModal());
   addPrefixButton.addEventListener("click", openPrefixDialog);
   importPrefixButton.addEventListener("click", importPrefixFromClipboard);
   refreshPrefixesButton.addEventListener("click", refreshPrefixes);
@@ -211,7 +199,6 @@ async function initializeSettings() {
   prefixDialog.addEventListener("close", resetPrefixDialog);
   resetDefaultsButton.addEventListener("click", () => resetDialog.showModal());
   confirmResetButton.addEventListener("click", resetToDefaults);
-  confirmPromptResetButton.addEventListener("click", resetPromptToDefault);
   cancelResetButton.addEventListener("click", () => resetDialog.close());
   captureHotkeyButton.addEventListener("click", beginHotkeyCapture);
   cancelHotkeyButton.addEventListener("click", cancelHotkeyCapture);
@@ -763,49 +750,6 @@ function getModelPickerOptions() {
   return Array.from(modelPickerMenu.querySelectorAll("[role=option]"));
 }
 
-function initializeInstructionPrompt() {
-  instructionPrompt.value = runtimeConfig.prompt;
-  autoResizeTextarea(instructionPrompt);
-}
-
-function handlePromptInput() {
-  autoResizeTextarea(instructionPrompt);
-  clearTimeout(promptSaveTimer);
-  promptStatus.textContent = "Saving…";
-  promptStatus.dataset.state = "saving";
-  promptSaveTimer = setTimeout(async () => {
-    try {
-      runtimeConfig.prompt = await desktopBridge.savePrompt(instructionPrompt.value);
-      promptStatus.textContent = "Saved.";
-      promptStatus.dataset.state = "success";
-    } catch (error) {
-      promptStatus.textContent = error.message || "Could not save the prompt.";
-      promptStatus.dataset.state = "error";
-    }
-  }, 250);
-}
-
-async function resetPromptToDefault(event) {
-  event.preventDefault();
-  clearTimeout(promptSaveTimer);
-  confirmPromptResetButton.disabled = true;
-  promptStatus.textContent = "Restoring the packaged prompt…";
-  promptStatus.dataset.state = "saving";
-  try {
-    if (!desktopBridge?.isElectron) throw new Error("Porvoz must be running as the Electron app.");
-    runtimeConfig.prompt = await desktopBridge.resetPrompt();
-    initializeInstructionPrompt();
-    promptResetDialog.close();
-    promptStatus.textContent = "Prompt reset to defaults.";
-    promptStatus.dataset.state = "success";
-  } catch (error) {
-    promptStatus.textContent = error.message || "Could not reset the prompt.";
-    promptStatus.dataset.state = "error";
-  } finally {
-    confirmPromptResetButton.disabled = false;
-  }
-}
-
 function renderPrefixes() {
   prefixList.replaceChildren();
   prefixConfig.forEach((prefix, index) => {
@@ -1046,7 +990,6 @@ function addPrefixManually() {
   prefixDialogHeading.textContent = "Add a prefix";
   prefixEditName.value = "";
   prefixEditInstruction.value = "";
-  prefixEditSearch.checked = false;
   prefixEditClipboard.checked = false;
   prefixEditStatus.textContent = "";
   prefixEditStatus.dataset.state = "idle";
@@ -1064,7 +1007,6 @@ function openPrefixEditor(index) {
   prefixDialogHeading.textContent = "Edit prefix";
   prefixEditName.value = prefix.name;
   prefixEditInstruction.value = prefix.instruction;
-  prefixEditSearch.checked = prefix.allowSearch === true;
   prefixEditClipboard.checked = prefix.allowClipboard === true;
   prefixEditStatus.textContent = "";
   prefixEditStatus.dataset.state = "idle";
@@ -1082,7 +1024,6 @@ function savePrefixEdit() {
     id: editingPrefixIndex >= 0 ? prefixConfig[editingPrefixIndex]?.id || "" : "",
     name: prefixEditName.value,
     instruction: prefixEditInstruction.value,
-    allowSearch: prefixEditSearch.checked,
     allowClipboard: prefixEditClipboard.checked
   };
   const nextPrefixes = prefixConfig.map((prefix, index) =>
@@ -1251,7 +1192,6 @@ function addPreviewPrefix() {
     id: "",
     name: prefixPreviewName.value,
     instruction: prefixPreviewInstruction.value,
-    allowSearch: prefixPreviewSearch.checked,
     allowClipboard: prefixPreviewClipboard.checked
   };
   const validationError = getPrefixValidationError([...prefixConfig, nextPrefix]);
@@ -1284,7 +1224,6 @@ function preparePrefixDialog(mode, index) {
   setButtonLabel(prefixEditSaveButton, mode === "edit" ? "Save changes" : "Add prefix");
   prefixEditStatus.textContent = "";
   prefixEditStatus.dataset.state = "idle";
-  prefixPreviewSearch.checked = false;
   prefixPreviewClipboard.checked = false;
   showPrefixDialogView(prefixChoiceView);
 }
@@ -1297,7 +1236,6 @@ function resetPrefixDialog() {
   prefixPreviewTranscript.textContent = "";
   prefixPreviewName.value = "";
   prefixPreviewInstruction.value = "";
-  prefixPreviewSearch.checked = false;
   prefixPreviewClipboard.checked = false;
   prefixPreviewStatus.textContent = "";
   prefixPreviewStatus.dataset.state = "idle";
@@ -1309,7 +1247,6 @@ function resetPrefixDialog() {
   prefixRecordStopButton.hidden = true;
   prefixEditName.value = "";
   prefixEditInstruction.value = "";
-  prefixEditSearch.checked = false;
   prefixEditClipboard.checked = false;
   prefixEditStatus.textContent = "";
   prefixEditStatus.dataset.state = "idle";
@@ -1404,7 +1341,6 @@ function removePrefix(index) {
 
 async function resetToDefaults(event) {
   event.preventDefault();
-  clearTimeout(promptSaveTimer);
   clearTimeout(prefixSaveTimer);
   clearTimeout(soundVolumeSaveTimer);
   confirmResetButton.disabled = true;
@@ -1417,7 +1353,6 @@ async function resetToDefaults(event) {
     prefixConfig = runtimeConfig.prefixes.map(normalizePrefix);
     renderProfiles();
     renderModels();
-    initializeInstructionPrompt();
     renderPrefixes();
     renderSoundVolume(runtimeConfig.soundVolume);
     await loadConnectionSettings();
@@ -1524,7 +1459,7 @@ async function beginHotkeyCapture() {
   captureHotkeyButton.disabled = true;
   setButtonLabel(captureHotkeyButton, "Press keys…");
   cancelHotkeyButton.hidden = false;
-  hotkeyStatus.textContent = "Press one Control/Alt key, or hold modifiers and press a trigger; release to save. Escape cancels.";
+  hotkeyStatus.textContent = "Press one Control/Alt key, a modifier combination, or hold modifiers and press a trigger; release to save. Escape cancels.";
   try {
     await desktopBridge.beginHotkeyCapture();
   } catch (error) {
@@ -1551,7 +1486,6 @@ function normalizePrefix(prefix) {
     id: typeof prefix?.id === "string" ? prefix.id : "",
     name: typeof prefix?.name === "string" ? prefix.name : "",
     instruction: typeof prefix?.instruction === "string" ? prefix.instruction : "",
-    allowSearch: prefix?.allowSearch === true,
     allowClipboard: prefix?.allowClipboard === true
   };
 }

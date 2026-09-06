@@ -44,8 +44,6 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
     saveConnection,
     saveModelCatalog,
     saveModelSelections,
-    savePrompt,
-    resetPrompt,
     savePrefixSettings,
     addProfile,
     renameProfile,
@@ -134,18 +132,6 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
       profile.models.instructionReasoning = reasoning;
     }
     saveSettings();
-  }
-
-  function savePrompt(prompt) {
-    if (typeof prompt !== "string") throw new Error("The instruction prompt must be text.");
-    settings.prompt = prompt;
-    saveSettings();
-  }
-
-  function resetPrompt() {
-    settings.prompt = defaults.prompt;
-    saveSettings();
-    return settings.prompt;
   }
 
   function savePrefixSettings({ prefixes } = {}) {
@@ -315,7 +301,6 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
 function createInitialSettings(defaults) {
   return normalizeSettings({
     profiles: defaults.profiles,
-    prompt: defaults.prompt,
     prefixes: defaults.prefixes
   }, defaults);
 }
@@ -327,7 +312,6 @@ function normalizeSettings(value, defaults) {
     activeProfileId: profiles.some((profile) => profile.id === value?.activeProfileId)
       ? value.activeProfileId
       : profiles[0].id,
-    prompt: typeof value?.prompt === "string" ? value.prompt : defaults.prompt,
     prefixes: normalizePrefixes(value?.prefixes, defaults.limits.maxPrefixes)
   };
 }
@@ -373,7 +357,6 @@ function normalizePrefixes(value, maxPrefixes) {
       id: normalizeText(entry?.id) || `prefix-${index + 1}`,
       name,
       instruction,
-      allowSearch: entry?.allowSearch === true,
       allowClipboard: entry?.allowClipboard === true
     });
   }

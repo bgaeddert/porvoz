@@ -76,7 +76,7 @@ if (desktopBridge?.isElectron) {
     setStatus("Canceled.", "idle");
   });
   desktopBridge.onHotkeyUpdated((hotkey) => {
-    hotkeyHint.textContent = `Hold ${hotkey.label} to record.`;
+    hotkeyHint.textContent = `Hold ${hotkey.label} to record. Double-tap to view the last response.`;
   });
   desktopBridge.onSoundVolumeUpdated((soundVolume) => {
     hotkeySoundVolume = normalizeSoundVolume(soundVolume);
@@ -381,7 +381,7 @@ function logClientError(stage, error, metadata = {}) {
 async function initializeDesktopHotkeyHint() {
   try {
     const hotkey = await desktopBridge.getHotkey();
-    if (hotkey?.label) hotkeyHint.textContent = `Hold ${hotkey.label} to record.`;
+    if (hotkey?.label) hotkeyHint.textContent = `Hold ${hotkey.label} to record. Double-tap to view the last response.`;
   } catch (error) {
     console.error(error);
   }

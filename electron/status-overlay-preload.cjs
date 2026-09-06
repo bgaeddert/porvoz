@@ -19,9 +19,6 @@ contextBridge.exposeInMainWorld("porvozOverlay", {
     ipcRenderer.on("porvoz:overlay-response", listener);
     return () => ipcRenderer.removeListener("porvoz:overlay-response", listener);
   },
-  setHovered(value) {
-    ipcRenderer.send("porvoz:overlay-hover", value === true);
-  },
   copyResponse() {
     return ipcRenderer.invoke("porvoz:overlay-copy");
   },

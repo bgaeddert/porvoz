@@ -28,7 +28,7 @@
         </nav>
         <nav class="section-nav" aria-label="Settings sections">
           <p>Configure</p>
-          <a href="#capture">Prefixes &amp; instructions</a>
+          <a href="#capture">Prefixes</a>
           <a href="#provider">Provider &amp; models</a>
           <a href="#keyboard">Keyboard</a>
           <a href="#sound">Sound</a>
@@ -38,8 +38,8 @@
 
       <div class="app-workspace">
         <header class="workspace-header">
-          <div><p id="settings-page-kicker" class="workspace-kicker">Settings</p><h1 id="settings-page-title">Prefixes &amp; instructions</h1></div>
-          <p id="settings-page-summary" class="workspace-summary">Manage the instruction prompt, reusable prefixes, and reset controls.</p>
+          <div><p id="settings-page-kicker" class="workspace-kicker">Settings</p><h1 id="settings-page-title">Prefixes</h1></div>
+          <p id="settings-page-summary" class="workspace-summary">Manage reusable voice prefixes and reset controls.</p>
         </header>
 
       <main class="page-main settings-main">
@@ -266,7 +266,7 @@
                 </button>
               </div>
             </div>
-            <p id="hotkey-status" class="field-note" aria-live="polite">Click Set hotkey, then press one Control/Alt key or a combination. Release to save; Escape cancels.</p>
+            <p id="hotkey-status" class="field-note" aria-live="polite">Click Set hotkey, then press one Control/Alt key, a modifier combination, or a combination with a trigger key. Release to save; Escape cancels.</p>
           </section>
 
           <section id="sound" class="settings-card" data-settings-page="sound" aria-labelledby="sound-heading" hidden>
@@ -306,28 +306,6 @@
               </div>
             </div>
             <p id="sound-volume-status" class="field-note" aria-live="polite">Cue volume is saved automatically.</p>
-          </section>
-
-          <section id="instruction-prompt-settings" class="settings-card" data-settings-page="capture" aria-labelledby="prompt-heading">
-            <div class="settings-heading settings-heading-actions">
-              <div>
-                <p class="panel-kicker">Instructions</p>
-                <h2 id="prompt-heading">Main instruction prompt</h2>
-              </div>
-              <button id="reset-prompt" class="button-secondary button-with-icon" type="button">
-                <svg class="icon icon-tabler icon-tabler-restore" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M3.06 13a9 9 0 1 0 .49 -4.087" />
-                  <path d="M3 4.001v5h5" />
-                  <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
-                </svg>
-                <span class="button-label">Reset prompt</span>
-              </button>
-            </div>
-            <label class="field-label" for="instruction-prompt">
-              Instructions prompt
-              <textarea id="instruction-prompt" rows="5" placeholder="Describe how the instruction model should respond."></textarea>
-            </label>
-            <p id="prompt-status" class="field-note" aria-live="polite">Changes save as you type.</p>
           </section>
 
           <section id="prefixes" class="settings-card" data-settings-page="capture" aria-labelledby="prefixes-heading">
@@ -371,7 +349,7 @@
               <div>
                 <p class="panel-kicker">Advanced</p>
                 <h2 id="reset-heading">Reset all settings</h2>
-                <p class="section-description">Clear every connection profile, loaded models, prompt, prefixes, and capture key, then rebuild the page from the packaged defaults.</p>
+                <p class="section-description">Clear every connection profile, loaded model, prefix, and capture setting, then rebuild the page from the packaged defaults.</p>
               </div>
               <button id="reset-defaults" class="button-danger button-with-icon" type="button">
                 <svg class="icon icon-tabler icon-tabler-restore" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -403,24 +381,6 @@
               <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
             </svg>
             <span class="button-label">Reset everything</span>
-          </button>
-        </div>
-      </form>
-    </dialog>
-    <dialog id="prompt-reset-dialog" class="reset-dialog" aria-labelledby="prompt-reset-dialog-heading">
-      <form method="dialog" class="reset-dialog-card">
-        <p class="panel-kicker">Confirm prompt reset</p>
-        <h2 id="prompt-reset-dialog-heading">Restore the packaged prompt?</h2>
-        <p>Your current main instruction prompt will be replaced with Porvoz’s packaged default. The rest of your settings will stay unchanged.</p>
-        <div class="dialog-actions">
-          <button id="cancel-prompt-reset" class="button-secondary" value="cancel" type="submit">Keep prompt</button>
-          <button id="confirm-prompt-reset" class="button-danger button-with-icon" value="confirm" type="button">
-            <svg class="icon icon-tabler icon-tabler-restore" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M3.06 13a9 9 0 1 0 .49 -4.087" />
-              <path d="M3 4.001v5h5" />
-              <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
-            </svg>
-            <span class="button-label">Reset prompt</span>
           </button>
         </div>
       </form>
@@ -493,7 +453,7 @@
               </span>
               <span class="prefix-option-copy">
                 <strong>Create a new prefix with your voice</strong>
-                <small>Describe what you want the prefix to do. AI will use your prompt and existing prefixes to draft the trigger and instruction.</small>
+                <small>Describe what you want the prefix to do. AI will use the existing prefixes to draft the trigger and instruction.</small>
               </span>
               <span class="prefix-ai-badge">AI</span>
             </button>
@@ -513,7 +473,7 @@
         </section>
 
         <section id="prefix-edit-view" class="prefix-dialog-view" aria-label="Edit prefix settings" hidden>
-          <p class="prefix-dialog-lede">Set the phrase, instruction, and access for this prefix.</p>
+          <p class="prefix-dialog-lede">Set the phrase, instruction, and whether this prefix receives clipboard context.</p>
           <div class="prefix-edit-fields">
             <label class="field-label" for="prefix-edit-name">
               Prefix name
@@ -525,14 +485,10 @@
             </label>
           </div>
           <fieldset class="prefix-access-fieldset">
-            <legend>Access for this prefix</legend>
-            <label class="prefix-toggle">
-              <input id="prefix-edit-search" type="checkbox" />
-              <span>Search access</span>
-            </label>
+            <legend>Context for this prefix</legend>
             <label class="prefix-toggle">
               <input id="prefix-edit-clipboard" type="checkbox" />
-              <span>Clipboard access</span>
+              <span>Include clipboard context</span>
             </label>
           </fieldset>
           <p id="prefix-edit-status" class="field-note" aria-live="polite"></p>
@@ -589,7 +545,7 @@
         <section id="prefix-preview-view" class="prefix-dialog-view" aria-labelledby="prefix-preview-heading" hidden>
           <p class="panel-kicker">AI draft</p>
           <h3 id="prefix-preview-heading">Review your new prefix</h3>
-          <p class="prefix-dialog-lede">Edit anything you like, choose the access this prefix can use, then add it to the registry.</p>
+          <p class="prefix-dialog-lede">Edit anything you like, choose whether to include clipboard context, then add it to the registry.</p>
           <div class="prefix-preview-source">
             <span>Heard from you</span>
             <p id="prefix-preview-transcript"></p>
@@ -603,14 +559,10 @@
             <textarea id="prefix-preview-instruction" rows="5" placeholder="What should the instruction model do?"></textarea>
           </label>
           <fieldset class="prefix-access-fieldset">
-            <legend>Access for this prefix</legend>
-            <label class="prefix-toggle">
-              <input id="prefix-preview-search" type="checkbox" />
-              <span>Search access</span>
-            </label>
+            <legend>Context for this prefix</legend>
             <label class="prefix-toggle">
               <input id="prefix-preview-clipboard" type="checkbox" />
-              <span>Clipboard access</span>
+              <span>Include clipboard context</span>
             </label>
           </fieldset>
           <p id="prefix-preview-status" class="field-note" aria-live="polite"></p>

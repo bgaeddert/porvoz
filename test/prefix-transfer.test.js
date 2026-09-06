@@ -14,7 +14,6 @@ test("prefix JSON is portable and excludes its internal id", () => {
   assert.deepEqual(JSON.parse(serialized), {
     name: "tidy",
     instruction: "Make it concise.",
-    allowSearch: true,
     allowClipboard: false
   });
 });
@@ -31,7 +30,6 @@ test("prefix JSON accepts the copied shape and creates a new entry", () => {
       id: "",
       name: "tidy",
       instruction: "Make it concise.",
-      allowSearch: true,
       allowClipboard: false
     }
   });

@@ -99,13 +99,6 @@ export function createPorvozHttpServer({ store, adminKey, host = "127.0.0.1", po
     if (request.method === "POST" && url.pathname === "/v1/porvoz/profiles") {
       return sendJson(response, 201, service.createProfile(await readJson(request)));
     }
-    if (request.method === "PUT" && url.pathname === "/v1/porvoz/prompt") {
-      const body = await readJson(request);
-      return sendJson(response, 200, { prompt: service.savePrompt(body.prompt) });
-    }
-    if (request.method === "POST" && url.pathname === "/v1/porvoz/prompt/reset") {
-      return sendJson(response, 200, { prompt: service.resetPrompt() });
-    }
     if (request.method === "PUT" && url.pathname === "/v1/porvoz/prefixes") {
       return sendJson(response, 200, service.savePrefixSettings(await readJson(request)));
     }

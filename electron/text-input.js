@@ -3,6 +3,7 @@ import koffi from "koffi";
 import { parseTextCommands } from "./text-command-parser.js";
 import { createClipboardTextTransaction } from "./clipboard-text-transaction.js";
 import { abortableDelay, throwIfAborted } from "./operation-cancellation.js";
+import { getX11 } from "./linux-x11.js";
 
 const INPUT_KEYBOARD = 1;
 const KEYEVENTF_KEYUP = 0x0002;
@@ -105,6 +106,7 @@ const X11_KEY_NAMES = new Map([
 
 let textInputForPlatform;
 let syntheticEscapeSuppressedUntil = 0;
+let syntheticCopySuppressedUntil = 0;
 
 if (process.platform === "win32") {
   textInputForPlatform = createWindowsTextInput();
@@ -129,6 +131,24 @@ export function disposeTextInput() {
 
 export function isSyntheticEscapeActive() {
   return Date.now() < syntheticEscapeSuppressedUntil;
+}
+
+export function isSyntheticCopyActive() {
+  return Date.now() < syntheticCopySuppressedUntil;
+}
+
+export async function readSelectedTextFromClipboard({
+  signal,
+  target
+} = {}) {
+  await textInputForPlatform.prepareCopy(target, signal);
+  return clipboardTextTransaction.readSelectedText(
+    () => {
+      syntheticCopySuppressedUntil = Math.max(syntheticCopySuppressedUntil, Date.now() + 250);
+      return textInputForPlatform.sendCopy({ target });
+    },
+    { signal }
+  );
 }
 
 export async function typeText(text, { target = null, signal } = {}) {
@@ -236,6 +256,16 @@ function createWindowsTextInput() {
       if (!GetWindowThreadProcessId(foregroundWindow, processId)) return null;
       return processId[0] === process.pid ? null : foregroundWindow;
     },
+    async prepareCopy(target, signal) {
+      // Copy only after the user's full hotkey chord is released. In particular,
+      // Ctrl+Meta recording must never inject Ctrl+Meta+C into the editor.
+      if (!await pollModifierRelease(MAX_MODIFIER_RELEASE_CHECKS, signal)) {
+        throw new Error("Release the keyboard modifiers before copying selected text.");
+      }
+      if (target && !isTargetForeground(target)) {
+        throw new Error("The recording application lost focus before selection capture.");
+      }
+    },
     async prepareTarget(target, signal) {
       throwIfAborted(signal);
       await waitForModifierKeysReleased(signal);
@@ -273,6 +303,19 @@ function createWindowsTextInput() {
         createWindowsKeyInput(0x11, 0, 0),
         createWindowsKeyInput(0x56, 0, 0),
         createWindowsKeyInput(0x56, 0, KEYEVENTF_KEYUP),
+        createWindowsKeyInput(0x11, 0, KEYEVENTF_KEYUP)
+      ]);
+    },
+    sendCopy({ target } = {}) {
+      // Clipboard snapshotting is asynchronous. Recheck immediately before
+      // injection in case focus or modifier state changed during that work.
+      if (ModifierKeys.some(isKeyDown) || (target && !isTargetForeground(target))) {
+        throw new Error("The keyboard or focused application changed before selection capture.");
+      }
+      sendInput([
+        createWindowsKeyInput(0x11, 0, 0),
+        createWindowsKeyInput(0x43, 0, 0),
+        createWindowsKeyInput(0x43, 0, KEYEVENTF_KEYUP),
         createWindowsKeyInput(0x11, 0, KEYEVENTF_KEYUP)
       ]);
     },
@@ -368,6 +411,7 @@ function createLinuxTextInput() {
   const XOpenDisplay = x11.func("void * XOpenDisplay(const char *display_name)");
   const XCloseDisplay = x11.func("int XCloseDisplay(void *display)");
   const XFlush = x11.func("int XFlush(void *display)");
+  const XQueryKeymap = x11.func("int XQueryKeymap(void *display, _Out_ uint8_t *keys)");
   const XStringToKeysym = x11.func("uint64_t XStringToKeysym(const char *string)");
   const XKeysymToKeycode = x11.func("uint8_t XKeysymToKeycode(void *display, uint64_t keysym)");
   const XTestFakeKeyEvent = xtst.func(
@@ -375,28 +419,34 @@ function createLinuxTextInput() {
   );
   const keycodes = new Map();
   let display;
+  let preparedTarget;
 
   return {
     captureTarget() {
-      return null;
+      return getX11().activeWindow() || null;
     },
-    async prepareTarget(_target, signal) {
+    async prepareCopy(target, signal) {
+      await waitForModifiers(signal);
+      verifyTarget(target);
+    },
+    async prepareTarget(target, signal) {
       getDisplay();
+      await waitForModifiers(signal);
       await wait(TEXT_TARGET_FOCUS_DELAY_MS, signal);
+      verifyTarget(target);
+      preparedTarget = target;
+    },
+    sendCopy({ target } = {}) {
+      verifyTarget(target);
+      sendControlShortcut("c");
     },
     sendPaste() {
-      const control = getKeycode("Control_L");
-      const paste = getKeycode("v");
-      sendKey(control, true);
-      try {
-        sendKey(paste, true);
-        sendKey(paste, false);
-      } finally {
-        sendKey(control, false);
-      }
+      verifyTarget(preparedTarget);
+      sendControlShortcut("v");
     },
     async pressKeyCombination(keys, signal) {
       throwIfAborted(signal);
+      verifyTarget(preparedTarget);
       const keycodes = keys.map((key) => getKeycode(getX11KeyName(key)));
       throwIfAborted(signal);
       if (keys.includes("Escape")) suppressSyntheticEscape();
@@ -422,11 +472,46 @@ function createLinuxTextInput() {
     }
   };
 
+  async function waitForModifiers(signal) {
+    // Wait for all modifier families, regardless of the configured hotkey.
+    // Never synthesize key-up for a modifier the user is physically holding.
+    const modifiers = ["Control_L", "Control_R", "Alt_L", "Alt_R", "Shift_L", "Shift_R", "Super_L", "Super_R", "Meta_L", "Meta_R", "ISO_Level3_Shift"]
+      .map((name) => XKeysymToKeycode(getDisplay(), XStringToKeysym(name))).filter(Boolean);
+    for (let attempt = 0; ; attempt += 1) {
+      throwIfAborted(signal);
+      const keys = Buffer.alloc(32);
+      XQueryKeymap(getDisplay(), keys);
+      if (!modifiers.some((key) => keys[key >> 3] & (1 << (key & 7)))) break;
+      if (attempt >= MAX_MODIFIER_RELEASE_CHECKS) {
+        throw new Error("Release the keyboard modifiers before pasting the response.");
+      }
+      await wait(MODIFIER_POLL_INTERVAL_MS, signal);
+    }
+  }
+
+  function sendControlShortcut(key) {
+    const control = getKeycode("Control_L");
+    const keycode = getKeycode(key);
+    sendKey(control, true);
+    try {
+      sendKey(keycode, true);
+      sendKey(keycode, false);
+    } finally {
+      sendKey(control, false);
+    }
+  }
+
   function getDisplay() {
     if (display) return display;
     display = XOpenDisplay(null);
     if (!display) throw new Error("Linux clipboard paste requires an available X11 display.");
     return display;
+  }
+
+  function verifyTarget(target) {
+    if (target && getX11().activeWindow() !== target) {
+      throw new Error("The recording application lost focus before the response could be pasted.");
+    }
   }
 
   function getKeycode(name) {
@@ -463,11 +548,17 @@ function createUnsupportedTextInput() {
     captureTarget() {
       return null;
     },
+    async prepareCopy() {
+      throw new Error(`Clipboard copy input is not available on ${process.platform}.`);
+    },
     async prepareTarget() {
       throw new Error(`Clipboard paste input is not available on ${process.platform}.`);
     },
     sendPaste() {
       throw new Error(`Clipboard paste input is not available on ${process.platform}.`);
+    },
+    sendCopy() {
+      throw new Error(`Clipboard copy input is not available on ${process.platform}.`);
     },
     async pressKeyCombination() {
       throw new Error(`Clipboard paste input is not available on ${process.platform}.`);

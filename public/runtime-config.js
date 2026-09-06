@@ -13,7 +13,6 @@ export async function loadRuntimeConfig() {
     || !result.models.selected
     || !["low", "medium", "high"].includes(result.models.selected.instructionReasoning)
     || !result.limits
-    || !Number.isFinite(result.limits.maxInstructionPromptCharacters)
     || !Number.isFinite(result.limits.maxPrefixes)
     || !Number.isFinite(result.limits.maxPrefixNameCharacters)
     || !Number.isFinite(result.limits.maxPrefixInstructionCharacters)
@@ -21,7 +20,6 @@ export async function loadRuntimeConfig() {
     || !Number.isFinite(result.soundVolume)
     || result.soundVolume < 0
     || result.soundVolume > 1
-    || typeof result.prompt !== "string"
     || !Array.isArray(result.prefixes)) {
     throw new Error("Could not load the app settings.");
   }

@@ -21,6 +21,7 @@ class FakeWindow extends EventEmitter {
   setContentSize(width, height) { this.size = [width, height]; }
   setPosition(x, y) { this.position = [x, y]; }
   isDestroyed() { return this.destroyed; }
+  isVisible() { return this.visible; }
   hide() { this.visible = false; this.hideCount = (this.hideCount || 0) + 1; }
   showInactive() { this.visible = true; this.showCount = (this.showCount || 0) + 1; }
   loadFile() { return Promise.resolve(); }
@@ -33,7 +34,7 @@ class FakeScreen extends EventEmitter {
   getPrimaryDisplay() { return { workArea: { x: 0, y: 0, width: 1200, height: 800 } }; }
 }
 
-test("hovering the pill can hold and dismiss the response panel", async () => {
+test("the saved response opens without focus and survives dismissal", async () => {
   let browserWindow;
   class BrowserWindowFactory extends FakeWindow {
     constructor(options) {
@@ -48,13 +49,18 @@ test("hovering the pill can hold and dismiss the response panel", async () => {
     screenApi: new FakeScreen()
   });
 
-  assert.equal(browserWindow.ignoresMouse, false);
+  assert.equal(browserWindow.ignoresMouse, true);
   assert.equal(browserWindow.focusable, false);
   overlay.setStatus({ state: "recording", message: "Recording" });
-  assert.equal(overlay.holdIfHovered(), false);
-  overlay.setPointerOver(true);
+  const initialShowCount = browserWindow.showCount;
+  overlay.setStatus({ state: "transcribing", message: "Transcribing" });
+  assert.equal(browserWindow.showCount, initialShowCount);
+  overlay.clear();
+  assert.equal(browserWindow.visible, false);
+  overlay.openResponse();
+  assert.equal(browserWindow.ignoresMouse, false);
   assert.deepEqual(browserWindow.size, [360, 238]);
-  assert.equal(overlay.holdIfHovered(), true);
+  assert.equal(browserWindow.focusable, false);
   overlay.setResponse("latest Porvoz output");
   assert.equal(overlay.getResponse(), "latest Porvoz output");
   assert.deepEqual(browserWindow.sent.at(-1), [
@@ -75,10 +81,17 @@ test("hovering the pill can hold and dismiss the response panel", async () => {
   assert.equal(browserWindow.showCount, showCount);
   overlay.setStatus({ state: "recording", message: "Recording" });
   assert.equal(browserWindow.visible, true);
+  overlay.dismiss();
+  overlay.openResponse();
+  assert.equal(browserWindow.visible, true);
+  assert.equal(overlay.getResponse(), "latest Porvoz output");
+  overlay.prepareForCapture();
+  assert.equal(browserWindow.visible, false);
+  assert.equal(browserWindow.ignoresMouse, true);
   overlay.destroy();
 });
 
-test("hovering immediately opens the response panel during every visible status", async (context) => {
+test("status changes keep the pill collapsed and transparent to pointer input", async (context) => {
   const statuses = ["recording", "waiting", "transcribing", "processing", "typing", "success", "error"];
 
   for (const state of statuses) {
@@ -98,11 +111,12 @@ test("hovering immediately opens the response panel during every visible status"
       });
 
       overlay.setStatus({ state, message: `${state} status` });
-      overlay.setPointerOver(true);
 
-      assert.deepEqual(browserWindow.size, [360, 238]);
-      assert.ok(browserWindow.sent.some(([channel, value]) =>
-        channel === "porvoz:overlay-response" && value.open === true));
+
+      assert.deepEqual(browserWindow.size, [360, 44]);
+      assert.equal(browserWindow.ignoresMouse, true);
+      assert.ok(browserWindow.sent.every(([channel, value]) =>
+        channel !== "porvoz:overlay-response" || value.open === false));
       overlay.destroy();
     });
   }
@@ -120,6 +134,7 @@ test("the overlay renderer exposes copy and dismiss controls", () => {
   assert.match(preload, /porvoz:overlay-copy/);
   assert.match(preload, /porvoz:overlay-open-external/);
   assert.match(preload, /porvoz:overlay-dismiss/);
-  assert.match(overlayRenderer, /pill\.addEventListener\("mouseenter"/);
+  assert.doesNotMatch(overlayRenderer, /mouseenter|mouseleave|setHovered/);
+  assert.doesNotMatch(preload, /overlay-hover/);
   assert.match(app, /mimeType: audio\.type,\s+captureId/);
 });

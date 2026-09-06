@@ -70,7 +70,7 @@ test("Keyboard and Sound are independent settings pages", () => {
   assert.equal(harness.document.title, "Porvoz · Sound");
 });
 
-test("Prefixes and instructions is the first Configure destination", () => {
+test("Prefixes is the first Configure destination", () => {
   const configureNav = settingsHtml.slice(
     settingsHtml.indexOf('<nav class="section-nav"'),
     settingsHtml.indexOf("</nav>", settingsHtml.indexOf('<nav class="section-nav"'))
@@ -78,14 +78,14 @@ test("Prefixes and instructions is the first Configure destination", () => {
   assert.ok(configureNav.indexOf('href="#capture"') < configureNav.indexOf('href="#provider"'));
 
   const harness = createHarness("#capture");
-  assert.equal(harness.pageTitle.textContent, "Prefixes & instructions");
-  assert.equal(harness.document.title, "Porvoz · Prefixes & instructions");
+  assert.equal(harness.pageTitle.textContent, "Prefixes");
+  assert.equal(harness.document.title, "Porvoz · Prefixes");
 });
 
-test("Settings opens Prefixes and instructions by default", () => {
+test("Settings opens Prefixes by default", () => {
   const harness = createHarness("");
   assert.equal(harness.location.hash, "#capture");
-  assert.equal(harness.pageTitle.textContent, "Prefixes & instructions");
+  assert.equal(harness.pageTitle.textContent, "Prefixes");
   assert.equal(harness.sections.find((section) => section.dataset.settingsPage === "capture").hidden, false);
   assert.equal(harness.links.find((link) => link.hash === "#capture").getAttribute("aria-current"), "page");
 });

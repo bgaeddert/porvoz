@@ -19,11 +19,14 @@ import { createSettingsStore } from "./settings-store.js";
 import { createBackendManager } from "./backend-manager.js";
 import { createDesktopPreferences } from "./desktop-preferences.js";
 import { createStatusOverlay } from "./status-overlay.js";
+import { createHotkeyGesture } from "./hotkey-gesture.js";
 import { createSelectedTextReader } from "./selected-text.js";
 import {
   captureTextInputTarget,
   disposeTextInput,
+  isSyntheticCopyActive,
   isSyntheticEscapeActive,
+  readSelectedTextFromClipboard,
   typeText
 } from "./text-input.js";
 import {
@@ -85,7 +88,9 @@ const CAPTURE_ATTEMPT_MAX_AGE_MS = 120_000;
 const ACTIVE_ACTIVITY_STATES = new Set(["recording", "transcribing", "processing", "typing"]);
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
-const selectedTextReader = createSelectedTextReader();
+const selectedTextReader = createSelectedTextReader({
+  readSelection: readSelectedTextFromClipboard
+});
 
 let appService;
 let mainWindow;
@@ -95,6 +100,11 @@ let tray;
 let isQuitting = false;
 let isHotkeyRecording = false;
 let hotkeyIntentGeneration = 0;
+const hotkeyGesture = createHotkeyGesture({
+  onHold: startHotkeyRecording,
+  onRelease: stopHotkeyRecording,
+  onDoubleTap: () => statusOverlay?.openResponse()
+});
 let isCapturingHotkey = false;
 let hookStarted = false;
 let backendManager;
@@ -203,7 +213,9 @@ async function createMainWindow() {
   secureRendererWindow(mainWindow);
   mainWindow.webContents.on("before-input-event", handleSettingsHotkeyInput);
   mainWindow.on("blur", () => {
-    if (isCapturingHotkey) cancelHotkeyCapture("Hotkey capture canceled because Porvoz lost focus.");
+    if (isCapturingHotkey && !capturePressedCodes.size) {
+      cancelHotkeyCapture("Hotkey capture canceled because Porvoz lost focus.");
+    }
   });
 
   mainWindow.on("close", (event) => {
@@ -336,7 +348,7 @@ function handleSettingsHotkeyInput(event, input) {
     capturePressedCodes.add(input.code);
     captureSeenCodes.add(input.code);
     if (MODIFIER_CODES.has(input.code)) {
-      notifyHotkeyCaptureStatus("waiting", "Keep holding the modifiers and press the trigger key, or release one Control/Alt key to use it alone.");
+      notifyHotkeyCaptureStatus("waiting", "Keep holding the modifiers and press the trigger key, or release a Control/Alt key or modifier combination to use it alone.");
       return;
     }
 
@@ -367,14 +379,14 @@ function handleSettingsHotkeyInput(event, input) {
 
   if (captureTriggerCode || capturePressedCodes.size) return;
 
-  const onlyCode = captureSeenCodes.size === 1 ? [...captureSeenCodes][0] : undefined;
-  if (onlyCode && SINGLE_MODIFIER_HOTKEY_CODES.has(onlyCode)) {
-    saveHotkey(normalizeHotkey({ key: onlyCode, modifiers: [] }));
+  const modifierOnlyHotkey = normalizeModifierOnlyHotkey([...captureSeenCodes]);
+  if (modifierOnlyHotkey) {
+    saveHotkey(modifierOnlyHotkey);
     return;
   }
 
   clearHotkeyCaptureState();
-  notifyHotkeyCaptureStatus("waiting", "Press one Control/Alt key or hold modifiers and press a trigger key.");
+  notifyHotkeyCaptureStatus("waiting", "Press one Control/Alt key, hold modifiers and press a trigger key, or use a Control/Alt modifier combination.");
 }
 
 function getCaptureModifiers(input) {
@@ -401,62 +413,172 @@ function clearHotkeyCaptureState() {
   captureTriggerModifiers = [];
 }
 
+function normalizeModifierOnlyHotkey(codes) {
+  if (!codes.length || codes.some((code) => !MODIFIER_CODES.has(code))) return null;
+  const key = codes.find((code) => SINGLE_MODIFIER_HOTKEY_CODES.has(code));
+  if (!key) return null;
+  const modifiers = codes
+    .filter((code) => code !== key)
+    .map((code) => MODIFIER_FOR_CODE.get(code))
+    .filter(Boolean);
+  return normalizeHotkey({ key, modifiers });
+}
+
 async function handleGlobalKeyDown(event) {
+  if (isCapturingHotkey) {
+    handleGlobalHotkeyInput("keyDown", event);
+    return;
+  }
+  if (isSyntheticCopyActive()) return;
   if (event.keycode === UiohookKey.Escape) {
     if (isSyntheticEscapeActive()) return;
-    if (!isCapturingHotkey) cancelActiveActivity();
+    hotkeyGesture.cancel();
+    cancelActiveActivity();
+    statusOverlay?.dismiss();
     return;
   }
   if (isCapturingHotkey) return;
   if (event.keycode === suppressedHotkeyKeyCode) return;
-  const hotkeyKeyCode = getUiohookKeyCode(currentHotkey.key);
   pressedKeys.add(event.keycode);
-  const requiredModifiersPressed = currentHotkey.modifiers.every((modifier) => isModifierPressed(modifier, event));
-  if (event.keycode === hotkeyKeyCode
-    && requiredModifiersPressed
-    && !isHotkeyRecording) {
+  if (isConfiguredHotkeyPressed(event)) hotkeyGesture.press();
+}
+
+async function startHotkeyRecording() {
+  if (!isHotkeyRecording && !activeOperations.size && !rendererActivities.size) {
     statusOverlay?.prepareForCapture();
     isHotkeyRecording = true;
-    const selectedTextPromise = selectedTextReader.read();
     const intentGeneration = ++hotkeyIntentGeneration;
     const isCurrentIntent = () => isHotkeyRecording && intentGeneration === hotkeyIntentGeneration;
+    let attempt;
     try {
+      attempt = beginCaptureAttempt();
       const setupStatus = await appService.getSetupStatus();
       if (!isCurrentIntent()) return;
       if (setupStatus.ready) {
-        const attempt = beginCaptureAttempt(selectedTextPromise);
+        if (!isCurrentIntent()) {
+          captureAttempts.delete(attempt.id);
+          return;
+        }
         sendHotkeyAction("start", { captureId: attempt.id });
       } else {
+        captureAttempts.delete(attempt.id);
         isHotkeyRecording = false;
         sendHotkeyAction("configuration-needed", { message: setupStatus.hotkeyMessage });
       }
     } catch (error) {
+      captureAttempts.delete(attempt?.id);
       if (!isCurrentIntent()) return;
       isHotkeyRecording = false;
       sendHotkeyAction("configuration-needed", {
         message: error.message || "The Porvoz backend is unavailable."
       });
+    } finally {
+      if (!isCurrentIntent()) captureAttempts.delete(attempt?.id);
     }
   }
 }
 
 function handleGlobalKeyUp(event) {
+  if (isCapturingHotkey) {
+    handleGlobalHotkeyInput("keyUp", event);
+    return;
+  }
   if (event.keycode === suppressedHotkeyKeyCode) {
     pressedKeys.delete(event.keycode);
     suppressedHotkeyKeyCode = undefined;
     return;
   }
   pressedKeys.delete(event.keycode);
-  const hotkeyKeyCode = getUiohookKeyCode(currentHotkey.key);
-  const modifierKeyCodes = currentHotkey.modifiers.flatMap((modifier) => MODIFIER_KEYCODES[modifier] || []);
-  if (isHotkeyRecording && (event.keycode === hotkeyKeyCode || modifierKeyCodes.includes(event.keycode))) {
+  const chord = getConfiguredHotkeyKeyCodes();
+  if (chord.includes(event.keycode)) {
+    hotkeyGesture.release(chord.every((keycode) => !pressedKeys.has(keycode)));
+  }
+}
+
+function stopHotkeyRecording() {
+  if (isHotkeyRecording) {
     isHotkeyRecording = false;
     for (const attempt of captureAttempts.values()) {
-      if (attempt.state === "recording") attempt.state = "processing";
+      if (attempt.state === "recording") {
+        attempt.state = "processing";
+        attempt.selectedTextPromise = selectedTextReader.read({ target: attempt.targetWindow });
+      }
     }
-    const responseHeld = statusOverlay?.holdIfHovered() === true;
-    sendHotkeyAction("stop", { responseHeld });
+    sendHotkeyAction("stop");
   }
+}
+
+function handleGlobalHotkeyInput(type, event) {
+  const code = getCodeFromUiohookKeyCode(event.keycode);
+  if (!code) return;
+  handleSettingsHotkeyInput({ preventDefault() {} }, {
+    type,
+    code,
+    isAutoRepeat: event.isAutoRepeat === true || event.autoRepeat === true,
+    control: event.ctrlKey === true,
+    alt: event.altKey === true,
+    shift: event.shiftKey === true,
+    meta: event.metaKey === true
+  });
+  // When the global hook handled the final keyup, the capture handler has
+  // just installed the usual one-event suppression. This keyup is that event.
+  if (type === "keyUp" && !isCapturingHotkey && event.keycode === suppressedHotkeyKeyCode) {
+    suppressedHotkeyKeyCode = undefined;
+  }
+}
+
+function getCodeFromUiohookKeyCode(keycode) {
+  const modifierCodes = new Map([
+    [UiohookKey.Ctrl, "ControlLeft"],
+    [UiohookKey.CtrlRight, "ControlRight"],
+    [UiohookKey.Alt, "AltLeft"],
+    [UiohookKey.AltRight, "AltRight"],
+    [UiohookKey.Shift, "ShiftLeft"],
+    [UiohookKey.ShiftRight, "ShiftRight"],
+    [UiohookKey.Meta, "MetaLeft"],
+    [UiohookKey.MetaRight, "MetaRight"]
+  ]);
+  const modifierCode = modifierCodes.get(keycode);
+  if (modifierCode) return modifierCode;
+
+  const digitName = Object.keys(UiohookKey).find((name) =>
+    /^\d$/.test(name) && UiohookKey[name] === keycode
+  );
+  if (digitName) return `Digit${digitName}`;
+
+  const keyName = Object.keys(UiohookKey).find((name) =>
+    !/^\d+$/.test(name) && UiohookKey[name] === keycode
+  );
+  if (!keyName) return undefined;
+  if (/^[A-Z]$/.test(keyName)) return `Key${keyName}`;
+  return keyName;
+}
+
+function isConfiguredHotkeyPressed(event) {
+  const hotkeyKeyCode = getUiohookKeyCode(currentHotkey.key);
+  if (!isModifierOnlyHotkey(currentHotkey)) {
+    return event.keycode === hotkeyKeyCode
+      && currentHotkey.modifiers.every((modifier) => isModifierPressed(modifier, event));
+  }
+
+  const keyModifier = MODIFIER_FOR_CODE.get(currentHotkey.key);
+  const requiredModifiers = [keyModifier, ...currentHotkey.modifiers];
+  return getConfiguredHotkeyKeyCodes().includes(event.keycode)
+    && requiredModifiers.every((modifier) => isModifierPressed(modifier, event));
+}
+
+function isModifierOnlyHotkey(hotkey) {
+  return Boolean(hotkey
+    && SINGLE_MODIFIER_HOTKEY_CODES.has(hotkey.key)
+    && Array.isArray(hotkey.modifiers)
+    && hotkey.modifiers.length);
+}
+
+function getConfiguredHotkeyKeyCodes() {
+  return [
+    getUiohookKeyCode(currentHotkey?.key),
+    ...(currentHotkey?.modifiers || []).flatMap((modifier) => MODIFIER_KEYCODES[modifier] || [])
+  ].filter((code) => code !== undefined);
 }
 
 function isModifierPressed(modifier, event) {
@@ -487,10 +609,8 @@ function normalizeHotkey(value) {
   const modifiers = Array.isArray(value.modifiers)
     ? [...new Set(value.modifiers.filter((modifier) => Object.hasOwn(MODIFIER_KEYCODES, modifier)))]
     : [];
-  if (MODIFIER_CODES.has(value.key) && !SINGLE_MODIFIER_HOTKEY_CODES.has(value.key)) {
-    return null;
-  }
-  if (SINGLE_MODIFIER_HOTKEY_CODES.has(value.key) && modifiers.length) return null;
+  const keyModifier = MODIFIER_FOR_CODE.get(value.key);
+  if (keyModifier && (!SINGLE_MODIFIER_HOTKEY_CODES.has(value.key) || modifiers.includes(keyModifier))) return null;
   return {
     key: value.key,
     modifiers,
@@ -639,8 +759,6 @@ function registerIpcHandlers() {
     notifySetupUpdated();
     return result;
   });
-  ipcMain.handle("porvoz:save-prompt", (_event, value) => appService.savePrompt(value));
-  ipcMain.handle("porvoz:reset-prompt", () => appService.resetPrompt());
   ipcMain.handle("porvoz:save-prefix-settings", (_event, value) => appService.savePrefixSettings(value));
   ipcMain.handle("porvoz:get-inference-key", () => appService.getInferenceKey());
   ipcMain.handle("porvoz:rotate-inference-key", () => appService.rotateInferenceKey());
@@ -680,7 +798,7 @@ function registerIpcHandlers() {
       const selectedText = await (attempt?.selectedTextPromise || selectedTextReader.read());
       const result = await appService.transcribe({
         ...value,
-        clipboardText: clipboard.readText(),
+        clipboardText: await clipboard.readText(),
         ...(selectedText ? { selectedText } : {})
       }, { signal });
       notifyLogsUpdated();
@@ -703,6 +821,8 @@ function registerIpcHandlers() {
     appService.createPrefixFromVoice(value, { signal })));
   ipcMain.handle("porvoz:get-hotkey", () => currentHotkey);
   ipcMain.handle("porvoz:begin-hotkey-capture", () => {
+    hotkeyGesture.cancel();
+    hotkeyGesture.release(true);
     isCapturingHotkey = true;
     isHotkeyRecording = false;
     pressedKeys.clear();
@@ -729,9 +849,6 @@ function registerIpcHandlers() {
     if (ACTIVE_ACTIVITY_STATES.has(value.state)) rendererActivities.add(_event.sender.id);
     else rendererActivities.delete(_event.sender.id);
     setOverlayStatus(value);
-  });
-  ipcMain.on("porvoz:overlay-hover", (event, value) => {
-    if (statusOverlay?.isSender(event.sender)) statusOverlay.setPointerOver(value);
   });
   ipcMain.on("porvoz:overlay-dismiss", (event) => {
     if (statusOverlay?.isSender(event.sender)) statusOverlay.dismiss();
@@ -783,13 +900,17 @@ function registerIpcHandlers() {
 
 function saveHotkey(nextHotkey) {
   clearHotkeyCaptureWatchdog();
+  hotkeyGesture.cancel();
+  hotkeyGesture.release(true);
   currentHotkey = nextHotkey;
   desktopPreferences.saveHotkey(currentHotkey);
   isCapturingHotkey = false;
   isHotkeyRecording = false;
   pressedKeys.clear();
   clearHotkeyCaptureState();
-  suppressedHotkeyKeyCode = getUiohookKeyCode(currentHotkey.key);
+  suppressedHotkeyKeyCode = isModifierOnlyHotkey(currentHotkey)
+    ? undefined
+    : getUiohookKeyCode(currentHotkey.key);
   tray?.setToolTip(`Porvoz · Hold ${currentHotkey.label} to transcribe`);
   notifyHotkeyUpdated();
   updateTrayMenu();
@@ -906,13 +1027,13 @@ function normalizeTypingRequest(value) {
   };
 }
 
-function beginCaptureAttempt(selectedTextPromise = selectedTextReader.read()) {
+function beginCaptureAttempt() {
   const attempt = {
     id: randomUUID(),
     createdAt: Date.now(),
     state: "recording",
     targetWindow: captureTextInputTarget(),
-    selectedTextPromise
+    selectedTextPromise: undefined
   };
   captureAttempts.set(attempt.id, attempt);
   const cleanupTimer = setTimeout(() => {
@@ -939,11 +1060,7 @@ async function waitForRecordingHotkeyRelease(signal) {
 }
 
 function isRecordingHotkeyPressed() {
-  const hotkeyCodes = [
-    getUiohookKeyCode(currentHotkey?.key),
-    ...(currentHotkey?.modifiers || []).flatMap((modifier) => MODIFIER_KEYCODES[modifier] || [])
-  ].filter((code) => code !== undefined);
-  return hotkeyCodes.some((code) => pressedKeys.has(code));
+  return getConfiguredHotkeyKeyCodes().some((code) => pressedKeys.has(code));
 }
 
 function sanitizeText(value) {

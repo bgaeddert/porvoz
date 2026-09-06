@@ -36,7 +36,7 @@ logFilter?.addEventListener("input", () => {
 
 await refreshLogs();
 
-async function refreshLogs(statusMessage = "Stored locally") {
+async function refreshLogs(statusMessage = "Activity loaded") {
   if (!desktopBridge?.isElectron) {
     renderLogs([]);
     return;
@@ -48,7 +48,13 @@ async function refreshLogs(statusMessage = "Stored locally") {
     setArchiveStatus(statusMessage, "success");
   } catch (error) {
     console.error("Could not load response logs:", error);
-    renderLogs([]);
+    renderLogs(logs);
+    if (!logs.length) {
+      logCount.textContent = "—";
+      logCountLabel.textContent = "history unavailable";
+      logsEmpty.querySelector("h2").textContent = "Could not load activity";
+      logsEmpty.querySelector("p").textContent = "The connected server could not return your history. Reopen Activity to retry.";
+    }
     setArchiveStatus(error.message || "Could not load response logs.", "error");
   }
 }
@@ -206,12 +212,12 @@ function createLogStage(log) {
   if (log.mimeType) meta.append(createMetaChip(`Format · ${log.mimeType}`));
   if (log.bytes !== null) meta.append(createMetaChip(`Size · ${log.bytes.toLocaleString()} bytes`));
   if (log.prefix) meta.append(createMetaChip(`Prefix · ${log.prefix}`));
-  // Access grants are a different class of fact and get their own styling.
+  // Tool and context availability are a different class of fact and get their own styling.
   if (log.searchEnabled || log.clipboardEnabled) {
     const access = document.createElement("div");
     access.className = "log-stage-access";
-    if (log.searchEnabled) access.append(createMetaChip("Access · Search"));
-    if (log.clipboardEnabled) access.append(createMetaChip("Access · Clipboard"));
+    if (log.searchEnabled) access.append(createMetaChip("Tool · Search available"));
+    if (log.clipboardEnabled) access.append(createMetaChip("Context · Clipboard"));
     meta.append(access);
   }
   meta.append(createStageActions(log));

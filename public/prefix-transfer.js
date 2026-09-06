@@ -11,7 +11,6 @@ export function serializePrefix(prefix) {
   return JSON.stringify({
     name: typeof prefix?.name === "string" ? prefix.name.trim() : "",
     instruction: typeof prefix?.instruction === "string" ? prefix.instruction.trim() : "",
-    allowSearch: prefix?.allowSearch === true,
     allowClipboard: prefix?.allowClipboard === true
   }, null, 2);
 }
@@ -53,7 +52,6 @@ export function parsePrefix(text) {
       id: "",
       name: value.name.trim(),
       instruction: value.instruction.trim(),
-      allowSearch: value.allowSearch === true,
       allowClipboard: value.allowClipboard === true
     }
   };

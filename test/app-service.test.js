@@ -7,7 +7,6 @@ const limits = {
   maxUploadBytes: 1024,
   maxTranscriptCharacters: 1000,
   maxClipboardCharacters: 1000,
-  maxInstructionPromptCharacters: 100,
   maxPrefixes: 5,
   maxPrefixNameCharacters: 12,
   maxPrefixInstructionCharacters: 40,
@@ -69,6 +68,22 @@ test("prefix saves trim valid values and enforce field limits", () => {
   }), /up to 12 characters/);
 });
 
+test("runtime config omits the retired prompt and prefix search setting", () => {
+  const { service } = createService({
+    prefixes: [{
+      id: "search",
+      name: "search",
+      instruction: "Find the answer.",
+      allowSearch: true,
+      allowClipboard: false
+    }]
+  });
+
+  const runtime = service.getRuntimeConfig();
+  assert.equal(Object.hasOwn(runtime, "prompt"), false);
+  assert.equal(Object.hasOwn(runtime.prefixes[0], "allowSearch"), false);
+});
+
 test("sound volume is clamped and persisted as a normalized value", () => {
   const { service, settingsStore } = createService();
 
@@ -76,14 +91,6 @@ test("sound volume is clamped and persisted as a normalized value", () => {
   assert.equal(settingsStore.getSettings().soundVolume, 1);
   assert.equal(service.saveSoundVolume(-0.25), 0);
   assert.throws(() => service.saveSoundVolume("loud"), /must be a number/);
-});
-
-test("prompt reset restores the packaged instruction prompt", () => {
-  const { service, settingsStore } = createService();
-
-  service.savePrompt("A custom prompt.");
-  assert.equal(service.resetPrompt(), "Keep answers concise.");
-  assert.equal(settingsStore.getSettings().prompt, "Keep answers concise.");
 });
 
 test("setup status names missing credentials and model selections", () => {
@@ -119,7 +126,7 @@ test("a transcript without a prefix bypasses the instruction endpoint", async ()
   assert.deepEqual(result, { transcript: "ordinary dictated text", instructionApplied: false });
 });
 
-test("selected text invokes the instruction model without a prefix", async () => {
+test("selected text uses the selection flow and ignores prefixes and clipboard access", async () => {
   let requestBody;
   const server = createServer((request, response) => {
     const chunks = [];
@@ -133,20 +140,34 @@ test("selected text invokes the instruction model without a prefix", async () =>
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 
   try {
-    const { service } = createService({ availableModels: ["instruction-model"] });
+    const { service } = createService({
+      prefixes: [
+        prefix("rewrite", "This prefix instruction must not be sent.", { allowClipboard: true }),
+        prefix("unrelated", "This unrelated instruction must not be sent.")
+      ],
+      availableModels: ["instruction-model"]
+    });
     const address = server.address();
     service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret" });
     service.saveModelSelections({ instruction: "instruction-model" });
 
+    let clipboardReads = 0;
     const result = await service.instruct({
       transcript: "rewrite this clearly",
       selectedText: "rough selected sentence"
-    });
+    }, { readClipboard: () => { clipboardReads += 1; return "clipboard must not be sent"; } });
 
     assert.deepEqual(result, { transcript: "selection result", instructionApplied: true });
+    assert.equal(clipboardReads, 0);
+    assert.match(requestBody.input, /rewrite this clearly/);
     assert.match(requestBody.input, /rough selected sentence/);
-    assert.match(requestBody.instructions, /Selected-text routing exception/);
-    assert.doesNotMatch(requestBody.instructions, /Clipboard access is enabled/);
+    assert.match(requestBody.instructions, /selection processor/);
+    assert.match(requestBody.instructions, /Do not detect, remove, or apply Porvoz prefixes/);
+    assert.doesNotMatch(requestBody.instructions, /This prefix instruction must not be sent/);
+    assert.doesNotMatch(requestBody.instructions, /This unrelated instruction must not be sent/);
+    assert.doesNotMatch(requestBody.input, /clipboard must not be sent/);
+    assert.deepEqual(requestBody.tools, [{ type: "web_search" }]);
+    assert.equal(requestBody.tool_choice, undefined);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
@@ -161,6 +182,47 @@ test("every prefix entry is active when it exists", async () => {
     service.instruct({ transcript: "digits 42" }),
     /Enter the base URL and API key in Settings/
   );
+});
+
+test("instruction failures retain the exact request prompt in the activity log", async () => {
+  let requestBody;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      requestBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.writeHead(500, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: { message: "Instruction service failed.", code: "server_error" } }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const { service, logs } = createService({
+      prefixes: [prefix("rewrite", "Rewrite the supplied text clearly.")],
+      availableModels: ["instruction-model"]
+    });
+    const address = server.address();
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret" });
+    service.saveModelSelections({ instruction: "instruction-model" });
+
+    await assert.rejects(
+      service.instruct({ transcript: "rewrite this sentence", logGroupId: "instruction-failure" }),
+      /instruction model could not respond/
+    );
+
+    assert.equal(logs[0].type, "error");
+    assert.equal(logs[0].stage, "instruction");
+    assert.equal(logs[0].groupId, "instruction-failure");
+    assert.equal(logs[0].model, "instruction-model");
+    assert.equal(logs[0].prefix, "rewrite");
+    assert.equal(logs[0].instructions, requestBody.instructions);
+    assert.equal(logs[0].input, requestBody.input);
+    assert.equal(logs[0].searchEnabled, true);
+    assert.equal(logs[0].clipboardEnabled, false);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
 });
 
 test("transcription failures retain the provider error in the error log", async () => {
@@ -226,7 +288,7 @@ test("canceled transcription stops without recording a failure log", async () =>
   assert.equal(logs.length, 0);
 });
 
-test("chained prefixes are detected together and use per-prefix access permissions", async () => {
+test("chained prefixes are stripped and only matched instructions and clipboard context are sent", async () => {
   let requestBody;
   const server = createServer((request, response) => {
     const chunks = [];
@@ -242,8 +304,9 @@ test("chained prefixes are detected together and use per-prefix access permissio
   try {
     const { service } = createService({
       prefixes: [
-        prefix("search", "Find the answer.", { allowSearch: true }),
-        prefix("clipboard", "Use the reference.", { allowClipboard: true })
+        prefix("search", "Find the answer."),
+        prefix("clipboard", "Use the reference.", { allowClipboard: true }),
+        prefix("unmatched", "This instruction must not be sent.")
       ],
       availableModels: ["instruction-model"]
     });
@@ -254,23 +317,24 @@ test("chained prefixes are detected together and use per-prefix access permissio
     const result = await service.instruct(
       {
         transcript: "search clipboard summarize this",
-        logGroupId: "chain-1",
-        selectedText: "selected application text"
+        logGroupId: "chain-1"
       },
       { readClipboard: () => "reference text" }
     );
 
     assert.deepEqual(result, { transcript: "combined result", instructionApplied: true });
-    assert.match(requestBody.instructions, /chain of consecutive registered instruction prefixes/);
-    assert.match(requestBody.instructions, /apply every matched prefix instruction in left-to-right order/);
-    assert.match(requestBody.instructions, /Prefix Search access: yes/);
-    assert.match(requestBody.instructions, /Prefix Clipboard access: yes/);
-    assert.match(requestBody.instructions, /at least one matched prefix grants it/);
+    assert.match(requestBody.instructions, /already matched and removed the leading prefix chain/);
+    assert.match(requestBody.instructions, /Matched prefix 1: search/);
+    assert.match(requestBody.instructions, /Instruction: Find the answer\./);
+    assert.match(requestBody.instructions, /Matched prefix 2: clipboard/);
+    assert.match(requestBody.instructions, /Instruction: Use the reference\./);
+    assert.doesNotMatch(requestBody.instructions, /This instruction must not be sent/);
     assert.match(requestBody.input, /reference text/);
-    assert.match(requestBody.instructions, /user had text selected in the focused application/);
-    assert.match(requestBody.input, /\[BEGIN SELECTED TEXT\][\s\S]*selected application text[\s\S]*\[END SELECTED TEXT\]/);
+    assert.match(requestBody.input, /\[BEGIN SPOKEN REQUEST\][\s\S]*summarize this[\s\S]*\[END SPOKEN REQUEST\]/);
+    assert.doesNotMatch(requestBody.input, /search clipboard summarize this/);
     assert.deepEqual(requestBody.reasoning, { effort: "high" });
     assert.deepEqual(requestBody.tools, [{ type: "web_search" }]);
+    assert.equal(requestBody.tool_choice, undefined);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
@@ -320,15 +384,17 @@ test("voice prefix creation transcribes the brief and returns an editable propos
       id: "",
       name: "tidy",
       instruction: "Rewrite next message concisely.",
-      allowSearch: false,
       allowClipboard: false
     });
-    assert.match(responsesRequestBody, /Keep answers concise\./);
+    assert.doesNotMatch(responsesRequestBody, /This retired prompt must never be sent\./);
     assert.match(responsesRequestBody, /"reasoning":\{"effort":"low"\}/);
     assert.match(responsesRequestBody, /Prefix name: digits/);
+    assert.doesNotMatch(responsesRequestBody, /Prefix Search access/);
     assert.match(responsesRequestBody, /Porvoz supports key notation/);
     assert.match(responsesRequestBody, /Do not mention the prefix, trigger phrase, command/);
     assert.match(responsesRequestBody, /Prepend exactly one space to the supplied text/);
+    assert.match(responsesRequestBody, /"tools":\[\{"type":"web_search"\}\]/);
+    assert.doesNotMatch(responsesRequestBody, /"tool_choice"/);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
@@ -339,7 +405,6 @@ function prefix(name, instruction, access = {}) {
     id: name.toLocaleLowerCase(),
     name,
     instruction,
-    allowSearch: access.allowSearch === true,
     allowClipboard: access.allowClipboard === true
   };
 }
@@ -360,7 +425,7 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
       }
     }],
     activeProfileId: "default",
-    prompt: "Keep answers concise.",
+    prompt: "This retired prompt must never be sent.",
     prefixes,
     hotkey: { key: "ControlRight", modifiers: [], label: "Right Ctrl" },
     soundVolume: 0.3
@@ -390,13 +455,6 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
     saveModelSelections(profileId, value) {
       const profile = getProfile(profileId);
       profile.models = { ...profile.models, ...value };
-    },
-    savePrompt(promptValue) {
-      settings.prompt = promptValue;
-    },
-    resetPrompt() {
-      settings.prompt = "Keep answers concise.";
-      return settings.prompt;
     },
     savePrefixSettings(value) {
       settings.prefixes = structuredClone(value.prefixes);

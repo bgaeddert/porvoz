@@ -62,6 +62,7 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
   assert.equal(unauthorized.status, 401);
 
   let runtime = await api(baseUrl, "/v1/porvoz/runtime", { headers: adminHeaders });
+  assert.equal(Object.hasOwn(runtime, "prompt"), false);
   const profileId = runtime.activeProfileId;
   await api(baseUrl, `/v1/porvoz/profiles/${profileId}/connection`, {
     method: "PUT",
@@ -99,7 +100,7 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
   assert.equal(ordinary.text, "ordinary dictation");
   assert.equal(ordinary.porvoz.instruction_applied, false);
 
-  await api(baseUrl, "/v1/porvoz/prefixes", {
+  runtime = await api(baseUrl, "/v1/porvoz/prefixes", {
     method: "PUT",
     headers: adminHeaders,
     body: JSON.stringify({
@@ -107,7 +108,6 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
         id: "clipboard",
         name: "clipboard",
         instruction: "Use supplied clipboard context.",
-        allowSearch: false,
         allowClipboard: true
       }]
     })
@@ -116,8 +116,7 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
   const instructedForm = new FormData();
   instructedForm.set("model", profileId);
   instructedForm.set("porvoz_context", JSON.stringify({
-    clipboard: "desktop clipboard text",
-    selectedText: "desktop selected text"
+    clipboard: "desktop clipboard text"
   }));
   instructedForm.set("file", new Blob([Buffer.from("audio")], { type: "audio/wav" }), "test.wav");
   const instructed = await api(baseUrl, "/v1/audio/transcriptions", {
@@ -129,7 +128,9 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
   assert.equal(instructed.porvoz.raw_transcript, "clipboard summarize this");
   assert.equal(instructed.porvoz.instruction_applied, true);
   assert.match(responseRequestBody, /desktop clipboard text/);
-  assert.match(responseRequestBody, /desktop selected text/);
+  assert.match(responseRequestBody, /Spoken request after matched prefixes/);
+  assert.doesNotMatch(responseRequestBody, /clipboard summarize this/);
+  assert.equal(Object.hasOwn(runtime.prefixes[0], "allowSearch"), false);
 
   const desktopClient = createBackendClient({
     baseUrl,
@@ -145,7 +146,8 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
   });
   assert.equal(desktopSelectedTextResult.instructionApplied, true);
   assert.match(responseRequestBody, /selection sent by the desktop client/);
-  assert.match(responseRequestBody, /Selected-text routing exception/);
+  assert.match(responseRequestBody, /selection processor/);
+  assert.doesNotMatch(responseRequestBody, /Use supplied clipboard context/);
 
   for (const clipboardText of ["x".repeat(300_001), "漢😀".repeat(100_000), "\u0000\n\"\\".repeat(100_000)]) {
     for (const withPrefix of [false, true]) {

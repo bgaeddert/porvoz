@@ -8,8 +8,6 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
     saveConnection,
     populateModels,
     saveModelSelections,
-    savePrompt,
-    resetPrompt,
     savePrefixSettings,
     createProfile,
     renameProfile,
@@ -73,14 +71,6 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
       method: "PUT",
       json: value
     });
-  }
-
-  async function savePrompt(prompt) {
-    return (await request("/v1/porvoz/prompt", { method: "PUT", json: { prompt } })).prompt;
-  }
-
-  async function resetPrompt() {
-    return (await request("/v1/porvoz/prompt/reset", { method: "POST" })).prompt;
   }
 
   async function savePrefixSettings(value) {

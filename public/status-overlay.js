@@ -1,6 +1,5 @@
 import { renderMarkdown } from "./markdown-renderer.js";
 
-const surface = document.querySelector("#overlay-surface");
 const pill = document.querySelector("#status-pill");
 const indicator = document.querySelector("#status-indicator");
 const message = document.querySelector("#status-message");
@@ -10,8 +9,6 @@ const copyButton = document.querySelector("#copy-response");
 const dismissButton = document.querySelector("#dismiss-response");
 let copyFeedbackTimer;
 
-pill.addEventListener("mouseenter", () => window.porvozOverlay?.setHovered(true));
-surface.addEventListener("mouseleave", () => window.porvozOverlay?.setHovered(false));
 copyButton.addEventListener("click", async () => {
   const copied = await window.porvozOverlay?.copyResponse();
   if (!copied) return;

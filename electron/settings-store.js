@@ -1,11 +1,7 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { safeStorage } from "electron";
-
-// Upgrade an untouched v1.2.1 prompt to the current packaged prompt while
-// preserving any prompt the user actually edited.
-const RELEASED_DEFAULT_PROMPT_SHA256 = "c6c4242e2ff03c816f88aa8cfa531b654f8f0e2ce544072474c2c985fbed608d";
 
 // Pre-profiles installs kept one connection/model set at the settings root and
 // a single raw encrypted buffer in the credentials file. This id lets both
@@ -40,8 +36,6 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     saveConnection,
     saveModelCatalog,
     saveModelSelections,
-    savePrompt,
-    resetPrompt,
     savePrefixSettings,
     getHotkey,
     saveHotkey,
@@ -180,18 +174,6 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     return candidate;
   }
 
-  function savePrompt(prompt) {
-    if (typeof prompt !== "string") throw new Error("The instruction prompt must be text.");
-    settings.prompt = prompt;
-    saveSettingsFile();
-  }
-
-  function resetPrompt() {
-    settings.prompt = defaults.prompt;
-    saveSettingsFile();
-    return settings.prompt;
-  }
-
   function savePrefixSettings({ prefixes } = {}) {
     settings.prefixes = normalizePrefixEntries(prefixes, defaults.limits.maxPrefixes);
     saveSettingsFile();
@@ -290,18 +272,17 @@ function migrateSettings(rawSettings, defaults) {
 }
 
 function normalizeSettingsShape(rawSettings, defaults) {
-  const normalizedPrompt = normalizePrompt(rawSettings?.prompt, defaults.prompt);
+  const { prompt: _retiredPrompt, ...retainedSettings } = rawSettings || {};
   const profiles = normalizeProfileEntries(rawSettings?.profiles, defaults);
   const activeProfileId = profiles.some((profile) => profile.id === rawSettings?.activeProfileId)
     ? rawSettings.activeProfileId
     : profiles[0].id;
   return {
-    ...rawSettings,
+    ...retainedSettings,
     profiles,
     activeProfileId,
     prefixes: normalizePrefixEntries(rawSettings?.prefixes, defaults.limits.maxPrefixes),
     soundVolume: normalizeSoundVolume(rawSettings?.soundVolume, defaults.soundVolume),
-    prompt: normalizedPrompt,
     hotkey: rawSettings?.hotkey ? clone(rawSettings.hotkey) : clone(defaults.hotkey)
   };
 }
@@ -346,7 +327,6 @@ function normalizeProfileEntries(value, defaults) {
 
 function createInitialSettings(defaults) {
   if (!defaults?.limits
-    || typeof defaults.prompt !== "string"
     || !Array.isArray(defaults.prefixes)
     || !Array.isArray(defaults.profiles)
     || !defaults.profiles.length) {
@@ -356,7 +336,6 @@ function createInitialSettings(defaults) {
   return {
     profiles,
     activeProfileId: profiles[0].id,
-    prompt: defaults.prompt,
     prefixes: normalizePrefixEntries(defaults.prefixes, defaults.limits.maxPrefixes),
     hotkey: clone(defaults.hotkey),
     soundVolume: normalizeSoundVolume(defaults.soundVolume, 0.3)
@@ -371,7 +350,6 @@ function validateSettings(settings) {
     || !settings.profiles.every(isValidProfile)
     || typeof settings.activeProfileId !== "string"
     || !settings.profiles.some((profile) => profile.id === settings.activeProfileId)
-    || typeof settings.prompt !== "string"
     || !Array.isArray(settings.prefixes)
     || !settings.hotkey) {
     throw new Error("The saved settings are invalid.");
@@ -404,7 +382,6 @@ function normalizePrefixEntries(value, maxPrefixes) {
       id: normalizeId(entry?.id) || `prefix-${index + 1}`,
       name,
       instruction,
-      allowSearch: entry?.allowSearch === true,
       allowClipboard: entry?.allowClipboard === true
     });
   });
@@ -428,12 +405,6 @@ function normalizeProfileName(value, maxLength) {
 
 function normalizeModel(value) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizePrompt(value, currentDefault) {
-  const prompt = typeof value === "string" ? value : "";
-  const promptHash = createHash("sha256").update(prompt).digest("hex");
-  return promptHash === RELEASED_DEFAULT_PROMPT_SHA256 ? currentDefault : prompt;
 }
 
 function normalizeInstructionReasoning(value, fallback = "low") {

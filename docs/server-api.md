@@ -38,9 +38,9 @@ Send `multipart/form-data` with:
 - `response_format`: optional, but only `json` is supported.
 - `porvoz_context`: optional JSON used by the first-party desktop. It can contain `clipboard` and `selectedText` strings. The desktop omits `selectedText` when the focused application reports no selection.
 
-The server transcribes the audio, detects the configured prefix chain, optionally calls the instruction model, and returns the final text:
+The server transcribes the audio, selects the straight-transcription, prefix, or selection flow, and returns the final text:
 
-Clipboard context is included only when a matched prefix grants Clipboard access. Non-empty `selectedText` always invokes the instruction model and is included automatically; it does not require a matched prefix or access flag. Both values are treated as untrusted reference material.
+With no selected text, a matching prefix chain invokes the instruction model with only the matched instructions and the transcript remaining after those prefix phrases are removed. Clipboard context is included only when a matched prefix enables it. Non-empty `selectedText` always invokes the instruction model through a separate selection prompt; prefix matching and clipboard forwarding are skipped. Search is available, but not required, on every instruction request. Selected text and clipboard values are treated as untrusted reference material.
 
 ```json
 {
@@ -63,7 +63,7 @@ All routes below require the admin key.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `GET` | `/v1/porvoz/runtime?profileId=<id>` | Read profiles, selected-profile models, prompt, prefixes, and limits |
+| `GET` | `/v1/porvoz/runtime?profileId=<id>` | Read profiles, selected-profile models, prefixes, and limits |
 | `GET` | `/v1/porvoz/setup?profileId=<id>` | Check whether a profile is ready for inference |
 | `POST` | `/v1/porvoz/profiles` | Create a profile |
 | `PATCH` | `/v1/porvoz/profiles/<id>` | Rename a profile |
@@ -74,8 +74,6 @@ All routes below require the admin key.
 | `PUT` | `/v1/porvoz/profiles/<id>/models` | Update model selections and reasoning level |
 | `GET` | `/v1/porvoz/profiles/<id>/inference-key` | Read the profile inference key |
 | `POST` | `/v1/porvoz/profiles/<id>/inference-key` | Replace the profile inference key |
-| `PUT` | `/v1/porvoz/prompt` | Update the shared instruction prompt |
-| `POST` | `/v1/porvoz/prompt/reset` | Restore the packaged prompt |
 | `PUT` | `/v1/porvoz/prefixes` | Replace the prefix registry |
 | `POST` | `/v1/porvoz/prefixes/from-audio` | Draft a prefix from an audio description |
 | `GET` | `/v1/porvoz/logs` | Read recent activity |

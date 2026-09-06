@@ -41,12 +41,6 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   setActiveProfile(value) {
     return ipcRenderer.invoke("porvoz:set-active-profile", value);
   },
-  savePrompt(value) {
-    return ipcRenderer.invoke("porvoz:save-prompt", value);
-  },
-  resetPrompt() {
-    return ipcRenderer.invoke("porvoz:reset-prompt");
-  },
   savePrefixSettings(value) {
     return ipcRenderer.invoke("porvoz:save-prefix-settings", value);
   },

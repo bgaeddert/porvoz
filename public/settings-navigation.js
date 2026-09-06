@@ -4,8 +4,8 @@ const pageDetails = {
     summary: "Manage the API connection and choose the models Porvoz uses."
   },
   capture: {
-    title: "Prefixes & instructions",
-    summary: "Manage the instruction prompt, reusable prefixes, and reset controls."
+    title: "Prefixes",
+    summary: "Manage reusable voice prefixes and reset controls."
   },
   keyboard: {
     title: "Keyboard",

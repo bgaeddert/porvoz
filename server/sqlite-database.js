@@ -1,11 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import initSqlJs from "sql.js/dist/sql-asm.js";
+import { createRequire } from "node:module";
+import initSqlJs from "sql.js/dist/sql-wasm.js";
+
+const require = createRequire(import.meta.url);
 
 export async function createSqliteDatabase(databasePath) {
   const resolvedPath = path.resolve(databasePath);
   mkdirSync(path.dirname(resolvedPath), { recursive: true });
-  const SQL = await initSqlJs();
+  // The asm.js build has a fixed ~21 MiB heap and aborts permanently when a
+  // response exceeds it. WASM can grow its heap. Read the bundled binary via
+  // Node so this also works inside Electron's packaged ASAR filesystem.
+  const SQL = await initSqlJs({
+    wasmBinary: readFileSync(require.resolve("sql.js/dist/sql-wasm.wasm"))
+  });
   const database = existsSync(resolvedPath)
     ? new SQL.Database(readFileSync(resolvedPath))
     : new SQL.Database();

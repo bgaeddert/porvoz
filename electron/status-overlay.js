@@ -12,7 +12,7 @@ const FADE_OUT_MS = 100;
 
 /**
  * Creates the non-activating status pill and its optional response panel. The
- * window accepts pointer input but never focus, so hovering or copying a held
+ * window accepts pointer input but never focus, so opening or copying a saved
  * response does not replace the application that owns the typing target.
  */
 export async function createStatusOverlay({
@@ -35,7 +35,6 @@ export async function createStatusOverlay({
   let fadeTimer;
   let currentStatus = { state: "idle", message: "" };
   let lastResponse = "";
-  let isPointerOver = false;
   let isResponseHeld = false;
   let suppressUntilNextRecording = false;
 
@@ -66,7 +65,7 @@ export async function createStatusOverlay({
 
   secureWindow?.(overlayWindow);
   overlayWindow.setAlwaysOnTop(true);
-  overlayWindow.setIgnoreMouseEvents(false);
+  overlayWindow.setIgnoreMouseEvents(true);
   try {
     overlayWindow.setFocusable(false);
   } catch {
@@ -90,6 +89,7 @@ export async function createStatusOverlay({
 
   const resize = (expanded) => {
     if (!overlayWindow || overlayWindow.isDestroyed()) return;
+    overlayWindow.setIgnoreMouseEvents(!expanded);
     overlayWindow.setContentSize(OVERLAY_WIDTH, expanded ? PANEL_HEIGHT : PILL_HEIGHT, false);
     reposition();
   };
@@ -123,7 +123,12 @@ export async function createStatusOverlay({
     overlayWindow.webContents.send("porvoz:overlay-status", currentStatus);
     sendPanelState();
     overlayWindow.setAlwaysOnTop(true);
-    overlayWindow.showInactive();
+    // Re-showing an already visible non-focusable window can still disturb
+    // X11 input focus under GNOME. GTK applications such as Gedit respond by
+    // dropping their text selection before selected-text capture runs.
+    // Updating the visible renderer is enough; only show the window when it
+    // is actually hidden.
+    if (!overlayWindow.isVisible()) overlayWindow.showInactive();
 
     if (!isResponseHeld && (currentStatus.state === "success" || currentStatus.state === "error")) {
       const delay = currentStatus.state === "error" ? ERROR_DISPLAY_MS : SUCCESS_DISPLAY_MS;
@@ -155,14 +160,11 @@ export async function createStatusOverlay({
     showCurrentStatus();
   };
 
-  const holdResponsePanel = () => {
-    if (!isPointerOver
-      || suppressUntilNextRecording
-      || currentStatus.state === "idle"
-      || !currentStatus.message
-      || !overlayWindow
-      || overlayWindow.isDestroyed()) return false;
+  const openResponse = () => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) return false;
+    suppressUntilNextRecording = false;
     isResponseHeld = true;
+    currentStatus = { state: "waiting", message: "Last response" };
     clearTimeout(hideTimer);
     clearTimeout(fadeTimer);
     resize(true);
@@ -197,27 +199,19 @@ export async function createStatusOverlay({
       sendPanelState();
     },
     getResponse: () => lastResponse,
-    setPointerOver(value) {
-      isPointerOver = value === true;
-      if (isPointerOver) holdResponsePanel();
-    },
-    isPointerOver: () => isPointerOver,
+    openResponse,
     isSender(sender) {
       return Boolean(overlayWindow && !overlayWindow.isDestroyed() && sender === overlayWindow.webContents);
     },
-    holdIfHovered() {
-      return holdResponsePanel();
-    },
     prepareForCapture() {
       suppressUntilNextRecording = false;
-      if (!isResponseHeld || isPointerOver) return;
+      if (!isResponseHeld) return;
       isResponseHeld = false;
       resize(false);
       hide();
     },
     dismiss() {
       isResponseHeld = false;
-      isPointerOver = false;
       suppressUntilNextRecording = true;
       currentStatus = { state: "idle", message: "" };
       clearTimeout(hideTimer);
@@ -228,7 +222,6 @@ export async function createStatusOverlay({
     },
     clear() {
       isResponseHeld = false;
-      isPointerOver = false;
       suppressUntilNextRecording = false;
       clearTimeout(hideTimer);
       clearTimeout(fadeTimer);

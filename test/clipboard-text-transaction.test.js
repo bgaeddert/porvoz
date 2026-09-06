@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createClipboardTextTransaction } from "../electron/clipboard-text-transaction.js";
+import {
+  createClipboardTextTransaction
+} from "../electron/clipboard-text-transaction.js";
 
 class FakeBlob {
   constructor(parts) {
@@ -61,12 +63,12 @@ class FakeClipboard {
   }
 }
 
-function createTransaction(clipboard, { platform } = {}) {
+function createTransaction(clipboard, { platform = "win32", delay = async () => {} } = {}) {
   return createClipboardTextTransaction({
     clipboard,
     ClipboardItem: FakeClipboardItem,
     Blob: FakeBlob,
-    delay: async () => {},
+    delay,
     platform
   });
 }
@@ -124,8 +126,11 @@ test("clipboard text transaction ignores unreadable Linux transport types", asyn
   });
 
   assert.deepEqual(await describeClipboard(clipboard), [[
-    ["text/plain", "original text"],
-    ["text/html", "<p>original text</p>"]
+    ['electron application/osclipboard;format="text/plain"', "original text"],
+    ['electron application/osclipboard;format="UTF8_STRING"', "original text"],
+    ['electron application/osclipboard;format="text/plain;charset=utf-8"', "original text"],
+    ['electron application/osclipboard;format="text/html"', "<p>original text</p>"],
+    ["application/x-copyq-owner", "porvoz"]
   ]]);
 });
 
@@ -179,5 +184,72 @@ test("clipboard text transaction restores the clipboard when canceled", async ()
   assert.deepEqual(await describeClipboard(clipboard), [[
     ["text/plain", "original text"],
     ["text/html", "<p>original text</p>"]
+  ]]);
+});
+
+test("synthetic copy returns selected text and restores every original format", async () => {
+  const clipboard = originalClipboard();
+  const transaction = createTransaction(clipboard);
+
+  const selected = await transaction.readSelectedText(async () => {
+    const current = await describeClipboard(clipboard);
+    assert.match(current[0][0][1], /^porvoz-selection-sentinel:/);
+    clipboard.items = [new FakeClipboardItem({
+      "text/plain": "selected from Chrome",
+      "text/html": "<b>selected from Chrome</b>"
+    })];
+  });
+
+  assert.equal(selected, "selected from Chrome");
+  assert.deepEqual(await describeClipboard(clipboard), [[
+    ["text/plain", "original text"],
+    ["text/html", "<p>original text</p>"]
+  ]]);
+});
+
+test("synthetic copy treats an unchanged sentinel as no selection", async () => {
+  const clipboard = originalClipboard();
+  const transaction = createTransaction(clipboard);
+
+  assert.equal(await transaction.readSelectedText(async () => {}), "");
+  assert.deepEqual(await describeClipboard(clipboard), [[
+    ["text/plain", "original text"],
+    ["text/html", "<p>original text</p>"]
+  ]]);
+});
+
+test("synthetic copy does not overwrite a later external clipboard change", async () => {
+  const clipboard = originalClipboard();
+  let delayCalls = 0;
+  const transaction = createTransaction(clipboard, {
+    async delay() {
+      delayCalls += 1;
+      if (delayCalls === 2) {
+        clipboard.items = [new FakeClipboardItem({ "text/plain": "new external value" })];
+      }
+    }
+  });
+
+  const selected = await transaction.readSelectedText(async () => {
+    clipboard.items = [new FakeClipboardItem({ "text/plain": "brief copied selection" })];
+  });
+
+  assert.equal(selected, "");
+  assert.deepEqual(await describeClipboard(clipboard), [[
+    ["text/plain", "new external value"]
+  ]]);
+});
+
+test("synthetic copy leaves ambiguous non-text clipboard changes intact", async () => {
+  const clipboard = originalClipboard();
+  const transaction = createTransaction(clipboard);
+
+  const selected = await transaction.readSelectedText(async () => {
+    clipboard.items = [new FakeClipboardItem({ "image/png": new FakeBlob(["image bytes"]) })];
+  });
+
+  assert.equal(selected, "");
+  assert.deepEqual(await describeClipboard(clipboard), [[
+    ["image/png", "image bytes"]
   ]]);
 });
