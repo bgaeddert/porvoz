@@ -4,6 +4,7 @@ import { parseTextCommands } from "./text-command-parser.js";
 import { createClipboardTextTransaction } from "./clipboard-text-transaction.js";
 import { abortableDelay, throwIfAborted } from "./operation-cancellation.js";
 import { getX11 } from "./linux-x11.js";
+import { isTerminalWindow } from "./terminal-detection.js";
 
 const INPUT_KEYBOARD = 1;
 const KEYEVENTF_KEYUP = 0x0002;
@@ -139,13 +140,15 @@ export function isSyntheticCopyActive() {
 
 export async function readSelectedTextFromClipboard({
   signal,
-  target
+  target,
+  consoleSelectionEnabled = false
 } = {}) {
   await textInputForPlatform.prepareCopy(target, signal);
+  if (!consoleSelectionEnabled && textInputForPlatform.isTerminalTarget(target)) return "";
   return clipboardTextTransaction.readSelectedText(
     () => {
       syntheticCopySuppressedUntil = Math.max(syntheticCopySuppressedUntil, Date.now() + 250);
-      return textInputForPlatform.sendCopy({ target });
+      return textInputForPlatform.sendCopy({ target, consoleSelectionEnabled });
     },
     { signal }
   );
@@ -173,6 +176,17 @@ export async function typeText(text, { target = null, signal } = {}) {
 
 function createWindowsTextInput() {
   const user32 = koffi.load("user32.dll");
+  const kernel32 = koffi.load("kernel32.dll");
+  const GetClassNameW = user32.func(
+    "int __stdcall GetClassNameW(void *hWnd, _Out_ uint16_t *lpClassName, int nMaxCount)"
+  );
+  const OpenProcess = kernel32.func(
+    "void * __stdcall OpenProcess(uint32_t access, int inherit, uint32_t processId)"
+  );
+  const QueryFullProcessImageNameW = kernel32.func(
+    "int __stdcall QueryFullProcessImageNameW(void *process, uint32_t flags, _Out_ uint16_t *name, _Inout_ uint32_t *size)"
+  );
+  const CloseHandle = kernel32.func("int __stdcall CloseHandle(void *handle)");
   const MOUSEINPUT = koffi.struct("PorvozMouseInput", {
     dx: "long",
     dy: "long",
@@ -306,16 +320,27 @@ function createWindowsTextInput() {
         createWindowsKeyInput(0x11, 0, KEYEVENTF_KEYUP)
       ]);
     },
-    sendCopy({ target } = {}) {
+    isTerminalTarget(target) {
+      const window = target || GetForegroundWindow();
+      return Boolean(window && isTerminalForeground(window));
+    },
+    sendCopy({ target, consoleSelectionEnabled = false } = {}) {
+      const foregroundWindow = GetForegroundWindow();
+      if (!foregroundWindow) throw new Error("No application is focused for selection capture.");
+      const terminal = isTerminalForeground(foregroundWindow);
+      if (terminal && !consoleSelectionEnabled) return;
       // Clipboard snapshotting is asynchronous. Recheck immediately before
       // injection in case focus or modifier state changed during that work.
-      if (ModifierKeys.some(isKeyDown) || (target && !isTargetForeground(target))) {
+      if (ModifierKeys.some(isKeyDown) || GetForegroundWindow() !== foregroundWindow
+        || (target && !isTargetForeground(target))) {
         throw new Error("The keyboard or focused application changed before selection capture.");
       }
       sendInput([
         createWindowsKeyInput(0x11, 0, 0),
+        ...(terminal ? [createWindowsKeyInput(0x10, 0, 0)] : []),
         createWindowsKeyInput(0x43, 0, 0),
         createWindowsKeyInput(0x43, 0, KEYEVENTF_KEYUP),
+        ...(terminal ? [createWindowsKeyInput(0x10, 0, KEYEVENTF_KEYUP)] : []),
         createWindowsKeyInput(0x11, 0, KEYEVENTF_KEYUP)
       ]);
     },
@@ -337,6 +362,25 @@ function createWindowsTextInput() {
     },
     dispose() {}
   };
+
+  function isTerminalForeground(window) {
+    const classBuffer = Buffer.alloc(512);
+    const length = GetClassNameW(window, classBuffer, 256);
+    const windowClasses = length > 0 ? [classBuffer.toString("utf16le", 0, length * 2)] : [];
+    if (isTerminalWindow({ windowClasses })) return true;
+    const processId = [0];
+    GetWindowThreadProcessId(window, processId);
+    const processHandle = processId[0] ? OpenProcess(0x1000, 0, processId[0]) : null;
+    if (!processHandle) return false;
+    try {
+      const capacity = [32768];
+      const name = Buffer.alloc(capacity[0] * 2);
+      return Boolean(QueryFullProcessImageNameW(processHandle, 0, name, capacity)
+        && isTerminalWindow({ executable: name.toString("utf16le", 0, capacity[0] * 2) }));
+    } finally {
+      CloseHandle(processHandle);
+    }
+  }
 
   function isTargetForeground(target) {
     const foregroundWindow = GetForegroundWindow();
@@ -436,13 +480,26 @@ function createLinuxTextInput() {
       verifyTarget(target);
       preparedTarget = target;
     },
-    sendCopy({ target } = {}) {
-      verifyTarget(target);
-      sendControlShortcut("c");
+    isTerminalTarget(target) {
+      const window = target || getX11().activeWindow();
+      return Boolean(window && isTerminalWindow({ windowClasses: getX11().windowClasses(window) }));
+    },
+    sendCopy({ target, consoleSelectionEnabled = false } = {}) {
+      const foregroundWindow = getX11().activeWindow();
+      if (!foregroundWindow) throw new Error("No application is focused for selection capture.");
+      const terminal = isTerminalWindow({ windowClasses: getX11().windowClasses(foregroundWindow) });
+      if (terminal && !consoleSelectionEnabled) return;
+      verifyTarget(target || foregroundWindow);
+      verifyTarget(foregroundWindow);
+      sendControlShortcut("c", terminal);
     },
     sendPaste() {
+      const foregroundWindow = getX11().activeWindow();
+      if (!foregroundWindow) throw new Error("No application is focused for pasting the response.");
+      const terminal = isTerminalWindow({ windowClasses: getX11().windowClasses(foregroundWindow) });
       verifyTarget(preparedTarget);
-      sendControlShortcut("v");
+      verifyTarget(foregroundWindow);
+      sendControlShortcut("v", terminal);
     },
     async pressKeyCombination(keys, signal) {
       throwIfAborted(signal);
@@ -489,15 +546,22 @@ function createLinuxTextInput() {
     }
   }
 
-  function sendControlShortcut(key) {
+  function sendControlShortcut(key, withShift = false) {
     const control = getKeycode("Control_L");
+    const shift = withShift ? getKeycode("Shift_L") : null;
     const keycode = getKeycode(key);
-    sendKey(control, true);
+    // Pace terminal shortcuts at the X server so the receiving toolkit can
+    // observe the modifiers before the letter and before they are released.
+    // XFlush alone sends the entire chord as an effectively instant burst.
+    const eventDelay = withShift ? 25 : 0;
+    sendKey(control, true, eventDelay);
     try {
-      sendKey(keycode, true);
-      sendKey(keycode, false);
+      if (shift) sendKey(shift, true, eventDelay);
+      sendKey(keycode, true, eventDelay);
+      sendKey(keycode, false, eventDelay);
     } finally {
-      sendKey(control, false);
+      if (shift) sendKey(shift, false, eventDelay);
+      sendKey(control, false, eventDelay);
     }
   }
 
@@ -535,8 +599,8 @@ function createLinuxTextInput() {
     return X11_KEY_NAMES.get(key) || key;
   }
 
-  function sendKey(keycode, isPressed) {
-    if (!XTestFakeKeyEvent(getDisplay(), keycode, isPressed ? 1 : 0, 0)) {
+  function sendKey(keycode, isPressed, delayMs = 0) {
+    if (!XTestFakeKeyEvent(getDisplay(), keycode, isPressed ? 1 : 0, delayMs)) {
       throw new Error("Linux rejected the requested paste input.");
     }
     XFlush(getDisplay());

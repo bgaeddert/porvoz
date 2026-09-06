@@ -15,10 +15,43 @@ References:
 
 Porvoz uses raw X11 formats for its temporary clipboard text and restoration.
 It performs synthetic copy after the recording hotkey is released, waiting for
-all modifiers to be up so the target receives plain Ctrl+C. No timing guess or
-modifier release/re-press injection is required. The CopyQ ownership marker
+all modifiers to be up so ordinary applications receive Ctrl+C. Recognized
+standalone terminals are skipped by default; enabling Console selection in
+Keyboard settings allows Ctrl+Shift+C. Porvoz waits for the physical modifiers
+to be released instead of releasing and re-pressing them. The CopyQ ownership marker
 excludes temporary writes from clipboard-to-selection synchronization. Paste
 also waits for modifiers and verifies the recording window still has focus.
+Recognized terminals receive Ctrl+Shift+V for paste; other applications receive
+Ctrl+V. Terminal Copy and Paste events are spaced by 25 ms at the X server so
+the receiving toolkit can process the modifier changes around the letter key.
+This fixes Ghostty forwarding the instant shortcut as terminal escape sequences.
+
+Terminal detection reads the X11 `WM_CLASS` instance and class through
+`XGetClassHint`; it does not use accessibility APIs. Both platforms share the
+known-terminal identity list. An empty terminal copy returns no selected
+context without retrying Ctrl+C. Unknown terminals and embedded editor
+terminals may still receive Ctrl+C. Native Wayland selection capture is not
+added by this change.
+
+The Console selection toggle affects only selection copying in recognized
+terminals. When off, no clipboard transaction or Copy keystroke is attempted
+there. When on, the prior copy path is retained. The warning explains that an
+empty selection can let the shortcut reach a CLI as Control-C and interrupt it.
+Paste and ordinary-editor selection copying do not depend on this toggle.
+
+The terminal shortcut branches, event delays, default-off behavior, and
+focus-change guard are covered by mocked X11 input-boundary tests. Native class
+lookup was checked in the Ubuntu X11 session. For the 2.3.0 release, the user
+manually confirmed working dictation in Gedit, GNOME Terminal, and Ghostty after
+the terminal paste shortcut and event timing fixes. These results cover those
+tested desktop configurations, not every identity in the shared terminal list.
+
+For future terminal regression checks, leave Console selection off and confirm
+dictation pastes while a disposable CLI remains running. Then enable it and
+check selection capture using the terminal's actual keybindings. With nothing
+selected, the warning still applies: the terminal may forward Copy to the CLI.
+Check ordinary editor selection capture as well. The earlier editor-specific
+desktop results below predate the terminal changes.
 
 Direct PRIMARY reading was tested and rejected: Chrome retains old PRIMARY
 text after its visible selection collapses, including when the owner is still

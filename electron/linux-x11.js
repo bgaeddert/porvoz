@@ -13,8 +13,21 @@ export function getX11() {
   const root = x11.func("uintptr_t XDefaultRootWindow(void *display)")(display);
   const property = x11.func("int XGetWindowProperty(void *display, uintptr_t window, uintptr_t property, long offset, long length, int remove, uintptr_t type, _Out_ uintptr_t *actual_type, _Out_ int *format, _Out_ unsigned long *count, _Out_ unsigned long *remaining, _Out_ void **data)");
   const free = x11.func("int XFree(void *data)");
+  koffi.struct("PorvozXClassHint", { res_name: "void *", res_class: "void *" });
+  const getClassHint = x11.func("int XGetClassHint(void *display, uintptr_t window, _Out_ PorvozXClassHint *hint)");
   const activeAtom = atom(display, "_NET_ACTIVE_WINDOW", 0);
   native = {
+    windowClasses(window) {
+      const hint = { res_name: null, res_class: null };
+      try {
+        if (!getClassHint(display, window, hint)) return [];
+        return [hint.res_name, hint.res_class].filter(Boolean)
+          .map(value => koffi.decode(value, "char", -1));
+      } finally {
+        if (hint.res_name) free(hint.res_name);
+        if (hint.res_class) free(hint.res_class);
+      }
+    },
     activeWindow() {
       const type = [0], format = [0], count = [0], remaining = [0], data = [null];
       const status = property(display, root, activeAtom, 0, 1, 0, 33, type, format, count, remaining, data);

@@ -6,19 +6,19 @@ Instead of forcing you into a fixed vocabulary or workflow, Porvoz adapts to the
 
 ## Download and install
 
-The current release is [Porvoz v2.2.0](https://github.com/bgaeddert/porvoz/releases/tag/v2.2.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
+The current release is [Porvoz v2.3.0](https://github.com/bgaeddert/porvoz/releases/tag/v2.3.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v2.2.0/Porvoz-2.2.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v2.3.0/Porvoz-2.3.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v2.2.0/Porvoz-2.2.0-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v2.3.0/Porvoz-2.3.0-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-2.2.0-linux-x86_64.AppImage
-./Porvoz-2.2.0-linux-x86_64.AppImage
+chmod +x Porvoz-2.3.0-linux-x86_64.AppImage
+./Porvoz-2.3.0-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to start the local backend and protect its encryption key. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -27,7 +27,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6 xclip
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v2.2.0/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v2.3.0/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -75,15 +75,17 @@ Prefix names must be unique, ignoring case. Use **Remove prefix** to delete any 
 
 Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe and type the result into the application that owns the cursor. Use **Settings → Keyboard → Set hotkey** to choose another key or combination, such as **Ctrl + Super** or **Ctrl + Shift + F12**; changes take effect immediately.
 
+**Settings → Keyboard → Console selection** controls automatic selection copying only in recognized terminal windows. It is **off by default**, including for existing desktops. Dictation, paste, and selection copying in other applications are unaffected. Enable it to attempt `Ctrl+Shift+C` in recognized terminals. **Warning:** if nothing is selected, a terminal can pass that shortcut through as Control-C, likely canceling or exiting running applications or commands. Unknown terminals and terminal panes inside editors are not covered by this setting. The preference is saved on this computer and applies immediately.
+
 While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. Double-tap the configured hotkey to open the last completed response, even after the pill disappears. Hold the hotkey for 300 ms to start recording; short taps do not record audio or touch the clipboard. Hovering has no effect. The response panel renders common Markdown and provides **Copy** and **×** controls. Press **Escape** to dismiss it. The non-activating overlay does not become the typing target.
 
 The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. With no selected text, Porvoz matches consecutive prefixes at the beginning of the transcript, removes the matched phrases, and sends only those matched prefix instructions and the remaining spoken request to the instruction model. A transcript without a matched prefix bypasses the instruction model and is returned directly.
 
-Every instruction-model request makes the hosted `web_search` tool available without requiring the model to use it. Discovered citations may be appended to the result. In the prefix flow, the current clipboard is included as untrusted reference context only when at least one matched prefix enables it. When text is selected, Porvoz instead sends the complete transcript and selected text through a dedicated selection prompt; it does not match or send prefixes and does not include clipboard context. Porvoz captures selected text with a clipboard snapshot, a unique sentinel, and synthetic copy, then restores the original clipboard. On Windows and Linux, this runs when recording stops and waits for all Control, Alt, Shift, and Meta keys to be released before sending plain `Ctrl+C`. Linux writes raw X11 clipboard formats so neither capture nor paste clears the application's selection. Selection capture is bounded to 200,000 characters; unavailable selections are omitted. **Activity** stores the 200 most recent transcript, instruction, and error entries on the selected server. Desktops using the same remote server share that history.
+Every instruction-model request makes the hosted `web_search` tool available without requiring the model to use it. Discovered citations may be appended to the result. In the prefix flow, the current clipboard is included as untrusted reference context only when at least one matched prefix enables it. When text is selected, Porvoz instead sends the complete transcript and selected text through a dedicated selection prompt; it does not match or send prefixes and does not include clipboard context. Porvoz captures selected text with a clipboard snapshot, a unique sentinel, and synthetic copy, then restores the original clipboard. On Windows and Linux, this runs when recording stops and waits for all Control, Alt, Shift, and Meta keys to be released. Recognized standalone terminals are skipped unless Console selection is enabled, in which case they receive `Ctrl+Shift+C`; other applications receive `Ctrl+C`. An empty terminal copy is never retried with `Ctrl+C`. Detection uses Windows window classes and executable names or Linux X11 window classes and instance names, without accessibility APIs. Unknown terminals and terminal panes embedded in editors are not automatically recognized. Linux writes raw X11 clipboard formats so neither capture nor paste clears the application's selection. Selection capture is bounded to 200,000 characters; unavailable selections are omitted. **Activity** stores the 200 most recent transcript, instruction, and error entries on the selected server. Desktops using the same remote server share that history.
 
 When a typed response needs a keyboard action, the instruction model can return bracketed key notation such as `[Enter]`, `[Control+F]`, or `[Control+Shift+ArrowDown]`. Put modifier names first, separate keys with `+`, and use one notation per action; Porvoz parses the notation and sends the corresponding key press or combination. Linux typing uses X11 for the global hotkey and simulated paste input. macOS is not supported in the current release.
 
-Text placement uses serialized clipboard transactions: snapshot the clipboard, temporarily supply the response, simulate `Ctrl+V`, and restore the original formats unless clipboard ownership changed. Linux supplies raw X11 clipboard formats because Chromium's normal text write also takes over `PRIMARY` and clears GTK selections. A CopyQ ownership marker prevents clipboard-to-selection synchronization of these temporary writes. Linux waits for held modifiers to be released and verifies that the recording window still has focus before pasting; Windows retains its foreground-window restoration. Linux clipboard snapshots use `xclip`. See the [Linux](docs/linux-selection-testing.md) and [Windows](docs/windows-selection-testing.md) selection regression guides for real desktop verification and remaining physical-hotkey checks.
+Text placement uses serialized clipboard transactions: snapshot the clipboard, temporarily supply the response, simulate Paste, and restore the original formats unless clipboard ownership changed. Recognized Linux terminals receive `Ctrl+Shift+V`, with short delays between key events so terminals such as Ghostty recognize the shortcut. Other Linux applications and Windows retain `Ctrl+V`. Paste remains enabled regardless of the Console selection setting. Linux supplies raw X11 clipboard formats because Chromium's normal text write also takes over `PRIMARY` and clears GTK selections. A CopyQ ownership marker prevents clipboard-to-selection synchronization of these temporary writes. Linux waits for held modifiers to be released and verifies that the recording window still has focus before pasting; Windows retains its foreground-window restoration. Linux clipboard snapshots use `xclip`. See the [Linux](docs/linux-selection-testing.md) and [Windows](docs/windows-selection-testing.md) selection regression guides for real desktop verification and repeatable regression checks.
 
 ## Headless server and Docker
 
@@ -96,7 +98,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `2.2.0` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
+Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `2.3.0` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
 
 To build the image from the current source checkout instead, run `docker compose up -d --build`.
 
@@ -106,7 +108,7 @@ The server exposes `GET /v1/models` and `POST /v1/audio/transcriptions` for Open
 
 ## Local data and security
 
-The local child server stores its SQLite database and encrypted server master key in the platform user-data directory. Desktop-only preferences—including local/remote mode, the selected profile for each backend, hotkey, and sound volume—are stored separately. A configured remote admin key is protected with Electron's operating-system-backed credential encryption.
+The local child server stores its SQLite database and encrypted server master key in the platform user-data directory. Desktop-only preferences—including local/remote mode, the selected profile for each backend, hotkey, sound volume, and console selection—are stored separately. A configured remote admin key is protected with Electron's operating-system-backed credential encryption.
 
 On the first local-server launch, Porvoz imports existing desktop connection profiles, provider keys, models, and prefixes. Retired custom prompt and Search-access fields are ignored. Hotkey and sound preferences remain local. The previous settings and credentials files are retained; the old activity archive is not imported. See [server setup and migration](docs/server-setup.md) for data locations, backups, and deployment options.
 

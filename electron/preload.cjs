@@ -89,6 +89,9 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   saveSoundVolume(value) {
     return ipcRenderer.invoke("porvoz:save-sound-volume", value);
   },
+  saveConsoleSelectionEnabled(value) {
+    return ipcRenderer.invoke("porvoz:save-console-selection", value);
+  },
   setStatus(value) {
     ipcRenderer.send("porvoz:status", value);
   },

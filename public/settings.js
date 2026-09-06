@@ -96,6 +96,9 @@ const hotkeyStatus = document.querySelector("#hotkey-status");
 const soundVolumeInput = document.querySelector("#sound-volume");
 const soundVolumeValue = document.querySelector("#sound-volume-value");
 const soundVolumeStatus = document.querySelector("#sound-volume-status");
+const consoleSelectionInput = document.querySelector("#console-selection-enabled");
+const consoleSelectionStatus = document.querySelector("#console-selection-status");
+let savedConsoleSelectionEnabled = false;
 const previewCueButton = document.querySelector("#preview-cue");
 const previewCueSound = new Audio("./assets/recording-start.mp3");
 const desktopBridge = window.porvozDesktop;
@@ -152,6 +155,7 @@ async function initializeSettings() {
   renderModels();
   renderPrefixes();
   renderSoundVolume(runtimeConfig.soundVolume);
+  renderConsoleSelection(runtimeConfig.consoleSelectionEnabled);
   await initializeHotkey();
 
   profileSelect.addEventListener("change", switchActiveProfile);
@@ -204,6 +208,7 @@ async function initializeSettings() {
   cancelHotkeyButton.addEventListener("click", cancelHotkeyCapture);
   soundVolumeInput.addEventListener("input", updateSoundVolumePreview);
   soundVolumeInput.addEventListener("change", saveSoundVolume);
+  consoleSelectionInput.addEventListener("change", saveConsoleSelection);
   previewCueButton?.addEventListener("click", playCuePreview);
 
   if (desktopBridge?.isElectron) {
@@ -1355,6 +1360,8 @@ async function resetToDefaults(event) {
     renderModels();
     renderPrefixes();
     renderSoundVolume(runtimeConfig.soundVolume);
+    renderConsoleSelection(runtimeConfig.consoleSelectionEnabled);
+    consoleSelectionStatus.textContent = "";
     await loadConnectionSettings();
     resetDialog.close();
     resetStatus.textContent = "Settings reset to defaults.";
@@ -1379,6 +1386,30 @@ async function initializeHotkey() {
 
 function renderHotkey(hotkey) {
   hotkeyDisplay.textContent = hotkey.label;
+}
+
+function renderConsoleSelection(value) {
+  savedConsoleSelectionEnabled = value === true;
+  consoleSelectionInput.checked = savedConsoleSelectionEnabled;
+}
+
+async function saveConsoleSelection() {
+  const nextValue = consoleSelectionInput.checked;
+  consoleSelectionInput.disabled = true;
+  consoleSelectionStatus.textContent = "Saving…";
+  consoleSelectionStatus.dataset.state = "saving";
+  try {
+    const saved = await desktopBridge.saveConsoleSelectionEnabled(nextValue);
+    renderConsoleSelection(saved);
+    consoleSelectionStatus.textContent = saved ? "Console selection is on." : "Console selection is off.";
+    consoleSelectionStatus.dataset.state = "success";
+  } catch (error) {
+    consoleSelectionInput.checked = savedConsoleSelectionEnabled;
+    consoleSelectionStatus.textContent = error.message || "Could not save console selection.";
+    consoleSelectionStatus.dataset.state = "error";
+  } finally {
+    consoleSelectionInput.disabled = false;
+  }
 }
 
 function renderSoundVolume(value) {

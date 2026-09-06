@@ -30,7 +30,44 @@ includes Ctrl+Meta release-order tests and Win32-boundary tests that verify no
 input is injected until both modifiers are released. The physical hotkey check
 remains separate from those automated tests.
 
-## Repeat the desktop test
+## Terminal copy shortcut
+
+**Windows Terminal failure found in physical testing:** The user ran Codex CLI
+in Windows Terminal, dictated without selecting text, and saw Codex CLI stop
+before the transcript pasted into the shell. A subsequent read-only inspection
+found the main window (`CASCADIA_HOSTING_WINDOW_CLASS`, `WindowsTerminal.exe`)
+correctly matched the terminal policy. There was no per-copy trace for the
+original event, so its exact injected chord was not recorded.
+
+Windows Terminal documents that its Copy action forwards the key chord to the
+terminal when there is no selection, including the default `Ctrl+Shift+C`
+binding. Therefore changing Ctrl+C to Ctrl+Shift+C is not sufficient protection
+against interrupting a CLI. The mocked tests below prove the requested chord,
+not that a terminal consumes it. See [Windows Terminal Copy action](https://learn.microsoft.com/en-us/windows/terminal/customize-settings/actions#copy).
+
+Console selection now defaults **off** in Keyboard settings. While off,
+recognized terminals are skipped before clipboard snapshotting or Copy input;
+ordinary editors and paste are unchanged. Enabling it retains the unsafe
+terminal shortcut behavior with an explicit warning. The setting persists
+locally, applies to the next capture, and resets to off with Reset to defaults.
+
+When console selection is enabled, capture uses `Ctrl+Shift+C` in recognized standalone terminals,
+identified by window class or executable name. Other applications retain
+`Ctrl+C`. No accessibility API is used, and an empty terminal copy does not
+trigger a plain `Ctrl+C` retry. Embedded editor terminals and unknown terminal
+identities remain outside this detection policy.
+
+Automated input-boundary tests verify the terminal chord, ordinary editor
+chord, focus and modifier guards, and unchanged paste behavior. The native
+Win32 class and executable queries were also checked on Windows. The user
+completed manual Windows testing and approved the 2.3.0 release. For future
+regression checks, confirm dictation does not interrupt a disposable CLI with
+Console selection off, then test selected-text capture with it enabled. With
+the setting enabled and nothing selected, the warning still applies; the
+terminal may forward Copy to the CLI. This does not claim that terminal output
+selections can be replaced like editor text.
+
+## Repeat the editor desktop test
 
 Run `scripts/windows-selection-integration.js` with Electron on Windows. Set
 `PORVOZ_SELECTION_TEST_STATE` to a temporary JSON path; the helper writes its

@@ -89,7 +89,10 @@ const ACTIVE_ACTIVITY_STATES = new Set(["recording", "transcribing", "processing
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 const selectedTextReader = createSelectedTextReader({
-  readSelection: readSelectedTextFromClipboard
+  readSelection: options => readSelectedTextFromClipboard({
+    ...options,
+    consoleSelectionEnabled: desktopPreferences?.getConsoleSelectionEnabled() === true
+  })
 });
 
 let appService;
@@ -712,7 +715,8 @@ function registerIpcHandlers() {
   ipcMain.handle("porvoz:get-app-version", () => app.getVersion());
   ipcMain.handle("porvoz:get-runtime-config", async () => ({
     ...(await appService.getRuntimeConfig()),
-    soundVolume: desktopPreferences.getSoundVolume()
+    soundVolume: desktopPreferences.getSoundVolume(),
+    consoleSelectionEnabled: desktopPreferences.getConsoleSelectionEnabled()
   }));
   ipcMain.handle("porvoz:get-backend-settings", () => backendManager.getSettings());
   ipcMain.handle("porvoz:save-backend-settings", async (_event, value) => {
@@ -789,7 +793,8 @@ function registerIpcHandlers() {
     notifyHotkeyUpdated();
     notifySetupUpdated();
     updateTrayMenu();
-    return { ...runtimeConfig, soundVolume: desktopPreferences.getSoundVolume() };
+    return { ...runtimeConfig, soundVolume: desktopPreferences.getSoundVolume(),
+      consoleSelectionEnabled: desktopPreferences.getConsoleSelectionEnabled() };
   });
   ipcMain.handle("porvoz:transcribe", (_event, value) => runActiveOperation(async (signal) => {
     setOverlayStatus({ message: "Transcribing…", state: "transcribing", stage: "transcription" });
@@ -844,6 +849,8 @@ function registerIpcHandlers() {
     notifySoundVolumeUpdated(soundVolume);
     return soundVolume;
   });
+  ipcMain.handle("porvoz:save-console-selection", (_event, value) =>
+    desktopPreferences.saveConsoleSelectionEnabled(value));
   ipcMain.on("porvoz:status", (_event, value) => {
     if (!value || typeof value !== "object") return;
     if (ACTIVE_ACTIVITY_STATES.has(value.state)) rendererActivities.add(_event.sender.id);

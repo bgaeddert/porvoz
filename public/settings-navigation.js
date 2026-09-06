@@ -9,7 +9,7 @@ const pageDetails = {
   },
   keyboard: {
     title: "Keyboard",
-    summary: "Choose the global shortcut Porvoz listens for on this computer."
+    summary: "Choose the global shortcut and selection-copy behavior for recognized terminals on this computer."
   },
   sound: {
     title: "Sound",

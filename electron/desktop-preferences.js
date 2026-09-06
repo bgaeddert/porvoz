@@ -13,6 +13,8 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
     saveHotkey,
     getSoundVolume: () => state.soundVolume,
     saveSoundVolume,
+    getConsoleSelectionEnabled: () => state.consoleSelectionEnabled,
+    saveConsoleSelectionEnabled,
     resetCaptureSettings
   };
 
@@ -47,7 +49,8 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
       hotkey: value?.hotkey && typeof value.hotkey === "object"
         ? structuredClone(value.hotkey)
         : { key: "ControlRight", modifiers: [], label: "Right Ctrl" },
-      soundVolume: normalizeVolume(value?.soundVolume)
+      soundVolume: normalizeVolume(value?.soundVolume),
+      consoleSelectionEnabled: value?.consoleSelectionEnabled === true
     };
   }
 
@@ -120,7 +123,16 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
   function resetCaptureSettings(defaults = {}) {
     state.hotkey = structuredClone(defaults.hotkey || { key: "ControlRight", modifiers: [], label: "Right Ctrl" });
     state.soundVolume = normalizeVolume(defaults.soundVolume);
+    state.consoleSelectionEnabled = false;
     save();
+  }
+
+  function saveConsoleSelectionEnabled(value) {
+    if (typeof value !== "boolean") throw new Error("Console selection must be on or off.");
+    const next = { ...state, consoleSelectionEnabled: value };
+    writeState(next);
+    state = next;
+    return state.consoleSelectionEnabled;
   }
 
   function save() {

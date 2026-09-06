@@ -269,6 +269,22 @@
             <p id="hotkey-status" class="field-note" aria-live="polite">Click Set hotkey, then press one Control/Alt key, a modifier combination, or a combination with a trigger key. Release to save; Escape cancels.</p>
           </section>
 
+          <section id="console-selection" class="settings-card" data-settings-page="keyboard" aria-labelledby="console-selection-heading" hidden>
+            <div class="settings-heading">
+              <div>
+                <h2 id="console-selection-heading">Console selection</h2>
+                <p class="section-description">Choose whether Porvoz copies selected text from recognized terminals. Off by default. Dictation and selection copying in other applications are unaffected.</p>
+              </div>
+            </div>
+            <label class="checkbox-line">
+              <input id="console-selection-enabled" type="checkbox" aria-describedby="console-selection-warning console-selection-scope" />
+              <span>Enable selection copy in recognized terminals</span>
+            </label>
+            <p id="console-selection-warning" class="console-selection-warning"><strong>Warning:</strong> If nothing is selected, the terminal may pass the copy shortcut through as Control-C, likely canceling or exiting running terminal applications or commands. When enabled, Porvoz attempts Control-Shift-C to copy the selection.</p>
+            <p id="console-selection-scope" class="field-note">This setting applies only to recognized terminal windows. Unknown terminals and terminal panes inside editors are not covered.</p>
+            <p id="console-selection-status" class="field-note" aria-live="polite"></p>
+          </section>
+
           <section id="sound" class="settings-card" data-settings-page="sound" aria-labelledby="sound-heading" hidden>
             <div class="settings-heading">
               <div>

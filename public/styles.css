@@ -483,6 +483,17 @@ button,
   background: var(--warning-tint);
 }
 
+.console-selection-warning {
+  margin: 14px 0 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--warning-line);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-tint);
+  color: var(--warning-text);
+  line-height: 1.5;
+}
+
 .setup-warning-mark {
   display: grid;
   width: 24px;
