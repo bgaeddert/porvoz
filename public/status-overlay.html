@@ -8,16 +8,32 @@
   </head>
   <body>
     <main id="overlay-surface" class="overlay-surface">
-      <section id="response-panel" class="response-panel" aria-label="Last Porvoz response" hidden>
-        <header class="response-header">
-          <span class="response-label">Last output</span>
-          <div class="response-actions">
-            <button id="copy-response" class="response-button copy-button" type="button">Copy</button>
-            <button id="dismiss-response" class="response-button close-button" type="button" aria-label="Dismiss response">×</button>
-          </div>
-        </header>
-        <div id="response-text" class="response-text" role="textbox" aria-readonly="true"></div>
-      </section>
+      <div id="panel-wrapper" class="panel-wrapper" hidden>
+        <aside class="side-keys side-keys-left" aria-label="Quick keys left">
+          <button class="key-button" type="button" data-key="[Escape]" title="Escape">Esc</button>
+          <button class="key-button" type="button" data-key="[Tab]" title="Tab">Tab</button>
+          <button class="key-button" type="button" data-key="[Space]" title="Space">Space</button>
+          <button class="key-button" type="button" data-key="[Control+Z]" title="Undo (Ctrl+Z)">Undo</button>
+          <button class="key-button" type="button" data-key="[Control+A]" title="Select All (Ctrl+A)">Select All</button>
+        </aside>
+        <section id="response-panel" class="response-panel" aria-label="Last Porvoz response">
+          <header class="response-header">
+            <span class="response-label">Last output</span>
+            <div class="response-actions">
+              <button id="copy-response" class="response-button copy-button" type="button">Copy</button>
+              <button id="dismiss-response" class="response-button close-button" type="button" aria-label="Dismiss response">×</button>
+            </div>
+          </header>
+          <div id="response-text" class="response-text" role="textbox" aria-readonly="true"></div>
+        </section>
+        <aside class="side-keys side-keys-right" aria-label="Quick keys right">
+          <button class="key-button" type="button" data-key="[Enter]" title="Enter">Enter</button>
+          <button class="key-button" type="button" data-key="[Backspace]" title="Backspace">Backspace</button>
+          <button class="key-button" type="button" data-key="[Delete]" title="Delete">Delete</button>
+          <button class="key-button" type="button" data-key="[Control+C]" title="Copy (Ctrl+C)">Copy</button>
+          <button class="key-button" type="button" data-key="[Control+V]" title="Paste (Ctrl+V)">Paste</button>
+        </aside>
+      </div>
       <div id="status-pill" class="status-pill" role="status" aria-live="polite">
         <span id="status-indicator" class="status-indicator" aria-hidden="true"></span>
         <span id="status-message" class="status-message"></span>

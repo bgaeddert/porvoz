@@ -102,6 +102,7 @@ export function createPorvozHttpServer({
         porvoz: {
           raw_transcript: transcription.transcript,
           instruction_applied: instruction.instructionApplied,
+          web_search_used: instruction.webSearchUsed === true,
           log_group_id: transcription.logGroupId
         }
       });

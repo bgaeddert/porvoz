@@ -3,10 +3,12 @@ import { renderMarkdown } from "./markdown-renderer.js";
 const pill = document.querySelector("#status-pill");
 const indicator = document.querySelector("#status-indicator");
 const message = document.querySelector("#status-message");
+const panelWrapper = document.querySelector("#panel-wrapper");
 const panel = document.querySelector("#response-panel");
 const responseText = document.querySelector("#response-text");
 const copyButton = document.querySelector("#copy-response");
 const dismissButton = document.querySelector("#dismiss-response");
+const keyButtons = document.querySelectorAll(".key-button");
 let copyFeedbackTimer;
 
 copyButton.addEventListener("click", async () => {
@@ -24,9 +26,28 @@ responseText.addEventListener("click", (event) => {
   window.porvozOverlay?.openExternal(link.dataset.externalUrl);
 });
 
+keyButtons.forEach((button) => {
+  button.addEventListener("click", async (event) => {
+    event.preventDefault();
+    const key = button.dataset.key;
+    if (key && window.porvozOverlay?.sendKeyCommand) {
+      await window.porvozOverlay.sendKeyCommand(key);
+    }
+    button.blur();
+  });
+});
+
+const reportHover = () => window.porvozOverlay?.hover();
+panelWrapper?.addEventListener("mouseenter", reportHover);
+panelWrapper?.addEventListener("mousemove", reportHover);
+
 window.porvozOverlay?.onStatus(renderStatus);
 window.porvozOverlay?.onResponse(renderResponse);
-window.porvozOverlay?.onHide(() => pill.classList.remove("visible"));
+window.porvozOverlay?.onHide(() => {
+  pill.classList.remove("visible");
+  panelWrapper?.classList.remove("visible");
+  panel.classList.remove("visible");
+});
 
 function renderStatus(value = {}) {
   const state = typeof value.state === "string" ? value.state : "idle";
@@ -40,6 +61,10 @@ function renderStatus(value = {}) {
 function renderResponse(value = {}) {
   const open = value.open === true;
   const text = typeof value.text === "string" ? value.text : "";
+  if (panelWrapper) {
+    panelWrapper.hidden = !open;
+    panelWrapper.classList.toggle("visible", open);
+  }
   panel.hidden = !open;
   panel.classList.toggle("visible", open);
   if (text) renderMarkdown(responseText, text);

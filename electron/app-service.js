@@ -298,7 +298,7 @@ export function createAppService(settingsStore, logStore) {
       throwIfAborted(signal);
       if (inputs.error) throw new Error(inputs.error);
       if (!inputs.activePrefixes.length && !selectedText) {
-        return { transcript: inputs.transcript, instructionApplied: false };
+        return { transcript: inputs.transcript, instructionApplied: false, webSearchUsed: false };
       }
       if (!hasApiConfig(profileId)) throw new Error("Enter the base URL and API key in Settings.");
       if (!inputs.model) throw new Error("Choose an instruction model in Settings after loading models.");
@@ -308,19 +308,21 @@ export function createAppService(settingsStore, logStore) {
         ? limitClipboardContext(await readClipboard())
         : "";
       throwIfAborted(signal);
+      const instructionResult = await instructWithModel({
+        transcript: selectedText ? inputs.transcript : inputs.remainingTranscript,
+        model: inputs.model,
+        activePrefixes: inputs.activePrefixes,
+        reasoning: inputs.reasoning,
+        clipboardText,
+        selectedText,
+        logGroupId,
+        signal,
+        profileId
+      });
       return {
-        transcript: await instructWithModel({
-          transcript: selectedText ? inputs.transcript : inputs.remainingTranscript,
-          model: inputs.model,
-          activePrefixes: inputs.activePrefixes,
-          reasoning: inputs.reasoning,
-          clipboardText,
-          selectedText,
-          logGroupId,
-          signal,
-          profileId
-        }),
-        instructionApplied: true
+        transcript: instructionResult.output,
+        instructionApplied: true,
+        webSearchUsed: instructionResult.webSearchUsed
       };
     } catch (error) {
       const canceled = cancellationErrorFor(error, signal);
@@ -520,6 +522,7 @@ export function createAppService(settingsStore, logStore) {
         throw new Error("The instruction model returned no response.");
       }
       const output = appendSearchSources(instructionResponse, response);
+      const webSearchUsed = isWebSearchUsed(response);
       recordLog({
         type: "instruction",
         text: output,
@@ -529,9 +532,10 @@ export function createAppService(settingsStore, logStore) {
         instructions,
         input,
         searchEnabled: true,
+        searchUsed: webSearchUsed,
         clipboardEnabled: clipboardRequested
       });
-      return output;
+      return { output, webSearchUsed };
     } catch (error) {
       const canceled = cancellationErrorFor(error, signal);
       if (canceled) throw canceled;
@@ -641,6 +645,20 @@ export function createAppService(settingsStore, logStore) {
       }
     }
     return citations;
+  }
+
+  function isWebSearchUsed(response) {
+    if (!response) return false;
+    if (getResponseCitations(response).length > 0) return true;
+    if (Array.isArray(response.output)) {
+      for (const item of response.output) {
+        if (item?.type === "web_search_call") return true;
+        if (item?.type === "tool_call" && item?.name === "web_search") return true;
+        if (item?.action?.type === "web_search") return true;
+      }
+    }
+    if (response.web_search_call || response.webSearchUsed) return true;
+    return false;
   }
 
   function getInstructionInputs(value, settings, profileId, { matchPrefixes = true } = {}) {

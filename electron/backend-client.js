@@ -122,6 +122,7 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
       transcript: result.text,
       rawTranscript: result.porvoz?.raw_transcript || result.text,
       instructionApplied: result.porvoz?.instruction_applied === true,
+      webSearchUsed: result.porvoz?.web_search_used === true,
       logGroupId: result.porvoz?.log_group_id || ""
     };
   }

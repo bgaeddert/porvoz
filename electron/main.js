@@ -106,7 +106,10 @@ let hotkeyIntentGeneration = 0;
 const hotkeyGesture = createHotkeyGesture({
   onHold: startHotkeyRecording,
   onRelease: stopHotkeyRecording,
-  onDoubleTap: () => statusOverlay?.openResponse()
+  onDoubleTap: () => {
+    statusOverlay?.setLastTargetWindow(captureTextInputTarget());
+    statusOverlay?.openResponse();
+  }
 });
 let isCapturingHotkey = false;
 let hookStarted = false;
@@ -806,6 +809,7 @@ function registerIpcHandlers() {
         clipboardText: await clipboard.readText(),
         ...(selectedText ? { selectedText } : {})
       }, { signal });
+      if (attempt) attempt.webSearchUsed = result?.webSearchUsed === true;
       notifyLogsUpdated();
       return result;
     } catch (error) {
@@ -860,6 +864,23 @@ function registerIpcHandlers() {
   ipcMain.on("porvoz:overlay-dismiss", (event) => {
     if (statusOverlay?.isSender(event.sender)) statusOverlay.dismiss();
   });
+  ipcMain.on("porvoz:overlay-hover", (event) => {
+    if (statusOverlay?.isSender(event.sender)) statusOverlay.onHover();
+  });
+  ipcMain.handle("porvoz:overlay-key-command", async (event, keyCommand) => {
+    if (!statusOverlay?.isSender(event.sender) || typeof keyCommand !== "string") return false;
+    statusOverlay.onHover();
+    const target = captureTextInputTarget() || statusOverlay.getLastTargetWindow();
+    const keyOperation = textTypingQueue.then(() => typeText(keyCommand, { target }));
+    textTypingQueue = keyOperation.catch(() => {});
+    try {
+      await keyOperation;
+      return true;
+    } catch (error) {
+      await appService.logError({ stage: "typing", error });
+      return false;
+    }
+  });
   ipcMain.handle("porvoz:overlay-copy", (event) => {
     if (!statusOverlay?.isSender(event.sender)) return false;
     const response = statusOverlay.getResponse();
@@ -884,9 +905,15 @@ function registerIpcHandlers() {
     if (!responseText) return false;
     statusOverlay?.setResponse(responseText);
     setOverlayStatus({ message: "Placing text…", state: "typing", stage: "typing" });
+    const attempt = getCaptureAttempt(request.captureId);
     try {
       await typeTextAtCursor(request, signal);
-      setOverlayStatus({ message: "Text placed.", state: "success", stage: "typing" });
+      const webSearchUsed = request.webSearchUsed || attempt?.webSearchUsed === true;
+      if (webSearchUsed) {
+        statusOverlay?.showWebSearchResponse();
+      } else {
+        setOverlayStatus({ message: "Text placed.", state: "success", stage: "typing" });
+      }
       return true;
     } catch (error) {
       if (isCancellationError(error)) {
@@ -1025,22 +1052,26 @@ async function typeTextAtCursor(value, signal) {
 
 function normalizeTypingRequest(value) {
   if (!value || typeof value !== "object") {
-    return { text: "", captureId: "", purpose: "transcription" };
+    return { text: "", captureId: "", purpose: "transcription", webSearchUsed: false };
   }
   return {
     text: typeof value.text === "string" ? value.text : "",
     captureId: typeof value.captureId === "string" ? value.captureId : "",
-    purpose: value.purpose === "configuration-warning" ? "configuration-warning" : "transcription"
+    purpose: value.purpose === "configuration-warning" ? "configuration-warning" : "transcription",
+    webSearchUsed: value.webSearchUsed === true
   };
 }
 
 function beginCaptureAttempt() {
+  const targetWindow = captureTextInputTarget();
+  statusOverlay?.setLastTargetWindow(targetWindow);
   const attempt = {
     id: randomUUID(),
     createdAt: Date.now(),
     state: "recording",
-    targetWindow: captureTextInputTarget(),
-    selectedTextPromise: undefined
+    targetWindow,
+    selectedTextPromise: undefined,
+    webSearchUsed: false
   };
   captureAttempts.set(attempt.id, attempt);
   const cleanupTimer = setTimeout(() => {

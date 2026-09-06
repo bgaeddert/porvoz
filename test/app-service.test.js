@@ -123,7 +123,7 @@ test("a transcript without a prefix bypasses the instruction endpoint", async ()
 
   const result = await service.instruct({ transcript: "ordinary dictated text" });
 
-  assert.deepEqual(result, { transcript: "ordinary dictated text", instructionApplied: false });
+  assert.deepEqual(result, { transcript: "ordinary dictated text", instructionApplied: false, webSearchUsed: false });
 });
 
 test("selected text uses the selection flow and ignores prefixes and clipboard access", async () => {
@@ -157,7 +157,7 @@ test("selected text uses the selection flow and ignores prefixes and clipboard a
       selectedText: "rough selected sentence"
     }, { readClipboard: () => { clipboardReads += 1; return "clipboard must not be sent"; } });
 
-    assert.deepEqual(result, { transcript: "selection result", instructionApplied: true });
+    assert.deepEqual(result, { transcript: "selection result", instructionApplied: true, webSearchUsed: false });
     assert.equal(clipboardReads, 0);
     assert.match(requestBody.input, /rewrite this clearly/);
     assert.match(requestBody.input, /rough selected sentence/);
@@ -322,7 +322,7 @@ test("chained prefixes are stripped and only matched instructions and clipboard 
       { readClipboard: () => "reference text" }
     );
 
-    assert.deepEqual(result, { transcript: "combined result", instructionApplied: true });
+    assert.deepEqual(result, { transcript: "combined result", instructionApplied: true, webSearchUsed: false });
     assert.match(requestBody.instructions, /already matched and removed the leading prefix chain/);
     assert.match(requestBody.instructions, /Matched prefix 1: search/);
     assert.match(requestBody.instructions, /Instruction: Find the answer\./);
@@ -335,6 +335,49 @@ test("chained prefixes are stripped and only matched instructions and clipboard 
     assert.deepEqual(requestBody.reasoning, { effort: "high" });
     assert.deepEqual(requestBody.tools, [{ type: "web_search" }]);
     assert.equal(requestBody.tool_choice, undefined);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("instruct detects when web search was used from API response output", async () => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({
+      output_text: "Paris weather is 18°C",
+      output: [
+        { type: "web_search_call", id: "search_1" },
+        {
+          type: "message",
+          content: [
+            {
+              type: "text",
+              text: "Paris weather is 18°C",
+              annotations: [
+                { type: "url_citation", url: "https://weather.example.com", title: "Weather" }
+              ]
+            }
+          ]
+        }
+      ]
+    }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const { service } = createService({
+      prefixes: [prefix("search", "Search the web.")],
+      availableModels: ["instruction-model"]
+    });
+    const address = server.address();
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret" });
+    service.saveModelSelections({ instruction: "instruction-model" });
+
+    const result = await service.instruct({ transcript: "search weather in paris" });
+    assert.equal(result.instructionApplied, true);
+    assert.equal(result.webSearchUsed, true);
+    assert.match(result.transcript, /Paris weather is 18°C/);
+    assert.match(result.transcript, /Sources:\n1\. Weather — https:\/\/weather\.example\.com/);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }

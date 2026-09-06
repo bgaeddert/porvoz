@@ -2,9 +2,10 @@ import electron from "electron";
 
 const { BrowserWindow, screen } = electron;
 
-const OVERLAY_WIDTH = 360;
+const COLLAPSED_WIDTH = 360;
+const EXPANDED_WIDTH = 548;
 const PILL_HEIGHT = 44;
-const PANEL_HEIGHT = 238;
+const PANEL_HEIGHT = 244;
 const OVERLAY_BOTTOM_MARGIN = 12;
 const SUCCESS_DISPLAY_MS = 500;
 const ERROR_DISPLAY_MS = 4200;
@@ -35,11 +36,13 @@ export async function createStatusOverlay({
   let fadeTimer;
   let currentStatus = { state: "idle", message: "" };
   let lastResponse = "";
+  let lastTargetWindow;
   let isResponseHeld = false;
+  let isAutoClosePending = false;
   let suppressUntilNextRecording = false;
 
   overlayWindow = new BrowserWindowImpl({
-    width: OVERLAY_WIDTH,
+    width: COLLAPSED_WIDTH,
     height: PILL_HEIGHT,
     useContentSize: true,
     frame: false,
@@ -90,7 +93,7 @@ export async function createStatusOverlay({
   const resize = (expanded) => {
     if (!overlayWindow || overlayWindow.isDestroyed()) return;
     overlayWindow.setIgnoreMouseEvents(!expanded);
-    overlayWindow.setContentSize(OVERLAY_WIDTH, expanded ? PANEL_HEIGHT : PILL_HEIGHT, false);
+    overlayWindow.setContentSize(expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH, expanded ? PANEL_HEIGHT : PILL_HEIGHT, false);
     reposition();
   };
 
@@ -106,6 +109,10 @@ export async function createStatusOverlay({
     if (!overlayWindow || overlayWindow.isDestroyed()) return;
     clearTimeout(fadeTimer);
     overlayWindow.hide();
+    if (!isResponseHeld) {
+      resize(false);
+      sendPanelState();
+    }
   };
 
   const fadeAndHide = () => {
@@ -163,6 +170,7 @@ export async function createStatusOverlay({
   const openResponse = () => {
     if (!overlayWindow || overlayWindow.isDestroyed()) return false;
     suppressUntilNextRecording = false;
+    isAutoClosePending = false;
     isResponseHeld = true;
     currentStatus = { state: "waiting", message: "Last response" };
     clearTimeout(hideTimer);
@@ -170,6 +178,38 @@ export async function createStatusOverlay({
     resize(true);
     showCurrentStatus();
     return true;
+  };
+
+  const showWebSearchResponse = ({
+    durationMs = 2000,
+    message = "Text placed.",
+    state = "success",
+    stage = "typing"
+  } = {}) => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) return false;
+    suppressUntilNextRecording = false;
+    isResponseHeld = true;
+    isAutoClosePending = true;
+    currentStatus = { state, message: compactStatusMessage(state, message, stage) };
+    clearTimeout(hideTimer);
+    clearTimeout(fadeTimer);
+    resize(true);
+    showCurrentStatus();
+    hideTimer = setTimeout(() => {
+      if (isAutoClosePending) {
+        isAutoClosePending = false;
+        isResponseHeld = false;
+        fadeAndHide();
+      }
+    }, durationMs);
+    hideTimer.unref?.();
+    return true;
+  };
+
+  const onHover = () => {
+    if (!isAutoClosePending) return;
+    clearTimeout(hideTimer);
+    isAutoClosePending = false;
   };
 
   const onDisplayChanged = () => {
@@ -200,17 +240,23 @@ export async function createStatusOverlay({
     },
     getResponse: () => lastResponse,
     openResponse,
+    setLastTargetWindow(target) {
+      if (target) lastTargetWindow = target;
+    },
+    getLastTargetWindow: () => lastTargetWindow,
     isSender(sender) {
       return Boolean(overlayWindow && !overlayWindow.isDestroyed() && sender === overlayWindow.webContents);
     },
     prepareForCapture() {
       suppressUntilNextRecording = false;
+      isAutoClosePending = false;
       if (!isResponseHeld) return;
       isResponseHeld = false;
       resize(false);
       hide();
     },
     dismiss() {
+      isAutoClosePending = false;
       isResponseHeld = false;
       suppressUntilNextRecording = true;
       currentStatus = { state: "idle", message: "" };
@@ -221,6 +267,7 @@ export async function createStatusOverlay({
       hide();
     },
     clear() {
+      isAutoClosePending = false;
       isResponseHeld = false;
       suppressUntilNextRecording = false;
       clearTimeout(hideTimer);
@@ -230,6 +277,8 @@ export async function createStatusOverlay({
       sendPanelState();
       hide();
     },
+    showWebSearchResponse,
+    onHover,
     destroy() {
       clearTimeout(hideTimer);
       clearTimeout(fadeTimer);

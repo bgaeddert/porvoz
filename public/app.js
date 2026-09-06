@@ -277,7 +277,9 @@ async function processTranscription() {
     instructionResponse.value = result.transcript;
     autoResizeTextarea(instructionResponse);
     setStatus("Transcription complete.", "success", "instruction");
-    if (typeResultAtCursor) await typeFinalResponse(instructionResponse.value, captureId);
+    if (typeResultAtCursor) {
+      await typeFinalResponse(instructionResponse.value, captureId, "transcription", result.webSearchUsed === true);
+    }
   } catch (error) {
     if (generation !== activityGeneration || isCancellationError(error)) return;
     console.error(error);
@@ -404,13 +406,13 @@ async function initializeDesktopHotkeyHint() {
   }
 }
 
-async function typeFinalResponse(text, captureId = "", purpose = "transcription") {
+async function typeFinalResponse(text, captureId = "", purpose = "transcription", webSearchUsed = false) {
   // The website displays results in the page; it never types into other apps.
   if (!bridge.features.typing || !text) return;
   const generation = activityGeneration;
   isTypingResponse = true;
   try {
-    await bridge.typeText({ text, captureId, purpose });
+    await bridge.typeText({ text, captureId, purpose, webSearchUsed });
   } catch (error) {
     if (generation !== activityGeneration || isCancellationError(error)) return;
     console.error(error);

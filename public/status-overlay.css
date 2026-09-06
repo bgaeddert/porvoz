@@ -28,10 +28,92 @@ body {
   height: 100%;
 }
 
-.response-panel {
+.panel-wrapper {
   box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
   min-height: 0;
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.panel-wrapper.visible {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.panel-wrapper[hidden] {
+  display: none;
+}
+
+.side-keys {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 80px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 5px;
+  min-height: 0;
+}
+
+.key-button {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+  padding: 0 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 7px;
+  background: rgba(14, 18, 24, 0.95);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  color: #e9eef5;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease, transform 60ms ease;
+}
+
+.key-button:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(28, 36, 48, 0.98);
+  color: #ffffff;
+}
+
+.key-button:active {
+  border-color: rgba(123, 173, 255, 0.7);
+  background: rgba(42, 58, 82, 0.98);
+  transform: scale(0.96);
+}
+
+.key-button:focus-visible {
+  outline: 2px solid #7badff;
+  outline-offset: 1px;
+}
+
+.response-panel {
+  box-sizing: border-box;
+  flex: 0 0 360px;
+  width: 360px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 11px 11px 12px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -46,8 +128,6 @@ body {
 
 .response-panel.visible {
   display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
   opacity: 1;
   transform: translateY(0);
 }
@@ -336,6 +416,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .panel-wrapper,
+  .key-button,
   .response-panel,
   .response-button,
   .status-pill { transition: none; }

@@ -247,6 +247,7 @@ test("browser capture uploads audio without clipboard or selected-text context",
     transcript: "instruction result",
     rawTranscript: "raw dictation",
     instructionApplied: true,
+    webSearchUsed: false,
     logGroupId: "group-1"
   });
 

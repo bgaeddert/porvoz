@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createStatusOverlay } from "../electron/status-overlay.js";
+import { parseTextCommands } from "../electron/text-command-parser.js";
 
 class FakeWindow extends EventEmitter {
   constructor(options) {
@@ -59,8 +60,10 @@ test("the saved response opens without focus and survives dismissal", async () =
   assert.equal(browserWindow.visible, false);
   overlay.openResponse();
   assert.equal(browserWindow.ignoresMouse, false);
-  assert.deepEqual(browserWindow.size, [360, 238]);
+  assert.deepEqual(browserWindow.size, [548, 244]);
   assert.equal(browserWindow.focusable, false);
+  overlay.setLastTargetWindow(9999);
+  assert.equal(overlay.getLastTargetWindow(), 9999);
   overlay.setResponse("latest Porvoz output");
   assert.equal(overlay.getResponse(), "latest Porvoz output");
   assert.deepEqual(browserWindow.sent.at(-1), [
@@ -122,7 +125,7 @@ test("status changes keep the pill collapsed and transparent to pointer input", 
   }
 });
 
-test("the overlay renderer exposes copy and dismiss controls", () => {
+test("the overlay renderer exposes copy, dismiss, and quick key controls", () => {
   const html = readFileSync(new URL("../public/status-overlay.html", import.meta.url), "utf8");
   const preload = readFileSync(new URL("../electron/status-overlay-preload.cjs", import.meta.url), "utf8");
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
@@ -130,11 +133,102 @@ test("the overlay renderer exposes copy and dismiss controls", () => {
 
   assert.match(html, /id="copy-response"/);
   assert.match(html, /id="dismiss-response"/);
+
+  const keyMatches = [...html.matchAll(/class="key-button"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(keyMatches.length, 10);
+  assert.deepEqual(keyMatches.slice(0, 5), [
+    "[Escape]",
+    "[Tab]",
+    "[Space]",
+    "[Control+Z]",
+    "[Control+A]"
+  ]);
+  assert.deepEqual(keyMatches.slice(5), [
+    "[Enter]",
+    "[Backspace]",
+    "[Delete]",
+    "[Control+C]",
+    "[Control+V]"
+  ]);
+
+  for (const key of keyMatches) {
+    const parsed = parseTextCommands(key);
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].type, "key");
+    assert.ok(parsed[0].keys.length >= 1);
+  }
+
   assert.match(html, /script type="module"/);
   assert.match(preload, /porvoz:overlay-copy/);
   assert.match(preload, /porvoz:overlay-open-external/);
   assert.match(preload, /porvoz:overlay-dismiss/);
-  assert.doesNotMatch(overlayRenderer, /mouseenter|mouseleave|setHovered/);
-  assert.doesNotMatch(preload, /overlay-hover/);
+  assert.match(preload, /porvoz:overlay-key-command/);
+  assert.match(overlayRenderer, /sendKeyCommand/);
+  assert.match(overlayRenderer, /mouseenter|hover/);
+  assert.match(preload, /porvoz:overlay-hover/);
   assert.match(app, /mimeType: audio\.type,\s+captureId/);
+});
+
+test("web search response opens the panel for two seconds and hover keeps it open until dismissed", async () => {
+  let browserWindow;
+  class BrowserWindowFactory extends FakeWindow {
+    constructor(options) {
+      super(options);
+      browserWindow = this;
+    }
+  }
+  const overlay = await createStatusOverlay({
+    overlayPath: "overlay.html",
+    preloadPath: "preload.cjs",
+    BrowserWindowImpl: BrowserWindowFactory,
+    screenApi: new FakeScreen()
+  });
+
+  overlay.setResponse("search result output");
+  overlay.showWebSearchResponse({ durationMs: 2000 });
+  assert.equal(browserWindow.ignoresMouse, false);
+  assert.deepEqual(browserWindow.size, [548, 244]);
+  assert.deepEqual(browserWindow.sent.at(-1), [
+    "porvoz:overlay-response",
+    { open: true, text: "search result output" }
+  ]);
+
+  // Hovering keeps it open
+  overlay.onHover();
+  assert.equal(browserWindow.ignoresMouse, false);
+  assert.deepEqual(browserWindow.size, [548, 244]);
+
+  // Dismissing closes it
+  overlay.dismiss();
+  assert.equal(browserWindow.visible, false);
+  assert.deepEqual(browserWindow.size, [360, 44]);
+  assert.equal(browserWindow.ignoresMouse, true);
+  overlay.destroy();
+});
+
+test("web search response auto-closes after timeout when not hovered", async () => {
+  let browserWindow;
+  class BrowserWindowFactory extends FakeWindow {
+    constructor(options) {
+      super(options);
+      browserWindow = this;
+    }
+  }
+  const overlay = await createStatusOverlay({
+    overlayPath: "overlay.html",
+    preloadPath: "preload.cjs",
+    BrowserWindowImpl: BrowserWindowFactory,
+    screenApi: new FakeScreen()
+  });
+
+  overlay.setResponse("auto close output");
+  overlay.showWebSearchResponse({ durationMs: 20 });
+  assert.equal(browserWindow.ignoresMouse, false);
+  assert.deepEqual(browserWindow.size, [548, 244]);
+
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(browserWindow.visible, false);
+  assert.deepEqual(browserWindow.size, [360, 44]);
+  assert.equal(browserWindow.ignoresMouse, true);
+  overlay.destroy();
 });

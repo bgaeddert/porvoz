@@ -6,19 +6,19 @@ Instead of forcing you into a fixed vocabulary or workflow, Porvoz adapts to the
 
 ## Download and install
 
-The current release is [Porvoz v2.4.0](https://github.com/bgaeddert/porvoz/releases/tag/v2.4.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
+The current release is [Porvoz v2.5.0](https://github.com/bgaeddert/porvoz/releases/tag/v2.5.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v2.4.0/Porvoz-2.4.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v2.5.0/Porvoz-2.5.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v2.4.0/Porvoz-2.4.0-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v2.5.0/Porvoz-2.5.0-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-2.4.0-linux-x86_64.AppImage
-./Porvoz-2.4.0-linux-x86_64.AppImage
+chmod +x Porvoz-2.5.0-linux-x86_64.AppImage
+./Porvoz-2.5.0-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to start the local backend and protect its encryption key. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -27,7 +27,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6 xclip
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v2.4.0/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v2.5.0/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -81,7 +81,7 @@ Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe
 
 **Keyboard → Console selection** controls automatic selection copying only in recognized terminal windows. It is **off by default**, including for existing desktops. Dictation, paste, and selection copying in other applications are unaffected. Enable it to attempt `Ctrl+Shift+C` in recognized terminals. **Warning:** if nothing is selected, a terminal can pass that shortcut through as Control-C, likely canceling or exiting running applications or commands. Unknown terminals and terminal panes inside editors are not covered by this setting. The preference is saved on this computer and applies immediately.
 
-While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. Double-tap the configured hotkey to open the last completed response, even after the pill disappears. Hold the hotkey for 300 ms to start recording; short taps do not record audio or touch the clipboard. Hovering has no effect. The response panel renders common Markdown and provides **Copy** and **×** controls. Press **Escape** to dismiss it. The non-activating overlay does not become the typing target.
+While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. Double-tap the configured hotkey to open the last completed response, even after the pill disappears. When web search is used, the response panel displays automatically for two seconds unless hovered, staying open until dismissed. Hold the hotkey for 300 ms to start recording; short taps do not record audio or touch the clipboard. Hovering over an ordinary status pill has no effect. The response panel renders common Markdown and provides **Copy** and **×** controls. Press **Escape** to dismiss it. An open response panel also shows quick keyboard-action buttons (Escape, Tab, Enter, Ctrl+A, and similar) that send the corresponding key press to the application that owns the cursor. The non-activating overlay does not become the typing target.
 
 The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. With no selected text, Porvoz matches consecutive prefixes at the beginning of the transcript, removes the matched phrases, and sends only those matched prefix instructions and the remaining spoken request to the instruction model. A transcript without a matched prefix bypasses the instruction model and is returned directly.
 
@@ -102,7 +102,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `2.4.0` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
+Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `2.5.0` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
 
 To build the image from the current source checkout instead, run `docker compose up -d --build`.
 
