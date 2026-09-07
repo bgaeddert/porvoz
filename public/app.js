@@ -27,6 +27,7 @@ let shouldTypeFinalResponse = false;
 let captureIntentId = "";
 let discardRecording = false;
 let recordingStartedAt = 0;
+let hotkeyReleasedTimestamp = null;
 let mediaRecorder;
 let transcriptionStream;
 let recordedChunks = [];
@@ -54,6 +55,7 @@ if (bridge.features.hotkeys) {
   hotkeyHint.hidden = false;
   bridge.onHotkey((action, payload) => {
     if (action === "start" && !isTranscribing && !isTranscriptionProcessing) {
+      hotkeyReleasedTimestamp = null;
       startTranscription({
         typeResultAtCursor: true,
         captureId: payload?.captureId,
@@ -64,8 +66,9 @@ if (bridge.features.hotkeys) {
       void typeConfigurationWarning(payload?.message || payload);
     }
     if (action === "stop" && isTranscribing && !stopRequested) {
+      hotkeyReleasedTimestamp = payload?.hotkeyReleasedAt || Date.now();
       void playHotkeySound(action);
-      stopTranscription();
+      stopTranscription(hotkeyReleasedTimestamp);
     }
   });
   bridge.onActivityCanceled(() => {
@@ -190,8 +193,11 @@ async function getMicrophoneStream() {
   }
 }
 
-function stopTranscription() {
+function stopTranscription(releasedAt) {
   if (stopRequested) return;
+  if (!hotkeyReleasedTimestamp) {
+    hotkeyReleasedTimestamp = releasedAt || Date.now();
+  }
   stopRequested = true;
   transcribeButton.disabled = true;
   if (!mediaRecorder || mediaRecorder.state === "inactive") {
@@ -234,6 +240,8 @@ async function processTranscription() {
   const generation = activityGeneration;
   const typeResultAtCursor = shouldTypeFinalResponse;
   const captureId = captureIntentId;
+  const releasedAt = hotkeyReleasedTimestamp;
+  hotkeyReleasedTimestamp = null;
   const audioType = mediaRecorder?.mimeType || "audio/webm";
   const audio = new File(recordedChunks, getAudioFileName(audioType), { type: audioType });
   releaseRecordingResources();
@@ -257,20 +265,53 @@ async function processTranscription() {
   }
   setStatus("Sending audio for transcription…", "processing", "transcription");
 
+  const transcriptionRequestedAt = Date.now();
+  const preTranscriptionMs = releasedAt ? Math.max(0, transcriptionRequestedAt - releasedAt) : null;
+  const initialTiming = {
+    hotkeyReleasedAt: releasedAt,
+    preTranscriptionMs
+  };
+
   let processStage = "transcription";
   try {
     const result = await bridge.transcribe({
       audio: await audio.arrayBuffer(),
       mimeType: audio.type,
-      captureId
+      captureId,
+      timing: initialTiming
     });
     if (generation !== activityGeneration) return;
     if (!result?.transcript) throw new Error("Could not transcribe the audio.");
 
+    const timingForTyping = {
+      ...(result.timing || initialTiming),
+      responseCompletedAt: Date.now()
+    };
+
     replaceTranscript(result.rawTranscript || result.transcript);
     if (!result.instructionApplied) {
       setStatus("Transcription complete; no instruction prefix detected.", "success", "transcription");
-      if (typeResultAtCursor) await typeFinalResponse(result.transcript, captureId);
+      if (typeResultAtCursor) {
+        await typeFinalResponse(
+          result.transcript,
+          captureId,
+          "transcription",
+          false,
+          result.logGroupId,
+          timingForTyping
+        );
+      } else if (result.logGroupId && typeof bridge.updateLogTiming === "function") {
+        const totalMs = (
+          (timingForTyping.preTranscriptionMs || 0) +
+          (timingForTyping.transcriptionMs || 0)
+        );
+        if (totalMs > 0) {
+          void bridge.updateLogTiming({
+            logGroupId: result.logGroupId,
+            timing: { ...timingForTyping, totalMs }
+          }).catch(() => {});
+        }
+      }
       return;
     }
     processStage = "instruction";
@@ -278,7 +319,27 @@ async function processTranscription() {
     autoResizeTextarea(instructionResponse);
     setStatus("Transcription complete.", "success", "instruction");
     if (typeResultAtCursor) {
-      await typeFinalResponse(instructionResponse.value, captureId, "transcription", result.webSearchUsed === true);
+      await typeFinalResponse(
+        instructionResponse.value,
+        captureId,
+        "transcription",
+        result.webSearchUsed === true,
+        result.logGroupId,
+        timingForTyping
+      );
+    } else if (result.logGroupId && typeof bridge.updateLogTiming === "function") {
+      const totalMs = (
+        (timingForTyping.preTranscriptionMs || 0) +
+        (timingForTyping.transcriptionMs || 0) +
+        (timingForTyping.instructionPrepMs || 0) +
+        (timingForTyping.instructionMs || 0)
+      );
+      if (totalMs > 0) {
+        void bridge.updateLogTiming({
+          logGroupId: result.logGroupId,
+          timing: { ...timingForTyping, totalMs }
+        }).catch(() => {});
+      }
     }
   } catch (error) {
     if (generation !== activityGeneration || isCancellationError(error)) return;
@@ -406,13 +467,20 @@ async function initializeDesktopHotkeyHint() {
   }
 }
 
-async function typeFinalResponse(text, captureId = "", purpose = "transcription", webSearchUsed = false) {
+async function typeFinalResponse(
+  text,
+  captureId = "",
+  purpose = "transcription",
+  webSearchUsed = false,
+  logGroupId = "",
+  timing = null
+) {
   // The website displays results in the page; it never types into other apps.
   if (!bridge.features.typing || !text) return;
   const generation = activityGeneration;
   isTypingResponse = true;
   try {
-    await bridge.typeText({ text, captureId, purpose, webSearchUsed });
+    await bridge.typeText({ text, captureId, purpose, webSearchUsed, logGroupId, timing });
   } catch (error) {
     if (generation !== activityGeneration || isCancellationError(error)) return;
     console.error(error);

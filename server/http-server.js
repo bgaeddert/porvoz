@@ -85,25 +85,45 @@ export function createPorvozHttpServer({
       }
       if (!multipart.file) return sendOpenAiError(response, 400, "A transcription audio file is required.", "invalid_request_error");
       const context = parseContext(multipart.fields.porvoz_context);
+      const clientTiming = parseTiming(multipart.fields.porvoz_timing);
+      const tTranscribeStart = Date.now();
       const transcription = await service.transcribe({
         audio: multipart.file.data,
         mimeType: multipart.file.mimeType,
-        profileId
+        profileId,
+        timing: clientTiming
       }, { signal: controller.signal });
+      const tTranscribeEnd = Date.now();
+      const transcriptionMs = transcription.timing?.transcriptionMs ?? (tTranscribeEnd - tTranscribeStart);
+      const instructionPrepMs = Date.now() - tTranscribeEnd;
+      const timingForInstruct = {
+        ...(transcription.timing || clientTiming || {}),
+        transcriptionMs,
+        instructionPrepMs
+      };
+      const tInstructStart = Date.now();
       const instruction = await service.instruct({
         transcript: transcription.transcript,
         logGroupId: transcription.logGroupId,
         profileId,
         clipboardText: context.clipboard,
-        selectedText: context.selectedText
+        selectedText: context.selectedText,
+        timing: timingForInstruct
       }, { signal: controller.signal });
+      const tInstructEnd = Date.now();
+      const instructionMs = instruction.timing?.instructionMs ?? (tInstructEnd - tInstructStart);
+      const finalTiming = {
+        ...(instruction.timing || timingForInstruct),
+        ...(instruction.instructionApplied ? { instructionMs, instructionPrepMs } : { instructionPrepMs: null, instructionMs: null })
+      };
       return sendJson(response, 200, {
         text: instruction.transcript,
         porvoz: {
           raw_transcript: transcription.transcript,
           instruction_applied: instruction.instructionApplied,
           web_search_used: instruction.webSearchUsed === true,
-          log_group_id: transcription.logGroupId
+          log_group_id: transcription.logGroupId,
+          timing: finalTiming
         }
       });
     }
@@ -132,6 +152,10 @@ export function createPorvozHttpServer({
     }
     if (request.method === "POST" && url.pathname === "/v1/porvoz/logs/errors") {
       return sendJson(response, 201, service.logError(await readJson(request)));
+    }
+    if (request.method === "POST" && url.pathname === "/v1/porvoz/logs/timing") {
+      service.updateLogTiming(await readJson(request));
+      return sendJson(response, 200, { ok: true });
     }
     if (request.method === "POST" && url.pathname === "/v1/porvoz/reset") {
       return sendJson(response, 200, service.resetToDefaults());
@@ -307,6 +331,16 @@ function parseContext(value) {
     };
   } catch {
     throw httpError(400, "porvoz_context must contain valid JSON.");
+  }
+}
+
+function parseTiming(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
   }
 }
 

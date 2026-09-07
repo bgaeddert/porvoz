@@ -16,10 +16,12 @@
       "name": "Default",
       "connection": {
         "baseUrl": "",
-        "verifyCertificate": true
+        "verifyCertificate": true,
+        "openRouterSearch": true
       },
       "models": {
-        "instructionReasoning": "low"
+        "instructionReasoning": "low",
+        "openRouterSearch": true
       }
     }
   ],

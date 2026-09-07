@@ -5,6 +5,7 @@ export function createDatabaseLogStore(database, { maxEntries = 200 } = {}) {
   return {
     getLogs,
     appendLog,
+    updateLogTiming,
     clearLogs
   };
 
@@ -36,6 +37,34 @@ export function createDatabaseLogStore(database, { maxEntries = 200 } = {}) {
     database.prepare("DELETE FROM activity_logs").run();
     return [];
   }
+
+  function updateLogTiming(groupId, timing = {}) {
+    if (!groupId || typeof groupId !== "string") return;
+    const normalizedTiming = normalizeTiming(timing);
+    if (!normalizedTiming) return;
+
+    const rows = database.prepare(`
+      SELECT id, created_at, entry_json FROM activity_logs
+      ORDER BY created_at DESC, rowid DESC
+      LIMIT ?
+    `).all(entryLimit);
+
+    const updateStmt = database.prepare("UPDATE activity_logs SET entry_json = ? WHERE id = ?");
+    database.transaction(() => {
+      for (const row of rows) {
+        try {
+          const entry = JSON.parse(row.entry_json);
+          if (entry.groupId === groupId) {
+            entry.timing = {
+              ...(entry.timing || {}),
+              ...Object.fromEntries(Object.entries(normalizedTiming).filter(([_, v]) => v !== null))
+            };
+            updateStmt.run(JSON.stringify(entry), row.id);
+          }
+        } catch {}
+      }
+    })();
+  }
 }
 
 function normalizeLog(entry) {
@@ -57,13 +86,32 @@ function normalizeLog(entry) {
     instructions: typeof entry.instructions === "string" ? entry.instructions : "",
     input: typeof entry.input === "string" ? entry.input : "",
     searchEnabled: entry.searchEnabled === true,
+    searchUsed: entry.searchUsed === true,
     clipboardEnabled: entry.clipboardEnabled === true,
     stage: type === "error" ? normalizeStage(entry.stage) : "",
     status: type === "error" && Number.isInteger(Number(entry.status)) ? Number(entry.status) : null,
     errorCode: type === "error" ? string(entry.errorCode) : "",
     mimeType: type === "error" ? string(entry.mimeType) : "",
-    bytes: type === "error" && Number.isSafeInteger(Number(entry.bytes)) ? Number(entry.bytes) : null
+    bytes: type === "error" && Number.isSafeInteger(Number(entry.bytes)) ? Number(entry.bytes) : null,
+    timing: normalizeTiming(entry.timing)
   };
+}
+
+function normalizeTiming(timing) {
+  if (!timing || typeof timing !== "object") return null;
+  const num = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v)) : null);
+  const positiveNum = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v)) : null);
+  const result = {
+    hotkeyReleasedAt: num(timing.hotkeyReleasedAt),
+    textPastedAt: num(timing.textPastedAt),
+    preTranscriptionMs: num(timing.preTranscriptionMs),
+    transcriptionMs: num(timing.transcriptionMs),
+    instructionPrepMs: num(timing.instructionPrepMs),
+    instructionMs: num(timing.instructionMs),
+    pasteMs: num(timing.pasteMs),
+    totalMs: positiveNum(timing.totalMs)
+  };
+  return Object.values(result).some((v) => v !== null) ? result : null;
 }
 
 function normalizeStage(value) {

@@ -19,7 +19,7 @@ COPY public/index.html public/logs.html public/settings.html public/login.html .
 COPY public/styles.css ./public/
 COPY public/app-bridge.js public/app-version.js public/app.js public/capture-policy.js \
      public/environment-chrome.js public/icons.js public/login.js public/logs.js \
-     public/media-support.js public/prefix-transfer.js public/runtime-config.js \
+     public/log-timing.js public/media-support.js public/prefix-transfer.js public/runtime-config.js \
      public/settings-navigation.js public/settings.js public/setup-warning.js \
      public/web-client.js ./public/
 COPY public/assets/icon.svg ./public/assets/

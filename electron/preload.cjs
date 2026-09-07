@@ -62,6 +62,9 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   logError(value) {
     return ipcRenderer.invoke("porvoz:log-error", value);
   },
+  updateLogTiming(value) {
+    return ipcRenderer.invoke("porvoz:update-log-timing", value);
+  },
   clearLogs() {
     return ipcRenderer.invoke("porvoz:clear-logs");
   },

@@ -63,11 +63,43 @@ test("the log store preserves actionable error metadata", (context) => {
     instructions: "",
     input: "",
     searchEnabled: false,
+    searchUsed: false,
     clipboardEnabled: false,
     stage: "transcription",
     status: 404,
     errorCode: "",
     mimeType: "audio/webm;codecs=opus",
-    bytes: 42
+    bytes: 42,
+    timing: null
   });
+});
+
+test("the log store updates timing for matching group entries", (context) => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "porvoz-logs-"));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  const store = createLogStore({ logsPath: path.join(directory, "logs.json") });
+
+  store.appendLog({
+    type: "transcript",
+    text: "hello world",
+    groupId: "grp-1",
+    timing: { preTranscriptionMs: 120, transcriptionMs: 650 }
+  });
+  store.appendLog({
+    type: "instruction",
+    text: "hello world formatted",
+    groupId: "grp-1",
+    timing: { preTranscriptionMs: 120, transcriptionMs: 650, instructionMs: 1100 }
+  });
+
+  store.updateLogTiming("grp-1", { pasteMs: 85, totalMs: 1955 });
+
+  const logs = store.getLogs();
+  assert.equal(logs.length, 2);
+  assert.equal(logs[0].timing.pasteMs, 85);
+  assert.equal(logs[0].timing.totalMs, 1955);
+  assert.equal(logs[0].timing.instructionMs, 1100);
+  assert.equal(logs[1].timing.pasteMs, 85);
+  assert.equal(logs[1].timing.totalMs, 1955);
+  assert.equal(logs[1].timing.transcriptionMs, 650);
 });

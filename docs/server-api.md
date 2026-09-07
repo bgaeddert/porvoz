@@ -39,6 +39,7 @@ Send `multipart/form-data` with:
 - `model`: ignored for an inference key; required as a profile ID for the admin key.
 - `response_format`: optional, but only `json` is supported.
 - `porvoz_context`: optional JSON used by the first-party desktop. It can contain `clipboard` and `selectedText` strings. The desktop omits `selectedText` when the focused application reports no selection.
+- `porvoz_timing`: optional JSON used by first-party clients to carry capture timing into the shared activity record. Unknown or malformed timing data is ignored.
 
 The server transcribes the audio, selects the straight-transcription, prefix, or selection flow, and returns the final text:
 
@@ -50,7 +51,14 @@ With no selected text, a matching prefix chain invokes the instruction model wit
   "porvoz": {
     "raw_transcript": "Original transcription",
     "instruction_applied": true,
-    "log_group_id": "e224…"
+    "web_search_used": false,
+    "log_group_id": "e224…",
+    "timing": {
+      "preTranscriptionMs": 120,
+      "transcriptionMs": 640,
+      "instructionPrepMs": 2,
+      "instructionMs": 890
+    }
   }
 }
 ```
@@ -73,13 +81,14 @@ All routes below require the admin key, or an authenticated browser session carr
 | `GET` | `/v1/porvoz/profiles/<id>/connection` | Read provider connection state and the inference key |
 | `PUT` | `/v1/porvoz/profiles/<id>/connection` | Update provider URL, certificate policy, or provider key |
 | `POST` | `/v1/porvoz/profiles/<id>/models` | Refresh the upstream model catalog |
-| `PUT` | `/v1/porvoz/profiles/<id>/models` | Update model selections and reasoning level |
+| `PUT` | `/v1/porvoz/profiles/<id>/models` | Update model selections, reasoning level, and OpenRouter search-tool preference |
 | `GET` | `/v1/porvoz/profiles/<id>/inference-key` | Read the profile inference key |
 | `POST` | `/v1/porvoz/profiles/<id>/inference-key` | Replace the profile inference key |
 | `PUT` | `/v1/porvoz/prefixes` | Replace the prefix registry |
 | `POST` | `/v1/porvoz/prefixes/from-audio` | Draft a prefix from an audio description |
 | `GET` | `/v1/porvoz/logs` | Read recent activity |
 | `POST` | `/v1/porvoz/logs/errors` | Record a desktop-side error |
+| `POST` | `/v1/porvoz/logs/timing` | Add final stage and total timing to an activity group |
 | `DELETE` | `/v1/porvoz/logs` | Clear activity |
 | `POST` | `/v1/porvoz/reset` | Reset server-owned configuration and activity |
 

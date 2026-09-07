@@ -1327,6 +1327,18 @@ kbd {
   font-size: var(--fs-100);
 }
 
+.log-session-total-time {
+  padding: 1px 6px;
+  border: 1px solid var(--accent-line);
+  border-radius: 2px;
+  background: var(--accent-tint);
+  color: var(--accent-text);
+  font-family: var(--mono);
+  font-size: var(--fs-100);
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
 .log-session-time,
 .log-stage-time {
   color: var(--n-300);
@@ -1348,6 +1360,59 @@ kbd {
   padding: 8px;
 }
 
+.log-timing-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--n-600);
+  border-radius: 2px;
+  background: var(--n-900);
+  font-family: var(--mono);
+  font-size: var(--fs-100);
+}
+
+.log-timing-flow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--n-200);
+}
+
+.log-timing-flow-label {
+  color: var(--n-400);
+}
+
+.log-timing-flow-time {
+  color: var(--n-100);
+  font-weight: 600;
+}
+
+.log-timing-flow-arrow {
+  color: var(--n-500);
+  font-size: var(--fs-100);
+  user-select: none;
+}
+
+.log-timing-flow-total {
+  padding: 1px 5px;
+  border: 1px solid var(--accent-line);
+  border-radius: 2px;
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}
+
+.log-timing-flow-total .log-timing-flow-label {
+  color: var(--accent-text);
+  opacity: 0.85;
+}
+
+.log-timing-flow-total .log-timing-flow-time {
+  color: var(--accent-text);
+}
+
 /* Content leads; metadata trails it as one quiet row. */
 .log-stage {
   display: flex;
@@ -1361,6 +1426,11 @@ kbd {
 
 .log-stage-instruction {
   border-left-color: var(--n-400);
+}
+
+.log-stage.log-stage-search-used,
+.log-stage-instruction.log-stage-search-used {
+  border-left-color: var(--record, #e05a5a);
 }
 
 .log-stage-error {
@@ -1429,6 +1499,13 @@ kbd {
   border-color: var(--accent-line);
   background: var(--accent-tint);
   color: var(--accent-text);
+}
+
+.log-stage-access .log-meta-chip.log-meta-chip-search-used {
+  border-color: var(--record, #e05a5a);
+  background: rgba(224, 90, 90, 0.15);
+  color: #fca5a5;
+  font-weight: 600;
 }
 
 .log-stage-actions {

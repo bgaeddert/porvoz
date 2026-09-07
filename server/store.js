@@ -82,7 +82,7 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
     return profile;
   }
 
-  function saveConnection({ profileId, baseUrl, apiKey, verifyCertificate } = {}) {
+  function saveConnection({ profileId, baseUrl, apiKey, verifyCertificate, openRouterSearch } = {}) {
     const profile = getProfile(profileId);
     const nextBaseUrl = typeof baseUrl === "string" ? baseUrl : "";
     if (profile.connection.baseUrl !== nextBaseUrl) {
@@ -92,6 +92,10 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
     }
     profile.connection.baseUrl = nextBaseUrl;
     profile.connection.verifyCertificate = verifyCertificate !== false;
+    if (typeof openRouterSearch === "boolean") {
+      profile.connection.openRouterSearch = openRouterSearch;
+      profile.models.openRouterSearch = openRouterSearch;
+    }
     if (typeof apiKey === "string" && apiKey.trim()) {
       database.prepare(`
         INSERT INTO provider_credentials (profile_id, encrypted_value) VALUES (?, ?)
@@ -131,6 +135,9 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
       if (!reasoning) throw new Error("Choose low, medium, or high reasoning for the instruction model.");
       profile.models.instructionReasoning = reasoning;
     }
+    if (value.openRouterSearch !== undefined) {
+      profile.models.openRouterSearch = Boolean(value.openRouterSearch);
+    }
     saveSettings();
   }
 
@@ -149,8 +156,8 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
     const profile = {
       id: randomUUID(),
       name: finalName,
-      connection: { baseUrl: "", verifyCertificate: true },
-      models: { available: [], transcription: "", instruction: "", instructionReasoning: "low" }
+      connection: { baseUrl: "", verifyCertificate: true, openRouterSearch: true },
+      models: { available: [], transcription: "", instruction: "", instructionReasoning: "low", openRouterSearch: true }
     };
     settings.profiles.push(profile);
     settings.activeProfileId = profile.id;
@@ -333,13 +340,15 @@ function normalizeProfiles(value, defaults) {
       name,
       connection: {
         baseUrl: typeof entry?.connection?.baseUrl === "string" ? entry.connection.baseUrl : "",
-        verifyCertificate: entry?.connection?.verifyCertificate !== false
+        verifyCertificate: entry?.connection?.verifyCertificate !== false,
+        openRouterSearch: Boolean(entry?.connection?.openRouterSearch)
       },
       models: {
         available: uniqueStrings(entry?.models?.available),
         transcription: normalizeText(entry?.models?.transcription),
         instruction: normalizeText(entry?.models?.instruction),
-        instructionReasoning: normalizeReasoning(entry?.models?.instructionReasoning)
+        instructionReasoning: normalizeReasoning(entry?.models?.instructionReasoning),
+        openRouterSearch: Boolean(entry?.models?.openRouterSearch ?? entry?.connection?.openRouterSearch)
       }
     };
   });

@@ -61,7 +61,7 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     return typeof profileId === "string" && profileId ? profileId : settings.activeProfileId;
   }
 
-  function saveConnection({ profileId, baseUrl, apiKey: nextApiKey, verifyCertificate } = {}) {
+  function saveConnection({ profileId, baseUrl, apiKey: nextApiKey, verifyCertificate, openRouterSearch } = {}) {
     const profile = getProfile(resolveProfileId(profileId));
     if (profile.connection.baseUrl !== baseUrl) {
       profile.models.available = [];
@@ -72,6 +72,10 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     profile.connection.verifyCertificate = typeof verifyCertificate === "boolean"
       ? verifyCertificate
       : profile.connection.verifyCertificate !== false;
+    if (typeof openRouterSearch === "boolean") {
+      profile.connection.openRouterSearch = openRouterSearch;
+      profile.models.openRouterSearch = openRouterSearch;
+    }
     if (typeof nextApiKey === "string" && nextApiKey.trim()) {
       saveApiKey(profile.id, nextApiKey.trim());
     }
@@ -89,7 +93,7 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     return available;
   }
 
-  function saveModelSelections(profileId, { transcription, instruction, instructionReasoning } = {}) {
+  function saveModelSelections(profileId, { transcription, instruction, instructionReasoning, openRouterSearch } = {}) {
     const profile = getProfile(resolveProfileId(profileId));
     if (transcription !== undefined) {
       profile.models.transcription = normalizeModel(transcription);
@@ -104,6 +108,9 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
       }
       profile.models.instructionReasoning = nextInstructionReasoning;
     }
+    if (openRouterSearch !== undefined) {
+      profile.models.openRouterSearch = Boolean(openRouterSearch);
+    }
     saveSettingsFile();
   }
 
@@ -117,8 +124,8 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     const profile = {
       id: randomUUID(),
       name: finalName,
-      connection: { baseUrl: "", verifyCertificate: true },
-      models: { available: [], transcription: "", instruction: "", instructionReasoning: "low" }
+      connection: { baseUrl: "", verifyCertificate: true, openRouterSearch: true },
+      models: { available: [], transcription: "", instruction: "", instructionReasoning: "low", openRouterSearch: true }
     };
     settings.profiles.push(profile);
     settings.activeProfileId = profile.id;
@@ -310,7 +317,8 @@ function normalizeProfileEntries(value, defaults) {
       name,
       connection: {
         baseUrl: typeof entry?.connection?.baseUrl === "string" ? entry.connection.baseUrl : "",
-        verifyCertificate: entry?.connection?.verifyCertificate !== false
+        verifyCertificate: entry?.connection?.verifyCertificate !== false,
+        openRouterSearch: Boolean(entry?.connection?.openRouterSearch)
       },
       models: {
         available: Array.isArray(entry?.models?.available) ? uniqueStrings(entry.models.available) : [],
@@ -319,7 +327,8 @@ function normalizeProfileEntries(value, defaults) {
         instructionReasoning: normalizeInstructionReasoning(
           entry?.models?.instructionReasoning,
           defaults.profiles?.[0]?.models?.instructionReasoning
-        )
+        ),
+        openRouterSearch: Boolean(entry?.models?.openRouterSearch ?? entry?.connection?.openRouterSearch)
       }
     };
   });

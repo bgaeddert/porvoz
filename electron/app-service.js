@@ -37,6 +37,7 @@ export function createAppService(settingsStore, logStore) {
     resetToDefaults,
     getLogs,
     clearLogs,
+    updateLogTiming,
     logError,
     transcribe,
     instruct,
@@ -62,7 +63,8 @@ export function createAppService(settingsStore, logStore) {
         selected: {
           transcription: activeProfile.models.transcription,
           instruction: activeProfile.models.instruction,
-          instructionReasoning: normalizeInstructionReasoning(activeProfile.models.instructionReasoning)
+          instructionReasoning: normalizeInstructionReasoning(activeProfile.models.instructionReasoning),
+          openRouterSearch: Boolean(activeProfile.models?.openRouterSearch ?? activeProfile.connection?.openRouterSearch)
         }
       },
       prefixes: normalizePrefixes(settings.prefixes),
@@ -77,6 +79,7 @@ export function createAppService(settingsStore, logStore) {
       profileId: activeProfile.id,
       baseUrl: activeProfile.connection.baseUrl,
       verifyCertificate: activeProfile.connection.verifyCertificate !== false,
+      openRouterSearch: Boolean(activeProfile.models?.openRouterSearch ?? activeProfile.connection?.openRouterSearch),
       apiKeyConfigured: settingsStore.hasApiKey(activeProfile.id)
     };
   }
@@ -104,7 +107,7 @@ export function createAppService(settingsStore, logStore) {
     };
   }
 
-  function saveConnection({ profileId, baseUrl: requestedBaseUrl, apiKey, verifyCertificate } = {}) {
+  function saveConnection({ profileId, baseUrl: requestedBaseUrl, apiKey, verifyCertificate, openRouterSearch } = {}) {
     const nextBaseUrl = typeof requestedBaseUrl === "string"
       ? requestedBaseUrl.trim().replace(/\/+$/, "")
       : "";
@@ -112,7 +115,12 @@ export function createAppService(settingsStore, logStore) {
       throw new Error("Enter a valid HTTP or HTTPS base URL.");
     }
 
-    const connection = { profileId, baseUrl: nextBaseUrl, verifyCertificate };
+    const connection = {
+      profileId,
+      baseUrl: nextBaseUrl,
+      verifyCertificate,
+      openRouterSearch: typeof openRouterSearch === "boolean" ? openRouterSearch : undefined
+    };
     if (typeof apiKey === "string" && apiKey.trim()) connection.apiKey = apiKey;
     settingsStore.saveConnection(connection);
     resetOpenAIClient(profileId);
@@ -207,7 +215,7 @@ export function createAppService(settingsStore, logStore) {
     return getRuntimeConfig();
   }
 
-  async function transcribe({ audio, mimeType, profileId } = {}, { signal } = {}) {
+  async function transcribe({ audio, mimeType, profileId, timing } = {}, { signal } = {}) {
     const normalizedMimeType = typeof mimeType === "string" ? mimeType.toLowerCase() : "";
     const audioBuffer = toBuffer(audio);
     const selectedModel = getProfile(settingsStore.getSettings(), profileId).models.transcription;
@@ -234,24 +242,31 @@ export function createAppService(settingsStore, logStore) {
           { type: normalizedMimeType }
         );
       throwIfAborted(signal);
+      const transcribeStart = Date.now();
       const result = await getOpenAIClient(profileId).audio.transcriptions.create({
         file,
         model: selectedModel,
         response_format: "json"
       }, requestOptions(signal));
+      const transcribeEnd = Date.now();
       throwIfAborted(signal);
       const transcript = result.text?.trim();
       if (!transcript) {
         throw new Error("The transcription endpoint returned an empty transcription.");
       }
       const logGroupId = randomUUID();
+      const currentTiming = {
+        ...(timing || {}),
+        transcriptionMs: transcribeEnd - transcribeStart
+      };
       recordLog({
         type: "transcript",
         text: transcript,
         model: selectedModel,
-        groupId: logGroupId
+        groupId: logGroupId,
+        timing: currentTiming
       });
-      return { transcript, logGroupId };
+      return { transcript, logGroupId, timing: currentTiming };
     } catch (error) {
       const canceled = cancellationErrorFor(error, signal);
       if (canceled) throw canceled;
@@ -285,7 +300,8 @@ export function createAppService(settingsStore, logStore) {
       logGroupId,
       profileId,
       clipboardText: suppliedClipboardText,
-      selectedText: suppliedSelectedText
+      selectedText: suppliedSelectedText,
+      timing
     } = {},
     { readClipboard = () => suppliedClipboardText || "", signal } = {}
   ) {
@@ -298,7 +314,12 @@ export function createAppService(settingsStore, logStore) {
       throwIfAborted(signal);
       if (inputs.error) throw new Error(inputs.error);
       if (!inputs.activePrefixes.length && !selectedText) {
-        return { transcript: inputs.transcript, instructionApplied: false, webSearchUsed: false };
+        return {
+          transcript: inputs.transcript,
+          instructionApplied: false,
+          webSearchUsed: false,
+          ...(timing ? { timing } : {})
+        };
       }
       if (!hasApiConfig(profileId)) throw new Error("Enter the base URL and API key in Settings.");
       if (!inputs.model) throw new Error("Choose an instruction model in Settings after loading models.");
@@ -316,13 +337,15 @@ export function createAppService(settingsStore, logStore) {
         clipboardText,
         selectedText,
         logGroupId,
+        timing,
         signal,
         profileId
       });
       return {
         transcript: instructionResult.output,
         instructionApplied: true,
-        webSearchUsed: instructionResult.webSearchUsed
+        webSearchUsed: instructionResult.webSearchUsed,
+        ...(timing ? { timing: instructionResult.timing } : {})
       };
     } catch (error) {
       const canceled = cancellationErrorFor(error, signal);
@@ -336,6 +359,7 @@ export function createAppService(settingsStore, logStore) {
         instructions: error?.instructions,
         input: error?.input,
         searchEnabled: error?.searchEnabled,
+        searchProtocol: error?.searchProtocol,
         clipboardEnabled: error?.clipboardEnabled
       });
       throw error;
@@ -402,16 +426,20 @@ export function createAppService(settingsStore, logStore) {
     ].join("\n\n");
 
     let response;
+    const enableOpenRouterSearch = Boolean(activeProfile?.models?.openRouterSearch ?? activeProfile?.connection?.openRouterSearch);
+    const requestPayload = {
+      model: activeProfile.models.instruction,
+      reasoning: { effort: normalizeInstructionReasoning(activeProfile.models.instructionReasoning) },
+      instructions,
+      input
+    };
+    requestPayload.tools = webSearchTools(enableOpenRouterSearch);
+    if (!enableOpenRouterSearch) {
+      requestPayload.include = ["web_search_call.action.sources"];
+    }
     try {
       throwIfAborted(signal);
-      response = await getOpenAIClient(profileId).responses.create({
-        model: activeProfile.models.instruction,
-        reasoning: { effort: normalizeInstructionReasoning(activeProfile.models.instructionReasoning) },
-        instructions,
-        input,
-        tools: [{ type: "web_search" }],
-        include: ["web_search_call.action.sources"]
-      }, requestOptions(signal));
+      response = await getOpenAIClient(profileId).responses.create(requestPayload, requestOptions(signal));
       throwIfAborted(signal);
     } catch (error) {
       const canceled = cancellationErrorFor(error, signal);
@@ -496,26 +524,36 @@ export function createAppService(settingsStore, logStore) {
     clipboardText,
     selectedText,
     logGroupId,
+    timing,
     signal,
     profileId
   }) {
+    const instructionPrepStart = Date.now();
     const clipboardRequested = activePrefixes.some((prefix) => prefix.allowClipboard === true);
     const activePrefixLabel = activePrefixes.map(({ name }) => name).join(" + ");
     const { instructions, input } = selectedText
       ? buildSelectionRequest(transcript, selectedText)
       : buildPrefixRequest(transcript, activePrefixes, clipboardText, clipboardRequested);
+    const settings = settingsStore.getSettings();
+    const activeProfile = getProfile(settings, profileId);
+    const enableOpenRouterSearch = Boolean(activeProfile?.models?.openRouterSearch ?? activeProfile?.connection?.openRouterSearch);
     const requestBody = {
       model,
       reasoning: { effort: reasoning },
       instructions,
-      input,
-      tools: [{ type: "web_search" }],
-      include: ["web_search_call.action.sources"]
+      input
     };
+    requestBody.tools = webSearchTools(enableOpenRouterSearch);
+    if (!enableOpenRouterSearch) {
+      requestBody.include = ["web_search_call.action.sources"];
+    }
+    const instructionPrepMs = Date.now() - instructionPrepStart;
 
     try {
       throwIfAborted(signal);
+      const instructStart = Date.now();
       const response = await getOpenAIClient(profileId).responses.create(requestBody, requestOptions(signal));
+      const instructEnd = Date.now();
       throwIfAborted(signal);
       const instructionResponse = response.output_text;
       if (typeof instructionResponse !== "string" || !instructionResponse.trim()) {
@@ -523,6 +561,11 @@ export function createAppService(settingsStore, logStore) {
       }
       const output = appendSearchSources(instructionResponse, response);
       const webSearchUsed = isWebSearchUsed(response);
+      const currentTiming = {
+        ...(timing || {}),
+        instructionPrepMs,
+        instructionMs: instructEnd - instructStart
+      };
       recordLog({
         type: "instruction",
         text: output,
@@ -532,10 +575,12 @@ export function createAppService(settingsStore, logStore) {
         instructions,
         input,
         searchEnabled: true,
+        searchProtocol: enableOpenRouterSearch ? "openrouter" : "standard",
         searchUsed: webSearchUsed,
-        clipboardEnabled: clipboardRequested
+        clipboardEnabled: clipboardRequested,
+        timing: currentTiming
       });
-      return { output, webSearchUsed };
+      return { output, webSearchUsed, timing: currentTiming };
     } catch (error) {
       const canceled = cancellationErrorFor(error, signal);
       if (canceled) throw canceled;
@@ -543,6 +588,7 @@ export function createAppService(settingsStore, logStore) {
         status: error?.status,
         model,
         searchAvailable: true,
+        searchProtocol: enableOpenRouterSearch ? "openrouter" : "standard",
         message: error?.message
       });
       const wrappedError = new Error(isApiTimeoutError(error)
@@ -555,6 +601,7 @@ export function createAppService(settingsStore, logStore) {
       wrappedError.instructions = instructions;
       wrappedError.input = input;
       wrappedError.searchEnabled = true;
+      wrappedError.searchProtocol = enableOpenRouterSearch ? "openrouter" : "standard";
       wrappedError.clipboardEnabled = clipboardRequested;
       throw wrappedError;
     }
@@ -618,6 +665,20 @@ export function createAppService(settingsStore, logStore) {
     return { instructions, input };
   }
 
+  function webSearchTools(useOpenRouterSearch) {
+    if (useOpenRouterSearch) {
+      return [{
+        type: "openrouter:web_search",
+        parameters: {
+          engine: "exa",
+          max_results: 3,
+          max_total_results: 3
+        }
+      }];
+    }
+    return [{ type: "web_search" }];
+  }
+
   function appendSearchSources(text, response) {
     const citations = getResponseCitations(response)
       .filter(({ url }) => !text.includes(url));
@@ -634,12 +695,16 @@ export function createAppService(settingsStore, logStore) {
     for (const item of response.output || []) {
       for (const content of item.content || []) {
         for (const annotation of content.annotations || []) {
-          if (annotation?.type !== "url_citation" || typeof annotation.url !== "string") continue;
-          if (seenUrls.has(annotation.url)) continue;
-          seenUrls.add(annotation.url);
+          if (annotation?.type !== "url_citation") continue;
+          const citation = annotation.url_citation && typeof annotation.url_citation === "object"
+            ? annotation.url_citation
+            : annotation;
+          if (typeof citation.url !== "string") continue;
+          if (seenUrls.has(citation.url)) continue;
+          seenUrls.add(citation.url);
           citations.push({
-            title: typeof annotation.title === "string" ? annotation.title.trim() : "",
-            url: annotation.url
+            title: typeof citation.title === "string" ? citation.title.trim() : "",
+            url: citation.url
           });
         }
       }
@@ -649,12 +714,19 @@ export function createAppService(settingsStore, logStore) {
 
   function isWebSearchUsed(response) {
     if (!response) return false;
+    const serverToolUse = response.usage?.server_tool_use
+      || response.usage?.server_tool_use_details
+      || response.usage?.serverToolUse
+      || response.usage?.serverToolUseDetails;
+    if (Number(serverToolUse?.web_search_requests ?? serverToolUse?.webSearchRequests) > 0) return true;
     if (getResponseCitations(response).length > 0) return true;
     if (Array.isArray(response.output)) {
       for (const item of response.output) {
-        if (item?.type === "web_search_call") return true;
-        if (item?.type === "tool_call" && item?.name === "web_search") return true;
-        if (item?.action?.type === "web_search") return true;
+        if (item?.type === "web_search_call"
+          || item?.type === "openrouter:web_search_call"
+          || item?.type === "openrouter:web_search") return true;
+        if (item?.type === "tool_call" && ["web_search", "openrouter:web_search"].includes(item?.name)) return true;
+        if (["web_search", "openrouter:web_search", "search"].includes(item?.action?.type)) return true;
       }
     }
     if (response.web_search_call || response.webSearchUsed) return true;
@@ -785,6 +857,14 @@ export function createAppService(settingsStore, logStore) {
       mimeType,
       bytes
     });
+  }
+
+  function updateLogTiming(payload = {}) {
+    const targetGroupId = payload.logGroupId || payload.groupId || (typeof payload === "string" ? payload : "");
+    const timing = payload.timing || payload;
+    if (targetGroupId && typeof responseLogStore.updateLogTiming === "function") {
+      responseLogStore.updateLogTiming(targetGroupId, timing);
+    }
   }
 
   function clearLogs() {
@@ -955,6 +1035,7 @@ function createNoopLogStore() {
   return {
     getLogs: () => [],
     appendLog: () => undefined,
+    updateLogTiming: () => undefined,
     clearLogs: () => []
   };
 }

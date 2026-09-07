@@ -15,6 +15,7 @@ export function createLogStore({ logsPath, maxEntries = 200 }) {
   return {
     getLogs: () => clone(logs),
     appendLog,
+    updateLogTiming,
     clearLogs
   };
 
@@ -31,6 +32,23 @@ export function createLogStore({ logsPath, maxEntries = 200 }) {
     logs = [];
     saveLogsFile();
     return [];
+  }
+
+  function updateLogTiming(groupId, timing = {}) {
+    if (!groupId || typeof groupId !== "string") return;
+    const normalizedTiming = normalizeTiming(timing);
+    if (!normalizedTiming) return;
+    let modified = false;
+    for (const log of logs) {
+      if (log.groupId === groupId) {
+        log.timing = {
+          ...(log.timing || {}),
+          ...Object.fromEntries(Object.entries(normalizedTiming).filter(([_, v]) => v !== null))
+        };
+        modified = true;
+      }
+    }
+    if (modified) saveLogsFile();
   }
 
   function saveLogsFile() {
@@ -69,13 +87,32 @@ function normalizeLog(entry) {
     instructions: typeof entry.instructions === "string" ? entry.instructions : "",
     input: typeof entry.input === "string" ? entry.input : "",
     searchEnabled: entry.searchEnabled === true,
+    searchUsed: entry.searchUsed === true,
     clipboardEnabled: entry.clipboardEnabled === true,
     stage: type === "error" ? normalizeErrorStage(entry.stage) : "",
     status: type === "error" ? normalizeStatus(entry.status) : null,
     errorCode: type === "error" && typeof entry.errorCode === "string" ? entry.errorCode.trim() : "",
     mimeType: type === "error" && typeof entry.mimeType === "string" ? entry.mimeType.trim() : "",
-    bytes: type === "error" ? normalizeBytes(entry.bytes) : null
+    bytes: type === "error" ? normalizeBytes(entry.bytes) : null,
+    timing: normalizeTiming(entry.timing)
   };
+}
+
+function normalizeTiming(timing) {
+  if (!timing || typeof timing !== "object") return null;
+  const num = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v)) : null);
+  const positiveNum = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v)) : null);
+  const result = {
+    hotkeyReleasedAt: num(timing.hotkeyReleasedAt),
+    textPastedAt: num(timing.textPastedAt),
+    preTranscriptionMs: num(timing.preTranscriptionMs),
+    transcriptionMs: num(timing.transcriptionMs),
+    instructionPrepMs: num(timing.instructionPrepMs),
+    instructionMs: num(timing.instructionMs),
+    pasteMs: num(timing.pasteMs),
+    totalMs: positiveNum(timing.totalMs)
+  };
+  return Object.values(result).some((v) => v !== null) ? result : null;
 }
 
 function normalizeErrorStage(value) {

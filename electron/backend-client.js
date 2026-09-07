@@ -16,6 +16,7 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
     resetToDefaults,
     getLogs: () => request("/v1/porvoz/logs"),
     clearLogs: () => request("/v1/porvoz/logs", { method: "DELETE" }),
+    updateLogTiming: (value) => request("/v1/porvoz/logs/timing", { method: "POST", json: value }),
     logError: (value) => request("/v1/porvoz/logs/errors", { method: "POST", json: value }),
     transcribe,
     createPrefixFromVoice,
@@ -110,12 +111,15 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
     return getRuntimeConfig();
   }
 
-  async function transcribe({ audio, mimeType, clipboardText = "", selectedText = "" } = {}, { signal } = {}) {
+  async function transcribe({ audio, mimeType, clipboardText = "", selectedText = "", timing } = {}, { signal } = {}) {
     const profileId = await activeProfileId();
     const form = new FormData();
     form.set("model", profileId);
     form.set("response_format", "json");
     form.set("porvoz_context", serializeContext({ clipboardText, selectedText }));
+    if (timing && typeof timing === "object") {
+      form.set("porvoz_timing", JSON.stringify(timing));
+    }
     form.set("file", new Blob([audio], { type: mimeType }), audioFileName(mimeType));
     const result = await request("/v1/audio/transcriptions", { method: "POST", body: form, signal });
     return {
@@ -123,7 +127,8 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
       rawTranscript: result.porvoz?.raw_transcript || result.text,
       instructionApplied: result.porvoz?.instruction_applied === true,
       webSearchUsed: result.porvoz?.web_search_used === true,
-      logGroupId: result.porvoz?.log_group_id || ""
+      logGroupId: result.porvoz?.log_group_id || "",
+      ...(result.porvoz?.timing ? { timing: result.porvoz.timing } : {})
     };
   }
 

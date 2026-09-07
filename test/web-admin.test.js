@@ -113,6 +113,9 @@ test("the website requires sign-in and serves only its allowlisted files", async
       `${overlayPath} returned ${response.status}`);
     assert.doesNotMatch(await response.text(), /porvozDesktop|overlay-shell|"name": "porvoz"/);
   }
+
+  await browser.signIn();
+  assert.equal((await browser.fetch("/log-timing.js")).status, 200);
 });
 
 test("signing in issues a session that carries a request token", async (context) => {

@@ -504,13 +504,15 @@ function handleGlobalKeyUp(event) {
 function stopHotkeyRecording() {
   if (isHotkeyRecording) {
     isHotkeyRecording = false;
+    const hotkeyReleasedAt = Date.now();
     for (const attempt of captureAttempts.values()) {
       if (attempt.state === "recording") {
         attempt.state = "processing";
+        attempt.hotkeyReleasedAt = hotkeyReleasedAt;
         attempt.selectedTextPromise = selectedTextReader.read({ target: attempt.targetWindow });
       }
     }
-    sendHotkeyAction("stop");
+    sendHotkeyAction("stop", { hotkeyReleasedAt });
   }
 }
 
@@ -780,6 +782,11 @@ function registerIpcHandlers() {
     notifyLogsUpdated();
     return result;
   });
+  ipcMain.handle("porvoz:update-log-timing", async (_event, value) => {
+    const result = await appService.updateLogTiming(value);
+    notifyLogsUpdated();
+    return result;
+  });
   ipcMain.handle("porvoz:clear-logs", async () => {
     const logs = await appService.clearLogs();
     notifyLogsUpdated(logs);
@@ -804,12 +811,27 @@ function registerIpcHandlers() {
     try {
       const attempt = getCaptureAttempt(value?.captureId);
       const selectedText = await (attempt?.selectedTextPromise || selectedTextReader.read());
+      const hotkeyReleasedAt = attempt?.hotkeyReleasedAt || value?.timing?.hotkeyReleasedAt || value?.hotkeyReleasedAt;
+      const transcriptionRequestedAt = Date.now();
+      const preTranscriptionMs = hotkeyReleasedAt
+        ? Math.max(0, transcriptionRequestedAt - hotkeyReleasedAt)
+        : (value?.timing?.preTranscriptionMs ?? null);
+      const timing = {
+        ...(value?.timing || {}),
+        ...(hotkeyReleasedAt ? { hotkeyReleasedAt } : {}),
+        ...(preTranscriptionMs !== null ? { preTranscriptionMs } : {})
+      };
       const result = await appService.transcribe({
         ...value,
         clipboardText: await clipboard.readText(),
-        ...(selectedText ? { selectedText } : {})
+        ...(selectedText ? { selectedText } : {}),
+        timing
       }, { signal });
-      if (attempt) attempt.webSearchUsed = result?.webSearchUsed === true;
+      if (attempt) {
+        attempt.webSearchUsed = result?.webSearchUsed === true;
+        attempt.logGroupId = result?.logGroupId || attempt.logGroupId;
+        attempt.timing = result?.timing || timing;
+      }
       notifyLogsUpdated();
       return result;
     } catch (error) {
@@ -907,7 +929,35 @@ function registerIpcHandlers() {
     setOverlayStatus({ message: "Placing text…", state: "typing", stage: "typing" });
     const attempt = getCaptureAttempt(request.captureId);
     try {
+      const pasteStart = Date.now();
       await typeTextAtCursor(request, signal);
+      const textPastedAt = Date.now();
+      const pasteMs = Math.max(1, textPastedAt - pasteStart);
+      const hotkeyReleasedAt = attempt?.hotkeyReleasedAt || request.timing?.hotkeyReleasedAt;
+      const stageSum = (
+        (request.timing?.preTranscriptionMs || 0) +
+        (request.timing?.transcriptionMs || 0) +
+        (request.timing?.instructionPrepMs || 0) +
+        (request.timing?.instructionMs || 0) +
+        pasteMs
+      );
+      const measuredTotal = (hotkeyReleasedAt && textPastedAt > hotkeyReleasedAt)
+        ? textPastedAt - hotkeyReleasedAt
+        : null;
+      const totalMs = measuredTotal
+        || (request.timing?.totalMs && request.timing.totalMs > 0 ? request.timing.totalMs : null)
+        || (stageSum > 0 ? stageSum : pasteMs);
+      const logGroupId = request.logGroupId || attempt?.logGroupId;
+      if (logGroupId) {
+        const timingPatch = {
+          ...(attempt?.timing || request.timing || {}),
+          textPastedAt,
+          pasteMs,
+          totalMs
+        };
+        await appService.updateLogTiming({ logGroupId, timing: timingPatch });
+        notifyLogsUpdated();
+      }
       const webSearchUsed = request.webSearchUsed || attempt?.webSearchUsed === true;
       if (webSearchUsed) {
         statusOverlay?.showWebSearchResponse();
@@ -1052,13 +1102,15 @@ async function typeTextAtCursor(value, signal) {
 
 function normalizeTypingRequest(value) {
   if (!value || typeof value !== "object") {
-    return { text: "", captureId: "", purpose: "transcription", webSearchUsed: false };
+    return { text: "", captureId: "", logGroupId: "", purpose: "transcription", webSearchUsed: false, timing: null };
   }
   return {
     text: typeof value.text === "string" ? value.text : "",
     captureId: typeof value.captureId === "string" ? value.captureId : "",
+    logGroupId: typeof value.logGroupId === "string" ? value.logGroupId : "",
     purpose: value.purpose === "configuration-warning" ? "configuration-warning" : "transcription",
-    webSearchUsed: value.webSearchUsed === true
+    webSearchUsed: value.webSearchUsed === true,
+    timing: value.timing && typeof value.timing === "object" ? value.timing : null
   };
 }
 
@@ -1071,7 +1123,10 @@ function beginCaptureAttempt() {
     state: "recording",
     targetWindow,
     selectedTextPromise: undefined,
-    webSearchUsed: false
+    webSearchUsed: false,
+    hotkeyReleasedAt: null,
+    logGroupId: null,
+    timing: null
   };
   captureAttempts.set(attempt.id, attempt);
   const cleanupTimer = setTimeout(() => {

@@ -6,19 +6,19 @@ Instead of forcing you into a fixed vocabulary or workflow, Porvoz adapts to the
 
 ## Download and install
 
-The current release is [Porvoz v2.5.0](https://github.com/bgaeddert/porvoz/releases/tag/v2.5.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
+The current release is [Porvoz v2.6.0](https://github.com/bgaeddert/porvoz/releases/tag/v2.6.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v2.5.0/Porvoz-2.5.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v2.6.0/Porvoz-2.6.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v2.5.0/Porvoz-2.5.0-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v2.6.0/Porvoz-2.6.0-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-2.5.0-linux-x86_64.AppImage
-./Porvoz-2.5.0-linux-x86_64.AppImage
+chmod +x Porvoz-2.6.0-linux-x86_64.AppImage
+./Porvoz-2.6.0-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to start the local backend and protect its encryption key. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -27,7 +27,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6 xclip
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v2.5.0/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v2.6.0/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -40,7 +40,7 @@ The desktop uses its private local child server by default. To share one backend
 1. Open **Provider & models**.
 2. Enter the endpoint's base URL and API key under the active connection profile. To configure another endpoint later, select **New profile** above the form, give it a name, then fill in its own base URL, key, and models — Porvoz keeps every profile's settings separate and switches instantly when you pick a different one from the dropdown. Use **Rename** or **Delete** for any profile except the last one.
 3. Select **Load models**. Porvoz reads the endpoint's `/v1/models` catalog for the selected profile.
-4. Type or paste a model ID into the **Transcription model** and **Instruction model** fields; each is saved automatically. You can also use the browse button beside either field to search the loaded catalog, choose a model, and save it into that field. Choose the instruction reasoning level (`low`, `medium`, or `high`); it defaults to `low` and applies only to instruction-model requests.
+4. Type or paste a model ID into the **Transcription model** and **Instruction model** fields; each is saved automatically. You can also use the browse button beside either field to search the loaded catalog, choose a model, and save it into that field. Choose the instruction reasoning level (`low`, `medium`, or `high`); it defaults to `low` and applies only to instruction-model requests. Enable **OpenRouter search tool** when the selected endpoint is OpenRouter; leave it off for endpoints that implement the standard Responses API `web_search` tool.
 
 The endpoint must provide the OpenAI-compatible audio transcription and Responses API operations used by the app. **Verify certificate** is enabled by default for every API request. Disable it only for a trusted self-signed endpoint on a network you control.
 
@@ -85,7 +85,7 @@ While a capture is active, the status pill appears near the bottom of the displa
 
 The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. With no selected text, Porvoz matches consecutive prefixes at the beginning of the transcript, removes the matched phrases, and sends only those matched prefix instructions and the remaining spoken request to the instruction model. A transcript without a matched prefix bypasses the instruction model and is returned directly.
 
-Every instruction-model request makes the hosted `web_search` tool available without requiring the model to use it. Discovered citations may be appended to the result. In the prefix flow, the current clipboard is included as untrusted reference context only when at least one matched prefix enables it. When text is selected, Porvoz instead sends the complete transcript and selected text through a dedicated selection prompt; it does not match or send prefixes and does not include clipboard context. Porvoz captures selected text with a clipboard snapshot, a unique sentinel, and synthetic copy, then restores the original clipboard. On Windows and Linux, this runs when recording stops and waits for all Control, Alt, Shift, and Meta keys to be released. Recognized standalone terminals are skipped unless Console selection is enabled, in which case they receive `Ctrl+Shift+C`; other applications receive `Ctrl+C`. An empty terminal copy is never retried with `Ctrl+C`. Detection uses Windows window classes and executable names or Linux X11 window classes and instance names, without accessibility APIs. Unknown terminals and terminal panes embedded in editors are not automatically recognized. Linux writes raw X11 clipboard formats so neither capture nor paste clears the application's selection. Selection capture is bounded to 200,000 characters; unavailable selections are omitted. **Activity** stores the 200 most recent transcript, instruction, and error entries on the selected server. Desktops using the same remote server share that history.
+Every instruction-model request makes web search available without requiring the model to use it. The **Enable OpenRouter search tool** checkbox selects the wire protocol: checked requests use OpenRouter's `openrouter:web_search` server tool and its response metadata; unchecked requests use the standard `web_search` Responses tool and response metadata. Discovered citations may be appended to the result. In the prefix flow, the current clipboard is included as untrusted reference context only when at least one matched prefix enables it. When text is selected, Porvoz instead sends the complete transcript and selected text through a dedicated selection prompt; it does not match or send prefixes and does not include clipboard context. Porvoz captures selected text with a clipboard snapshot, a unique sentinel, and synthetic copy, then restores the original clipboard. On Windows and Linux, this runs when recording stops and waits for all Control, Alt, Shift, and Meta keys to be released. Recognized standalone terminals are skipped unless Console selection is enabled, in which case they receive `Ctrl+Shift+C`; other applications receive `Ctrl+C`. An empty terminal copy is never retried with `Ctrl+C`. Detection uses Windows window classes and executable names or Linux X11 window classes and instance names, without accessibility APIs. Unknown terminals and terminal panes embedded in editors are not automatically recognized. Linux writes raw X11 clipboard formats so neither capture nor paste clears the application's selection. Selection capture is bounded to 200,000 characters; unavailable selections are omitted. **Activity** stores the 200 most recent transcript, instruction, and error entries on the selected server, marks responses that actually used web search, and shows per-stage and total processing time when timing data is available. Desktops using the same remote server share that history.
 
 When a typed response needs a keyboard action, the instruction model can return bracketed key notation such as `[Enter]`, `[Control+F]`, or `[Control+Shift+ArrowDown]`. Put modifier names first, separate keys with `+`, and use one notation per action; Porvoz parses the notation and sends the corresponding key press or combination. Linux typing uses X11 for the global hotkey and simulated paste input. macOS is not supported in the current release.
 
@@ -102,7 +102,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `2.5.0` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
+Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `2.6.0` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
 
 To build the image from the current source checkout instead, run `docker compose up -d --build`.
 

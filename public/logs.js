@@ -1,5 +1,6 @@
 import { createIcon } from "./icons.js";
 import { bridge } from "./app-bridge.js";
+import { formatSignificantTotal, resolveTotalMs, formatDuration } from "./log-timing.js";
 
 const logCount = document.querySelector("#log-count");
 const logCountLabel = document.querySelector("#log-count-label");
@@ -75,8 +76,17 @@ function renderLogs(entries) {
 
 function matchesFilter(log) {
   if (!filterTerm) return true;
-  return [log.text, log.prefix, log.model, log.stage, log.errorCode, log.instructions, log.input]
-    .some((value) => typeof value === "string" && value.toLocaleLowerCase().includes(filterTerm));
+  const searchable = [
+    log.text,
+    log.prefix,
+    log.model,
+    log.stage,
+    log.errorCode,
+    log.instructions,
+    log.input,
+    log.searchUsed ? "web search used search" : ""
+  ];
+  return searchable.some((value) => typeof value === "string" && value.toLocaleLowerCase().includes(filterTerm));
 }
 
 function setEmptyStateCopy(isFilteredOut) {
@@ -153,6 +163,15 @@ function createLogGroup(group) {
     : error ? "error" : entries[0].type;
   heading.append(label, count);
 
+  const combinedTiming = entries.reduce((acc, entry) => ({ ...acc, ...(entry.timing || {}) }), {});
+  const totalMs = resolveTotalMs(combinedTiming);
+  if (totalMs !== null && totalMs > 0) {
+    const totalTimeBadge = document.createElement("span");
+    totalTimeBadge.className = "log-session-total-time";
+    totalTimeBadge.textContent = `Total · ${formatSignificantTotal(totalMs)}`;
+    heading.append(totalTimeBadge);
+  }
+
   const time = document.createElement("time");
   time.className = "log-session-time";
   time.dateTime = entries[entries.length - 1].createdAt;
@@ -161,13 +180,79 @@ function createLogGroup(group) {
 
   const stages = document.createElement("div");
   stages.className = "log-session-stages";
+
+  const timingFlow = createTimingFlow(combinedTiming);
+  if (timingFlow) stages.append(timingFlow);
+
   entries.forEach((log, index) => {
     if (index > 0) stages.append(createStageConnector(log));
-    stages.append(createLogStage(log));
+    stages.append(createLogStage(log, entries));
   });
 
   session.append(header, stages);
   return session;
+}
+
+function createTimingFlow(timing) {
+  if (!timing) return null;
+  const steps = [];
+  if (timing.preTranscriptionMs !== null && timing.preTranscriptionMs > 0) {
+    steps.push({ label: "Pre-request", duration: timing.preTranscriptionMs });
+  }
+  if (timing.transcriptionMs !== null && timing.transcriptionMs > 0) {
+    steps.push({ label: "Transcribe", duration: timing.transcriptionMs });
+  }
+  if (timing.instructionPrepMs !== null && timing.instructionPrepMs > 0) {
+    steps.push({ label: "Prep", duration: timing.instructionPrepMs });
+  }
+  if (timing.instructionMs !== null && timing.instructionMs > 0) {
+    steps.push({ label: "Instruct", duration: timing.instructionMs });
+  }
+  if (timing.pasteMs !== null && timing.pasteMs > 0) {
+    steps.push({ label: "Paste", duration: timing.pasteMs });
+  }
+  if (!steps.length) return null;
+
+  const container = document.createElement("div");
+  container.className = "log-timing-flow";
+
+  steps.forEach((step, index) => {
+    if (index > 0) {
+      const arrow = document.createElement("span");
+      arrow.className = "log-timing-flow-arrow";
+      arrow.textContent = "→";
+      container.append(arrow);
+    }
+    const item = document.createElement("span");
+    item.className = "log-timing-flow-step";
+    const stepLabel = document.createElement("span");
+    stepLabel.className = "log-timing-flow-label";
+    stepLabel.textContent = step.label;
+    const stepTime = document.createElement("strong");
+    stepTime.className = "log-timing-flow-time";
+    stepTime.textContent = formatDuration(step.duration);
+    item.append(stepLabel, stepTime);
+    container.append(item);
+  });
+
+  const totalMs = resolveTotalMs(timing);
+  if (totalMs !== null && totalMs > 0) {
+    const equals = document.createElement("span");
+    equals.className = "log-timing-flow-arrow";
+    equals.textContent = "=";
+    const totalItem = document.createElement("span");
+    totalItem.className = "log-timing-flow-step log-timing-flow-total";
+    const totalLabel = document.createElement("span");
+    totalLabel.className = "log-timing-flow-label";
+    totalLabel.textContent = "Total";
+    const totalTime = document.createElement("strong");
+    totalTime.className = "log-timing-flow-time";
+    totalTime.textContent = formatSignificantTotal(totalMs);
+    totalItem.append(totalLabel, totalTime);
+    container.append(equals, totalItem);
+  }
+
+  return container;
 }
 
 function createStageConnector(log) {
@@ -184,9 +269,9 @@ function createStageConnector(log) {
   return connector;
 }
 
-function createLogStage(log) {
+function createLogStage(log, entries) {
   const stage = document.createElement("article");
-  stage.className = `log-stage log-stage-${log.type}`;
+  stage.className = `log-stage log-stage-${log.type}${log.searchUsed ? " log-stage-search-used" : ""}`;
 
   const meta = document.createElement("aside");
   meta.className = "log-stage-meta";
@@ -211,11 +296,35 @@ function createLogStage(log) {
   if (log.mimeType) meta.append(createMetaChip(`Format · ${log.mimeType}`));
   if (log.bytes !== null) meta.append(createMetaChip(`Size · ${log.bytes.toLocaleString()} bytes`));
   if (log.prefix) meta.append(createMetaChip(`Prefix · ${log.prefix}`));
+
+  if (log.timing) {
+    if (log.timing.preTranscriptionMs !== null && log.type === "transcript") {
+      meta.append(createMetaChip(`Pre-request · ${formatDuration(log.timing.preTranscriptionMs)}`));
+    }
+    if (log.timing.transcriptionMs !== null && log.type === "transcript") {
+      meta.append(createMetaChip(`Transcription · ${formatDuration(log.timing.transcriptionMs)}`));
+    }
+    if (log.timing.instructionPrepMs !== null && log.type === "instruction") {
+      meta.append(createMetaChip(`Prep · ${formatDuration(log.timing.instructionPrepMs)}`));
+    }
+    if (log.timing.instructionMs !== null && log.type === "instruction") {
+      meta.append(createMetaChip(`Instruction · ${formatDuration(log.timing.instructionMs)}`));
+    }
+    const isLastStage = entries ? log === entries[entries.length - 1] : true;
+    if (log.timing.pasteMs !== null && isLastStage) {
+      meta.append(createMetaChip(`Paste · ${formatDuration(log.timing.pasteMs)}`));
+    }
+  }
+
   // Tool and context availability are a different class of fact and get their own styling.
-  if (log.searchEnabled || log.clipboardEnabled) {
+  if (log.searchUsed || log.clipboardEnabled) {
     const access = document.createElement("div");
     access.className = "log-stage-access";
-    if (log.searchEnabled) access.append(createMetaChip("Tool · Search available"));
+    if (log.searchUsed) {
+      const searchChip = createMetaChip("Search · Web search used");
+      searchChip.classList.add("log-meta-chip-search-used");
+      access.append(searchChip);
+    }
     if (log.clipboardEnabled) access.append(createMetaChip("Context · Clipboard"));
     meta.append(access);
   }
@@ -350,6 +459,7 @@ function normalizeLog(log) {
     instructions: typeof log.instructions === "string" ? log.instructions : "",
     input: typeof log.input === "string" ? log.input : "",
     searchEnabled: log.searchEnabled === true,
+    searchUsed: log.searchUsed === true,
     clipboardEnabled: log.clipboardEnabled === true,
     stage: typeof log.stage === "string" ? log.stage.trim() : "",
     status: Number.isInteger(Number(log.status)) && Number(log.status) >= 100 && Number(log.status) <= 599
@@ -359,8 +469,26 @@ function normalizeLog(log) {
     mimeType: typeof log.mimeType === "string" ? log.mimeType.trim() : "",
     bytes: Number.isSafeInteger(Number(log.bytes)) && Number(log.bytes) >= 0 && log.bytes !== null
       ? Number(log.bytes)
-      : null
+      : null,
+    timing: normalizeTiming(log.timing)
   };
+}
+
+function normalizeTiming(timing) {
+  if (!timing || typeof timing !== "object") return null;
+  const num = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v)) : null);
+  const positiveNum = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v)) : null);
+  const result = {
+    hotkeyReleasedAt: num(timing.hotkeyReleasedAt),
+    textPastedAt: num(timing.textPastedAt),
+    preTranscriptionMs: num(timing.preTranscriptionMs),
+    transcriptionMs: num(timing.transcriptionMs),
+    instructionPrepMs: num(timing.instructionPrepMs),
+    instructionMs: num(timing.instructionMs),
+    pasteMs: num(timing.pasteMs),
+    totalMs: positiveNum(timing.totalMs)
+  };
+  return Object.values(result).some((v) => v !== null) ? result : null;
 }
 
 function formatStage(value) {

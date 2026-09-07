@@ -127,6 +127,9 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
   assert.equal(instructed.text, "clipboard result");
   assert.equal(instructed.porvoz.raw_transcript, "clipboard summarize this");
   assert.equal(instructed.porvoz.instruction_applied, true);
+  assert.equal(typeof instructed.porvoz.timing?.transcriptionMs, "number");
+  assert.equal(typeof instructed.porvoz.timing?.instructionPrepMs, "number");
+  assert.equal(typeof instructed.porvoz.timing?.instructionMs, "number");
   assert.match(responseRequestBody, /desktop clipboard text/);
   assert.match(responseRequestBody, /Spoken request after matched prefixes/);
   assert.doesNotMatch(responseRequestBody, /clipboard summarize this/);
@@ -138,6 +141,15 @@ test("the headless server supports admin CRUD and key-routed OpenAI transcriptio
     getActiveProfileId: () => profileId,
     setActiveProfileId: () => {}
   });
+
+  await desktopClient.updateLogTiming({
+    logGroupId: instructed.porvoz.log_group_id,
+    timing: { pasteMs: 42, totalMs: 500 }
+  });
+  const serverLogs = await desktopClient.getLogs();
+  const matchedEntry = serverLogs.find((entry) => entry.groupId === instructed.porvoz.log_group_id);
+  assert.equal(matchedEntry.timing?.pasteMs, 42);
+  assert.equal(matchedEntry.timing?.totalMs, 500);
   transcript = "ordinary dictation with selected context";
   const desktopSelectedTextResult = await desktopClient.transcribe({
     audio: Buffer.from("audio"),

@@ -77,6 +77,7 @@ function createBrowserBridge() {
 
     getLogs: () => request("/v1/porvoz/logs"),
     clearLogs: () => request("/v1/porvoz/logs", { method: "DELETE" }),
+    updateLogTiming: (value) => request("/v1/porvoz/logs/timing", { method: "POST", json: value }),
     logError: (value) => request("/v1/porvoz/logs/errors", { method: "POST", json: value }),
 
     // Desktop status reporting has no counterpart in a browser tab. Accepting
@@ -192,10 +193,13 @@ function createBrowserBridge() {
   // Browser capture sends no clipboard or selected-text context: the page never
   // reads either, and a prefix that permits clipboard context simply receives
   // nothing here.
-  async function transcribe({ audio, mimeType } = {}, { signal } = {}) {
+  async function transcribe({ audio, mimeType, timing } = {}, { signal } = {}) {
     const form = new FormData();
     form.set("model", await activeProfileId());
     form.set("response_format", "json");
+    if (timing && typeof timing === "object") {
+      form.set("porvoz_timing", JSON.stringify(timing));
+    }
     form.set("file", new Blob([audio], { type: mimeType }), audioFileName(mimeType));
     const result = await request("/v1/audio/transcriptions", { method: "POST", body: form, signal });
     return {
@@ -203,7 +207,8 @@ function createBrowserBridge() {
       rawTranscript: result.porvoz?.raw_transcript || result.text,
       instructionApplied: result.porvoz?.instruction_applied === true,
       webSearchUsed: result.porvoz?.web_search_used === true,
-      logGroupId: result.porvoz?.log_group_id || ""
+      logGroupId: result.porvoz?.log_group_id || "",
+      ...(result.porvoz?.timing ? { timing: result.porvoz.timing } : {})
     };
   }
 

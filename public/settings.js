@@ -30,6 +30,7 @@ const confirmDeleteProfileButton = document.querySelector("#confirm-delete-profi
 const baseUrlInput = document.querySelector("#base-url");
 const apiKeyInput = document.querySelector("#api-key");
 const verifyCertificateInput = document.querySelector("#verify-certificate");
+const openRouterSearchInput = document.querySelector("#open-router-search");
 const connectionForm = document.querySelector("#connection-form");
 const connectionStatus = document.querySelector("#connection-status");
 const inferenceApiKey = document.querySelector("#inference-api-key");
@@ -177,6 +178,7 @@ async function initializeSettings() {
   transcriptionModel.addEventListener("input", handleModelInput);
   instructionModel.addEventListener("input", handleModelInput);
   instructionReasoning.addEventListener("change", saveModelSelections);
+  openRouterSearchInput.addEventListener("change", saveModelSelections);
   openTranscriptionModelPickerButton.addEventListener("click", () => openModelPicker("transcription"));
   openInstructionModelPickerButton.addEventListener("click", () => openModelPicker("instruction"));
   modelPickerInput.addEventListener("input", () => {
@@ -529,6 +531,7 @@ function renderModels() {
   instructionReasoning.value = ["low", "medium", "high"].includes(runtimeConfig.models.selected.instructionReasoning)
     ? runtimeConfig.models.selected.instructionReasoning
     : "low";
+  openRouterSearchInput.checked = runtimeConfig.models.selected.openRouterSearch === true;
   const hasModels = models.length > 0;
   openTranscriptionModelPickerButton.disabled = !hasModels;
   openInstructionModelPickerButton.disabled = !hasModels;
@@ -569,7 +572,8 @@ function saveModelSelections() {
   const selections = {
     transcription: transcriptionModel.value.trim(),
     instruction: instructionModel.value.trim(),
-    instructionReasoning: instructionReasoning.value
+    instructionReasoning: instructionReasoning.value,
+    openRouterSearch: openRouterSearchInput.checked
   };
   const previousStatus = modelStatus.textContent;
   modelStatus.textContent = "Saving model selections…";
@@ -580,6 +584,7 @@ function saveModelSelections() {
       transcriptionModel.value = runtimeConfig.models.selected.transcription || "";
       instructionModel.value = runtimeConfig.models.selected.instruction || "";
       instructionReasoning.value = runtimeConfig.models.selected.instructionReasoning || "low";
+      openRouterSearchInput.checked = runtimeConfig.models.selected.openRouterSearch === true;
       modelStatus.textContent = `${runtimeConfig.models.available.length} models loaded. Selections saved.`;
       modelStatus.dataset.state = "success";
       return true;

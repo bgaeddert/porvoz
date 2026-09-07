@@ -33,3 +33,27 @@ test("large response logs survive save, subsequent reads and database reopen", a
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("timing updates reach every retained database activity entry", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "porvoz-log-timing-"));
+  const databasePath = path.join(directory, "history.db");
+  let database;
+  try {
+    database = await createSqliteDatabase(databasePath);
+    database.exec(`CREATE TABLE activity_logs (
+      id TEXT PRIMARY KEY, created_at TEXT NOT NULL, entry_json TEXT NOT NULL
+    )`);
+    const logs = createDatabaseLogStore(database, { maxEntries: 100 });
+    logs.appendLog({ id: "target", type: "transcript", text: "Earlier response", groupId: "target-group" });
+    for (let index = 0; index < 60; index += 1) {
+      logs.appendLog({ id: `later-${index}`, type: "transcript", text: `Later response ${index}` });
+    }
+
+    logs.updateLogTiming("target-group", { totalMs: 1250 });
+
+    assert.equal(logs.getLogs().find((log) => log.id === "target").timing.totalMs, 1250);
+  } finally {
+    database?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

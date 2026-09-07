@@ -44,6 +44,7 @@ const PRIVATE_FILES = new Map([
   ["/capture-policy.js", "capture-policy.js"],
   ["/environment-chrome.js", "environment-chrome.js"],
   ["/icons.js", "icons.js"],
+  ["/log-timing.js", "log-timing.js"],
   ["/logs.js", "logs.js"],
   ["/media-support.js", "media-support.js"],
   ["/prefix-transfer.js", "prefix-transfer.js"],
