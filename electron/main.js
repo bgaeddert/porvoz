@@ -137,6 +137,8 @@ let radialNativeHookActive = false;
 let radialNativeCaptureActive = false;
 let voiceNativeHookActive = false;
 let radialTargetWindow;
+let radialOpenPoint;
+let latestLinuxCursorPoint;
 let isCapturingRadialTrigger = false;
 let isCapturingRadialSlot = false;
 let hotkeyCaptureMode = "";
@@ -157,9 +159,12 @@ let captureSeenButton;
 const radialGesture = createRadialGesture({
   onOpen: () => {
     if (!radialGesture.isPressed() || !isRadialMenuConfigured(currentRadialMenu)) return;
-    radialOverlay?.open(currentRadialMenu);
+    const cursorPoint = radialOpenPoint;
+    radialOpenPoint = undefined;
+    radialOverlay?.open(currentRadialMenu, cursorPoint);
   },
   onCenterRelease: () => {
+    radialOpenPoint = undefined;
     const target = radialTargetWindow;
     radialTargetWindow = undefined;
     const slot = currentRadialMenu?.slots?.find((candidate) => candidate.id === "center");
@@ -394,6 +399,7 @@ function registerGlobalHotkey() {
   uIOhook.on("keyup", handleGlobalKeyUp);
   uIOhook.on("mousedown", handleGlobalMouseDown);
   uIOhook.on("mouseup", handleGlobalMouseUp);
+  uIOhook.on("mousemove", handleGlobalMouseMove);
   uIOhook.start();
   hookStarted = true;
   radialInputHook = createRadialInputHook({
@@ -675,7 +681,7 @@ function handleGlobalMouseDown(event) {
     return;
   }
   if (radialFallbackEnabled() && isConfiguredRadialMouseEvent(event)) {
-    handleRadialTriggerPress();
+    handleRadialTriggerPress(getPhysicalCursorPoint(event));
   }
 }
 
@@ -690,18 +696,34 @@ function handleGlobalMouseUp(event) {
   }
 }
 
-function handleRadialTriggerPress() {
+function handleGlobalMouseMove(event) {
+  if (process.platform !== "linux") return;
+  latestLinuxCursorPoint = getPhysicalCursorPoint(event);
+}
+
+function getPhysicalCursorPoint(event) {
+  const x = Number(event?.x);
+  const y = Number(event?.y);
+  return Number.isFinite(x) && Number.isFinite(y)
+    ? { x, y, physical: true }
+    : undefined;
+}
+
+function handleRadialTriggerPress(cursorPoint) {
   if (!isRadialMenuConfigured(currentRadialMenu) || radialOverlay?.isOpen()) return;
   if (isCapturingHotkey || isCapturingRadialTrigger || isHotkeyRecording || activeOperations.size) return;
   radialTargetWindow = captureTextInputTarget();
+  radialOpenPoint = cursorPoint || latestLinuxCursorPoint;
   radialGesture.press();
 }
 
 function handleRadialTriggerRelease() {
+  radialOpenPoint = undefined;
   radialGesture.release();
 }
 
 function cancelRadialMenuGesture() {
+  radialOpenPoint = undefined;
   radialGesture.cancel();
   radialTargetWindow = undefined;
   radialOverlay?.cancel();
@@ -1678,6 +1700,7 @@ function shutdownApplication() {
   voiceNativeHookActive = false;
   radialNativeHookActive = false;
   if (hookStarted) {
+    uIOhook.off?.("mousemove", handleGlobalMouseMove);
     uIOhook.stop();
     hookStarted = false;
   }

@@ -79,7 +79,7 @@ const confirmDeleteProfileButton = document.querySelector("#confirm-delete-profi
 const baseUrlInput = document.querySelector("#base-url");
 const apiKeyInput = document.querySelector("#api-key");
 const verifyCertificateInput = document.querySelector("#verify-certificate");
-const openRouterSearchInput = document.querySelector("#open-router-search");
+const searchToolInputs = [...document.querySelectorAll("input[name=\"search-tool\"]")];
 const connectionForm = document.querySelector("#connection-form");
 const connectionStatus = document.querySelector("#connection-status");
 const inferenceApiKey = document.querySelector("#inference-api-key");
@@ -146,6 +146,8 @@ const cancelHotkeyButton = document.querySelector("#cancel-hotkey");
 const hotkeyDisplay = document.querySelector("#hotkey-display");
 const hotkeyStatus = document.querySelector("#hotkey-status");
 const radialEnabledInput = document.querySelector("#radial-enabled");
+const radialScaleInput = document.querySelector("#radial-scale");
+const radialScaleValue = document.querySelector("#radial-scale-value");
 const radialTriggerDisplay = document.querySelector("#radial-trigger-display");
 const captureRadialTriggerButton = document.querySelector("#capture-radial-trigger");
 const cancelRadialTriggerButton = document.querySelector("#cancel-radial-trigger");
@@ -250,7 +252,7 @@ async function initializeSettings() {
   transcriptionModel.addEventListener("input", handleModelInput);
   instructionModel.addEventListener("input", handleModelInput);
   instructionReasoning.addEventListener("change", saveModelSelections);
-  openRouterSearchInput.addEventListener("change", saveModelSelections);
+  searchToolInputs.forEach((input) => input.addEventListener("change", saveModelSelections));
   openTranscriptionModelPickerButton.addEventListener("click", () => openModelPicker("transcription"));
   openInstructionModelPickerButton.addEventListener("click", () => openModelPicker("instruction"));
   modelPickerInput.addEventListener("input", () => {
@@ -285,6 +287,8 @@ async function initializeSettings() {
   captureHotkeyButton?.addEventListener("click", beginHotkeyCapture);
   cancelHotkeyButton?.addEventListener("click", cancelHotkeyCapture);
   radialEnabledInput?.addEventListener("change", saveRadialEnabled);
+  radialScaleInput?.addEventListener("input", updateRadialScalePreview);
+  radialScaleInput?.addEventListener("change", saveRadialScale);
   captureRadialTriggerButton?.addEventListener("click", beginRadialTriggerCapture);
   // Cancel on pointer-down so its left-button release cannot be mistaken for
   // the mouse trigger currently being recorded.
@@ -623,7 +627,7 @@ function renderModels() {
   instructionReasoning.value = ["low", "medium", "high"].includes(runtimeConfig.models.selected.instructionReasoning)
     ? runtimeConfig.models.selected.instructionReasoning
     : "low";
-  openRouterSearchInput.checked = runtimeConfig.models.selected.openRouterSearch === true;
+  setSearchTool(runtimeConfig.models.selected.searchTool);
   const hasModels = models.length > 0;
   openTranscriptionModelPickerButton.disabled = !hasModels;
   openInstructionModelPickerButton.disabled = !hasModels;
@@ -665,7 +669,7 @@ function saveModelSelections() {
     transcription: transcriptionModel.value.trim(),
     instruction: instructionModel.value.trim(),
     instructionReasoning: instructionReasoning.value,
-    openRouterSearch: openRouterSearchInput.checked
+    searchTool: getSearchTool()
   };
   const previousStatus = modelStatus.textContent;
   modelStatus.textContent = "Saving model selections…";
@@ -676,7 +680,7 @@ function saveModelSelections() {
       transcriptionModel.value = runtimeConfig.models.selected.transcription || "";
       instructionModel.value = runtimeConfig.models.selected.instruction || "";
       instructionReasoning.value = runtimeConfig.models.selected.instructionReasoning || "low";
-      openRouterSearchInput.checked = runtimeConfig.models.selected.openRouterSearch === true;
+      setSearchTool(runtimeConfig.models.selected.searchTool);
       modelStatus.textContent = `${runtimeConfig.models.available.length} models loaded. Selections saved.`;
       modelStatus.dataset.state = "success";
       return true;
@@ -1515,6 +1519,17 @@ async function initializeHotkey() {
   }
 }
 
+function getSearchTool() {
+  return searchToolInputs.find((input) => input.checked)?.value || "omit";
+}
+
+function setSearchTool(value) {
+  const selected = ["omit", "openai", "openrouter"].includes(value) ? value : "omit";
+  searchToolInputs.forEach((input) => {
+    input.checked = input.value === selected;
+  });
+}
+
 async function initializeRadialMenu() {
   try {
     radialMenu = normalizeRadialMenuForSettings(await bridge.getRadialMenu());
@@ -1530,6 +1545,7 @@ function normalizeRadialMenuForSettings(value) {
   return {
     enabled: value?.enabled === true,
     trigger: value?.trigger && typeof value.trigger === "object" ? { ...value.trigger } : null,
+    scale: normalizeRadialScale(value?.scale),
     slots: RADIAL_SLOT_DEFINITIONS.map((definition) => {
       const source = sourceSlots.find((slot) => String(slot?.id) === definition.id);
       return {
@@ -1544,6 +1560,7 @@ function normalizeRadialMenuForSettings(value) {
 function renderRadialMenu() {
   if (!radialMenu || !radialSettingsSegments) return;
   radialEnabledInput.checked = radialMenu.enabled === true;
+  renderRadialScale(radialMenu.scale);
   const trigger = radialMenu.trigger;
   radialTriggerDisplay.textContent = trigger
     ? trigger.label || (trigger.kind === "mouse" ? formatMouseButtonLabel(trigger.button) : "Assigned")
@@ -1757,6 +1774,32 @@ async function saveRadialEnabled() {
   } catch {
     // queueRadialMenuSave reports the actionable error beside the setting.
   }
+}
+
+function renderRadialScale(value) {
+  const normalizedValue = normalizeRadialScale(value);
+  const percentage = Math.round(normalizedValue * 100);
+  radialScaleInput.value = String(percentage);
+  radialScaleValue.textContent = `${percentage}%`;
+}
+
+function updateRadialScalePreview() {
+  const nextScale = normalizeRadialScale(Number(radialScaleInput.value) / 100);
+  radialMenu.scale = nextScale;
+  renderRadialScale(nextScale);
+}
+
+function saveRadialScale() {
+  if (!radialMenu) return;
+  const nextScale = normalizeRadialScale(Number(radialScaleInput.value) / 100);
+  const nextMenu = {
+    ...radialMenu,
+    scale: nextScale
+  };
+  radialMenu = nextMenu;
+  radialTriggerStatus.textContent = "Saving…";
+  radialTriggerStatus.dataset.state = "saving";
+  void queueRadialMenuSave(nextMenu).catch(() => {});
 }
 
 async function saveRadialSlotEdit(event) {
@@ -1994,6 +2037,11 @@ function handleSoundVolumeUpdated(value) {
 function normalizeSoundVolume(value) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? Math.min(1, Math.max(0, numericValue)) : 0.3;
+}
+
+function normalizeRadialScale(value) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? Math.min(1, Math.max(0.5, numericValue)) : 1;
 }
 
 function handleHotkeyUpdated(hotkey) {

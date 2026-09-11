@@ -82,7 +82,7 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
     return profile;
   }
 
-  function saveConnection({ profileId, baseUrl, apiKey, verifyCertificate, openRouterSearch } = {}) {
+  function saveConnection({ profileId, baseUrl, apiKey, verifyCertificate, searchTool, openRouterSearch } = {}) {
     const profile = getProfile(profileId);
     const nextBaseUrl = typeof baseUrl === "string" ? baseUrl : "";
     if (profile.connection.baseUrl !== nextBaseUrl) {
@@ -92,9 +92,11 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
     }
     profile.connection.baseUrl = nextBaseUrl;
     profile.connection.verifyCertificate = verifyCertificate !== false;
-    if (typeof openRouterSearch === "boolean") {
-      profile.connection.openRouterSearch = openRouterSearch;
-      profile.models.openRouterSearch = openRouterSearch;
+    if (searchTool !== undefined || openRouterSearch !== undefined) {
+      profile.models.searchTool = normalizeSearchTool(
+        searchTool !== undefined ? searchTool : openRouterSearch,
+        profile.models.searchTool
+      );
     }
     if (typeof apiKey === "string" && apiKey.trim()) {
       database.prepare(`
@@ -135,8 +137,11 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
       if (!reasoning) throw new Error("Choose low, medium, or high reasoning for the instruction model.");
       profile.models.instructionReasoning = reasoning;
     }
-    if (value.openRouterSearch !== undefined) {
-      profile.models.openRouterSearch = Boolean(value.openRouterSearch);
+    if (value.searchTool !== undefined || value.openRouterSearch !== undefined) {
+      profile.models.searchTool = normalizeSearchTool(
+        value.searchTool !== undefined ? value.searchTool : value.openRouterSearch,
+        profile.models.searchTool
+      );
     }
     saveSettings();
   }
@@ -156,8 +161,8 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
     const profile = {
       id: randomUUID(),
       name: finalName,
-      connection: { baseUrl: "", verifyCertificate: true, openRouterSearch: true },
-      models: { available: [], transcription: "", instruction: "", instructionReasoning: "low", openRouterSearch: true }
+      connection: { baseUrl: "", verifyCertificate: true },
+      models: { available: [], transcription: "", instruction: "", instructionReasoning: "low", searchTool: "omit" }
     };
     settings.profiles.push(profile);
     settings.activeProfileId = profile.id;
@@ -340,15 +345,21 @@ function normalizeProfiles(value, defaults) {
       name,
       connection: {
         baseUrl: typeof entry?.connection?.baseUrl === "string" ? entry.connection.baseUrl : "",
-        verifyCertificate: entry?.connection?.verifyCertificate !== false,
-        openRouterSearch: Boolean(entry?.connection?.openRouterSearch)
+        verifyCertificate: entry?.connection?.verifyCertificate !== false
       },
       models: {
         available: uniqueStrings(entry?.models?.available),
         transcription: normalizeText(entry?.models?.transcription),
         instruction: normalizeText(entry?.models?.instruction),
-        instructionReasoning: normalizeReasoning(entry?.models?.instructionReasoning),
-        openRouterSearch: Boolean(entry?.models?.openRouterSearch ?? entry?.connection?.openRouterSearch)
+        instructionReasoning: normalizeReasoning(
+          entry?.models?.instructionReasoning,
+          defaults.profiles?.[0]?.models?.instructionReasoning
+        ),
+        searchTool: normalizeSearchTool(
+          entry?.models?.searchTool,
+          entry?.models?.openRouterSearch ?? entry?.connection?.openRouterSearch
+            ?? defaults.profiles?.[0]?.models?.searchTool
+        )
       }
     };
   });
@@ -377,6 +388,19 @@ function normalizeReasoning(value, fallback = "low") {
   if (["low", "medium", "high"].includes(candidate)) return candidate;
   const normalizedFallback = normalizeText(fallback).toLocaleLowerCase();
   return ["low", "medium", "high"].includes(normalizedFallback) ? normalizedFallback : "low";
+}
+
+function normalizeSearchTool(value, fallback = "omit") {
+  if (value === true) return "openrouter";
+  if (value === false) return "openai";
+  const normalizedValue = normalizeText(value).toLocaleLowerCase();
+  if (["omit", "openai", "openrouter"].includes(normalizedValue)) return normalizedValue;
+  if (fallback === true) return "openrouter";
+  if (fallback === false) return "openai";
+  const normalizedFallback = normalizeText(fallback).toLocaleLowerCase();
+  return ["omit", "openai", "openrouter"].includes(normalizedFallback)
+    ? normalizedFallback
+    : "omit";
 }
 
 function normalizeProfileName(value, maxLength) {

@@ -16,6 +16,7 @@ class FakeWindow extends EventEmitter {
   setIgnoreMouseEvents(value) { this.ignoresMouse = value; }
   setFocusable(value) { this.focusable = value; }
   getContentSize() { return this.size; }
+  setContentSize(width, height) { this.size = [width, height]; }
   setPosition(x, y) { this.position = [x, y]; }
   isDestroyed() { return this.destroyed; }
   isVisible() { return this.visible; }
@@ -72,8 +73,43 @@ test("the radial overlay opens at the cursor, tracks a slot, and commits on rele
   overlay.open(menu);
   overlay.select("outside");
   assert.equal(overlay.commit(), "outside");
+  overlay.open({ ...menu, scale: 0.5 });
+  assert.deepEqual(browserWindow.size, [RADIAL_OVERLAY_SIZE / 2, RADIAL_OVERLAY_SIZE / 2]);
+  const scaledOpen = browserWindow.sent.findLast(([channel]) => channel === "porvoz:radial-open");
+  assert.equal(scaledOpen[1].scale, 0.5);
+  overlay.commit();
   overlay.open(menu);
   assert.equal(overlay.cancel(), true);
   assert.equal(overlay.isOpen(), false);
+  overlay.destroy();
+});
+
+test("the radial overlay converts native physical cursor coordinates before positioning", async () => {
+  let browserWindow;
+  class BrowserWindowFactory extends FakeWindow {
+    constructor(options) {
+      super(options);
+      browserWindow = this;
+    }
+  }
+  class ScaledScreen extends FakeScreen {
+    screenToDipPoint(point) {
+      return { x: point.x / 2, y: point.y / 2 };
+    }
+    getPrimaryDisplay() {
+      return { workArea: { x: 0, y: 0, width: 1200, height: 800 } };
+    }
+  }
+
+  const overlay = await createRadialOverlay({
+    overlayPath: "radial-overlay.html",
+    preloadPath: "radial-overlay-preload.cjs",
+    BrowserWindowImpl: BrowserWindowFactory,
+    screenApi: new ScaledScreen(),
+    secureWindow: () => {}
+  });
+
+  overlay.open({ slots: [] }, { x: 1000, y: 600, physical: true });
+  assert.deepEqual(browserWindow.position, [224, 24]);
   overlay.destroy();
 });

@@ -228,14 +228,24 @@
                   <option value="high">High</option>
                 </select>
               </label>
-              <label class="field-label" for="open-router-search">
-                OpenRouter search tool
-                <span class="checkbox-line">
-                  <input id="open-router-search" type="checkbox" />
-                  <span>Enable OpenRouter search tool</span>
-                </span>
-                <small>Web search is always available. Checked uses OpenRouter's server tool; unchecked uses the standard web-search tool.</small>
-              </label>
+              <fieldset class="search-tool-fieldset" aria-describedby="search-tool-help">
+                <legend>Search tool</legend>
+                <div class="search-tool-options">
+                  <label class="radio-line">
+                    <input id="search-tool-omit" name="search-tool" type="radio" value="omit" checked />
+                    <span>Omit search tool</span>
+                  </label>
+                  <label class="radio-line">
+                    <input id="search-tool-openai" name="search-tool" type="radio" value="openai" />
+                    <span>OpenAI search tool</span>
+                  </label>
+                  <label class="radio-line">
+                    <input id="search-tool-openrouter" name="search-tool" type="radio" value="openrouter" />
+                    <span>OpenRouter search tool</span>
+                  </label>
+                </div>
+                <small id="search-tool-help">Choose the search-tool format sent with instruction requests. Omit lets compatible providers such as LocalAI inject their configured MCP tools.</small>
+              </fieldset>
               <div class="form-actions model-actions">
                 <p id="model-status" class="field-note" aria-live="polite">No models loaded yet.</p>
                 <button id="populate-models" class="button-secondary button-with-icon" type="button">
@@ -314,6 +324,19 @@
               <input id="radial-enabled" type="checkbox" />
               <span>Enable radial menu</span>
             </label>
+            <div class="radial-scale-setting">
+              <div class="radial-scale-copy">
+                <span class="hotkey-caption">Menu size</span>
+                <p>Choose how large the wheel appears when it opens.</p>
+              </div>
+              <label class="radial-scale-control" for="radial-scale">
+                <span class="radial-scale-label">
+                  <span>Size</span>
+                  <output id="radial-scale-value" for="radial-scale">100%</output>
+                </span>
+                <input id="radial-scale" type="range" min="50" max="100" step="1" value="100" />
+              </label>
+            </div>
             <div class="radial-trigger-setting">
               <div class="hotkey-readout">
                 <span class="hotkey-caption">Menu trigger</span>

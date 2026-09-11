@@ -1,4 +1,7 @@
 export const RADIAL_SEGMENT_COUNT = 12;
+export const RADIAL_MENU_MIN_SCALE = 0.5;
+export const RADIAL_MENU_MAX_SCALE = 1;
+export const RADIAL_MENU_DEFAULT_SCALE = 1;
 export const RADIAL_SLOT_IDS = Object.freeze([
   ...Array.from({ length: RADIAL_SEGMENT_COUNT }, (_value, index) => String(index + 1)),
   "center"
@@ -65,6 +68,7 @@ export function createDefaultRadialMenu() {
   return {
     enabled: false,
     trigger: null,
+    scale: RADIAL_MENU_DEFAULT_SCALE,
     slots: RADIAL_SLOT_IDS.map((id) => ({ id, label: "", action: null }))
   };
 }
@@ -79,6 +83,7 @@ export function normalizeRadialMenu(value) {
   return {
     enabled: value?.enabled === true,
     trigger: normalizeRadialTrigger(value?.trigger),
+    scale: normalizeRadialScale(value?.scale),
     slots: defaults.slots.map((slot) => {
       const source = slotsById.get(slot.id);
       return {
@@ -88,6 +93,14 @@ export function normalizeRadialMenu(value) {
       };
     })
   };
+}
+
+export function normalizeRadialScale(value) {
+  const number = Number(value);
+  return Math.min(RADIAL_MENU_MAX_SCALE, Math.max(
+    RADIAL_MENU_MIN_SCALE,
+    Number.isFinite(number) ? number : RADIAL_MENU_DEFAULT_SCALE
+  ));
 }
 
 export function normalizeRadialTrigger(value) {

@@ -5,6 +5,8 @@ import vm from "node:vm";
 
 const navigationSource = readFileSync(new URL("../public/settings-navigation.js", import.meta.url), "utf8");
 const settingsHtml = readFileSync(new URL("../public/settings.html", import.meta.url), "utf8");
+const indexHtml = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+const logsHtml = readFileSync(new URL("../public/logs.html", import.meta.url), "utf8");
 
 const PAGES = ["provider", "prefixes", "keyboard", "radial", "sound"];
 
@@ -94,10 +96,26 @@ test("the sidebar lists what you configure first, then what you check it with", 
   // There is no second level of navigation left to fall into.
   assert.equal(settingsHtml.includes('class="section-nav"'), false);
   assert.match(settingsHtml, /id="capture-radial-trigger"/);
+  assert.match(settingsHtml, /id="radial-scale" type="range" min="50" max="100" step="1" value="100"/);
+  assert.match(settingsHtml, /id="radial-scale-value"[^>]*>100%<\/output>/);
   assert.match(settingsHtml, /id="radial-settings-wheel"/);
   assert.match(settingsHtml, /id="radial-slot-form"/);
   // Log out belongs to the website and stays hidden in the desktop app.
   assert.match(navigation, /id="sign-out"[^>]*data-web-only/);
+});
+
+test("the desktop sidebar keeps Radial available on every top-level page", () => {
+  for (const html of [settingsHtml, indexHtml, logsHtml]) {
+    assert.match(html, /href="settings\.html#radial"[^>]*data-desktop-only/);
+  }
+});
+
+test("request routing offers three search-tool modes with omit selected by default", () => {
+  const searchTools = [...settingsHtml.matchAll(/name="search-tool"[^>]*value="([^"]+)"/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(searchTools, ["omit", "openai", "openrouter"]);
+  assert.match(settingsHtml, /id="search-tool-omit"[^>]*checked/);
+  assert.match(settingsHtml, /Omit lets compatible providers such as LocalAI inject their configured MCP tools/);
 });
 
 test("Porvoz opens on the first destination, and older links still find Prefixes", () => {

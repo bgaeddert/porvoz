@@ -13,6 +13,7 @@ export async function loadRuntimeConfig() {
     || !Array.isArray(result.models.available)
     || !result.models.selected
     || !["low", "medium", "high"].includes(result.models.selected.instructionReasoning)
+    || !["omit", "openai", "openrouter"].includes(result.models.selected.searchTool)
     || !result.limits
     || !Number.isFinite(result.limits.maxPrefixes)
     || !Number.isFinite(result.limits.maxPrefixNameCharacters)

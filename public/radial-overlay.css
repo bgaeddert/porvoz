@@ -29,8 +29,8 @@ body {
 
 .radial-wheel {
   display: block;
-  width: 552px;
-  height: 552px;
+  width: 100%;
+  height: 100%;
 }
 
 .radial-outline {

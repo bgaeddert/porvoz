@@ -81,7 +81,7 @@ All routes below require the admin key, or an authenticated browser session carr
 | `GET` | `/v1/porvoz/profiles/<id>/connection` | Read provider connection state and the inference key |
 | `PUT` | `/v1/porvoz/profiles/<id>/connection` | Update provider URL, certificate policy, or provider key |
 | `POST` | `/v1/porvoz/profiles/<id>/models` | Refresh the upstream model catalog |
-| `PUT` | `/v1/porvoz/profiles/<id>/models` | Update model selections, reasoning level, and OpenRouter search-tool preference |
+| `PUT` | `/v1/porvoz/profiles/<id>/models` | Update model selections, reasoning level, and search-tool mode (`omit`, `openai`, or `openrouter`) |
 | `GET` | `/v1/porvoz/profiles/<id>/inference-key` | Read the profile inference key |
 | `POST` | `/v1/porvoz/profiles/<id>/inference-key` | Replace the profile inference key |
 | `PUT` | `/v1/porvoz/prefixes` | Replace the prefix registry |

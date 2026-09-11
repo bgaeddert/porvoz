@@ -14,6 +14,7 @@ test("the default radial menu has twelve clockwise slots and a center slot", () 
   const menu = createDefaultRadialMenu();
   assert.equal(menu.enabled, false);
   assert.equal(menu.trigger, null);
+  assert.equal(menu.scale, 1);
   assert.equal(menu.slots.length, 13);
   assert.deepEqual(RADIAL_SLOT_DEFINITIONS[0], { id: "1", number: 1, position: "12 o'clock" });
   assert.deepEqual(RADIAL_SLOT_DEFINITIONS.at(-1), { id: "center", number: 13, position: "Center" });
@@ -37,6 +38,13 @@ test("radial settings normalize trigger, labels, keyboard shortcuts, and navigat
   });
   assert.deepEqual(menu.slots.at(-1).action, { type: "navigation", command: "forward", label: "Forward" });
   assert.equal(menu.slots[1].action, null);
+});
+
+test("radial menu size is constrained to the supported scale range", () => {
+  assert.equal(normalizeRadialMenu({ scale: 0.25 }).scale, 0.5);
+  assert.equal(normalizeRadialMenu({ scale: 0.75 }).scale, 0.75);
+  assert.equal(normalizeRadialMenu({ scale: 2 }).scale, 1);
+  assert.equal(normalizeRadialMenu({ scale: "invalid" }).scale, 1);
 });
 
 test("recorded DOM codes become sendable key combinations, including Windows", () => {

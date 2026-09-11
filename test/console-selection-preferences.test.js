@@ -23,10 +23,12 @@ test("console selection defaults off for new and existing desktops, persists, an
   const radialMenu = {
     enabled: true,
     trigger: { kind: "mouse", button: 4 },
+    scale: 0.5,
     slots: [{ id: "1", label: "Back", action: { type: "navigation", command: "back" } }]
   };
   preferences.saveRadialMenu(radialMenu);
   assert.equal(load().getRadialMenu().trigger.button, 4);
+  assert.equal(load().getRadialMenu().scale, 0.5);
   assert.equal(load().getRadialMenu().slots[0].action.command, "back");
   assert.throws(() => preferences.saveConsoleSelectionEnabled("false"), /on or off/);
   assert.equal(preferences.getConsoleSelectionEnabled(), true);

@@ -40,36 +40,36 @@ test("saving a connection with an empty API key preserves the existing key", () 
   assert.equal(service.getConnectionSettings().apiKeyConfigured, true);
 });
 
-test("connection settings persist openRouterSearch preference", () => {
+test("connection settings persist search tool preference", () => {
   const { service, settingsStore } = createService();
 
-  assert.equal(service.getConnectionSettings().openRouterSearch, true);
+  assert.equal(service.getConnectionSettings().searchTool, "omit");
 
-  service.saveConnection({ baseUrl: "https://openrouter.ai/api/v1", apiKey: "secret", openRouterSearch: true });
+  service.saveConnection({ baseUrl: "https://openrouter.ai/api/v1", apiKey: "secret", searchTool: "openrouter" });
 
-  assert.equal(settingsStore.getSettings().profiles[0].connection.openRouterSearch, true);
-  assert.equal(service.getConnectionSettings().openRouterSearch, true);
+  assert.equal(settingsStore.getSettings().profiles[0].models.searchTool, "openrouter");
+  assert.equal(service.getConnectionSettings().searchTool, "openrouter");
 
-  service.saveConnection({ baseUrl: "https://openrouter.ai/api/v1", apiKey: "secret", openRouterSearch: false });
+  service.saveConnection({ baseUrl: "https://openrouter.ai/api/v1", apiKey: "secret", searchTool: "openai" });
 
-  assert.equal(settingsStore.getSettings().profiles[0].connection.openRouterSearch, false);
-  assert.equal(service.getConnectionSettings().openRouterSearch, false);
+  assert.equal(settingsStore.getSettings().profiles[0].models.searchTool, "openai");
+  assert.equal(service.getConnectionSettings().searchTool, "openai");
 });
 
-test("model selections persist openRouterSearch preference in request routing", () => {
+test("model selections persist search tool mode in request routing", () => {
   const { service, settingsStore } = createService();
 
-  assert.equal(service.getRuntimeConfig().models.selected.openRouterSearch, true);
+  assert.equal(service.getRuntimeConfig().models.selected.searchTool, "omit");
 
-  service.saveModelSelections({ openRouterSearch: true });
+  service.saveModelSelections({ searchTool: "openai" });
 
-  assert.equal(settingsStore.getSettings().profiles[0].models.openRouterSearch, true);
-  assert.equal(service.getRuntimeConfig().models.selected.openRouterSearch, true);
+  assert.equal(settingsStore.getSettings().profiles[0].models.searchTool, "openai");
+  assert.equal(service.getRuntimeConfig().models.selected.searchTool, "openai");
 
-  service.saveModelSelections({ openRouterSearch: false });
+  service.saveModelSelections({ searchTool: "openrouter" });
 
-  assert.equal(settingsStore.getSettings().profiles[0].models.openRouterSearch, false);
-  assert.equal(service.getRuntimeConfig().models.selected.openRouterSearch, false);
+  assert.equal(settingsStore.getSettings().profiles[0].models.searchTool, "openrouter");
+  assert.equal(service.getRuntimeConfig().models.selected.searchTool, "openrouter");
 });
 
 test("prefix saves reject incomplete and duplicate definitions", () => {
@@ -180,7 +180,7 @@ test("selected text uses the selection flow and ignores prefixes and clipboard a
       availableModels: ["instruction-model"]
     });
     const address = server.address();
-    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", openRouterSearch: false });
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", searchTool: "omit" });
     service.saveModelSelections({ instruction: "instruction-model" });
 
     let clipboardReads = 0;
@@ -194,12 +194,13 @@ test("selected text uses the selection flow and ignores prefixes and clipboard a
     assert.match(requestBody.input, /rewrite this clearly/);
     assert.match(requestBody.input, /rough selected sentence/);
     assert.match(requestBody.instructions, /selection processor/);
+    assert.match(requestBody.instructions, new RegExp(`Today's date \\(local system date, YYYY-MM-DD\\): ${localIsoDate()}`));
     assert.match(requestBody.instructions, /Do not detect, remove, or apply Porvoz prefixes/);
     assert.doesNotMatch(requestBody.instructions, /This prefix instruction must not be sent/);
     assert.doesNotMatch(requestBody.instructions, /This unrelated instruction must not be sent/);
     assert.doesNotMatch(requestBody.input, /clipboard must not be sent/);
-    assert.deepEqual(requestBody.tools, [{ type: "web_search" }]);
-    assert.deepEqual(requestBody.include, ["web_search_call.action.sources"]);
+    assert.equal(requestBody.tools, undefined);
+    assert.equal(requestBody.include, undefined);
     assert.equal(requestBody.tool_choice, undefined);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -236,7 +237,7 @@ test("instruction failures retain the exact request prompt in the activity log",
       availableModels: ["instruction-model"]
     });
     const address = server.address();
-    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", openRouterSearch: true });
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", searchTool: "openrouter" });
     service.saveModelSelections({ instruction: "instruction-model" });
 
     await assert.rejects(
@@ -344,7 +345,7 @@ test("chained prefixes are stripped and only matched instructions and clipboard 
       availableModels: ["instruction-model"]
     });
     const address = server.address();
-    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", openRouterSearch: true });
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", searchTool: "openrouter" });
     service.saveModelSelections({ instruction: "instruction-model", instructionReasoning: "high" });
 
     const result = await service.instruct(
@@ -357,6 +358,7 @@ test("chained prefixes are stripped and only matched instructions and clipboard 
 
     assert.deepEqual(result, { transcript: "combined result", instructionApplied: true, webSearchUsed: false });
     assert.match(requestBody.instructions, /already matched and removed the leading prefix chain/);
+    assert.match(requestBody.instructions, new RegExp(`Today's date \\(local system date, YYYY-MM-DD\\): ${localIsoDate()}`));
     assert.match(requestBody.instructions, /Matched prefix 1: search/);
     assert.match(requestBody.instructions, /Instruction: Find the answer\./);
     assert.match(requestBody.instructions, /Matched prefix 2: clipboard/);
@@ -420,7 +422,7 @@ test("instruct detects when web search was used from API response output", async
   }
 });
 
-test("instruct selects the OpenRouter or standard web-search protocol without disabling search", async () => {
+test("instruct selects omit, OpenAI, or OpenRouter search tools", async () => {
   let capturedRequestBody;
   const server = createServer((request, response) => {
     const chunks = [];
@@ -434,12 +436,12 @@ test("instruct selects the OpenRouter or standard web-search protocol without di
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 
   try {
-    const { service } = createService({
+    const { service, logs } = createService({
       prefixes: [prefix("rewrite", "Rewrite concisely.")],
       availableModels: ["instruction-model"]
     });
     const address = server.address();
-    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", openRouterSearch: true });
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", searchTool: "omit" });
     service.saveModelSelections({ instruction: "instruction-model" });
 
     const timedResult = await service.instruct({
@@ -448,16 +450,23 @@ test("instruct selects the OpenRouter or standard web-search protocol without di
     });
     assert.equal(typeof timedResult.timing.instructionPrepMs, "number");
     assert.equal(typeof timedResult.timing.instructionMs, "number");
+    assert.equal(capturedRequestBody.tools, undefined);
+    assert.equal(capturedRequestBody.include, undefined);
+    assert.equal(logs[0].searchEnabled, false);
+
+    service.saveModelSelections({ searchTool: "openai" });
+    await service.instruct({ transcript: "rewrite this text" });
+    assert.deepEqual(capturedRequestBody.tools, [{ type: "web_search" }]);
+    assert.deepEqual(capturedRequestBody.include, ["web_search_call.action.sources"]);
+    assert.equal(logs[0].searchEnabled, true);
+
+    service.saveModelSelections({ searchTool: "openrouter" });
+    await service.instruct({ transcript: "rewrite this text" });
     assert.deepEqual(capturedRequestBody.tools, [{
       type: "openrouter:web_search",
       parameters: { engine: "exa", max_results: 3, max_total_results: 3 }
     }]);
     assert.equal(capturedRequestBody.include, undefined);
-
-    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", openRouterSearch: false });
-    await service.instruct({ transcript: "rewrite this text" });
-    assert.deepEqual(capturedRequestBody.tools, [{ type: "web_search" }]);
-    assert.deepEqual(capturedRequestBody.include, ["web_search_call.action.sources"]);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
@@ -485,7 +494,7 @@ test("instruct detects an OpenRouter web-search output item from API response", 
       availableModels: ["instruction-model"]
     });
     const address = server.address();
-    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", openRouterSearch: true });
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", searchTool: "openrouter" });
     service.saveModelSelections({ instruction: "instruction-model" });
 
     const result = await service.instruct({ transcript: "search stock price" });
@@ -517,7 +526,7 @@ test("instruct detects OpenRouter web search usage from the authoritative usage 
       availableModels: ["instruction-model"]
     });
     const address = server.address();
-    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", openRouterSearch: true });
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", searchTool: "openrouter" });
     service.saveModelSelections({ instruction: "instruction-model" });
 
     const result = await service.instruct({ transcript: "search for the current result" });
@@ -560,7 +569,7 @@ test("voice prefix creation transcribes the brief and returns an editable propos
       availableModels: ["transcription-model", "instruction-model"]
     });
     const address = server.address();
-    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", openRouterSearch: true });
+    service.saveConnection({ baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "secret", searchTool: "openrouter" });
     service.saveModelSelections({ transcription: "transcription-model", instruction: "instruction-model" });
 
     const result = await service.createPrefixFromVoice({
@@ -577,6 +586,7 @@ test("voice prefix creation transcribes the brief and returns an editable propos
     });
     assert.doesNotMatch(responsesRequestBody, /This retired prompt must never be sent\./);
     assert.match(responsesRequestBody, /"reasoning":\{"effort":"low"\}/);
+    assert.match(responsesRequestBody, new RegExp(`Today's date \\(local system date, YYYY-MM-DD\\): ${localIsoDate()}`));
     assert.match(responsesRequestBody, /Prefix name: digits/);
     assert.doesNotMatch(responsesRequestBody, /Prefix Search access/);
     assert.match(responsesRequestBody, /Porvoz supports key notation/);
@@ -599,6 +609,15 @@ function prefix(name, instruction, access = {}) {
   };
 }
 
+function localIsoDate() {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0")
+  ].join("-");
+}
+
 function createService({ prefixes = [], availableModels = [] } = {}) {
   const apiKeys = new Map();
   const logs = [];
@@ -606,13 +625,13 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
     profiles: [{
       id: "default",
       name: "Default",
-      connection: { baseUrl: "", verifyCertificate: true, openRouterSearch: true },
+      connection: { baseUrl: "", verifyCertificate: true },
       models: {
         available: availableModels,
         transcription: "",
         instruction: "",
         instructionReasoning: "low",
-        openRouterSearch: true
+        searchTool: "omit"
       }
     }],
     activeProfileId: "default",
@@ -636,13 +655,12 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
       const profile = getProfile(value.profileId);
       profile.connection = {
         baseUrl: value.baseUrl,
-        verifyCertificate: value.verifyCertificate !== false,
-        openRouterSearch: typeof value.openRouterSearch === "boolean"
-          ? value.openRouterSearch
-          : Boolean(profile.connection?.openRouterSearch)
+        verifyCertificate: value.verifyCertificate !== false
       };
-      if (typeof value.openRouterSearch === "boolean") {
-        profile.models.openRouterSearch = value.openRouterSearch;
+      if (value.searchTool !== undefined || value.openRouterSearch !== undefined) {
+        profile.models.searchTool = value.searchTool !== undefined
+          ? value.searchTool
+          : value.openRouterSearch ? "openrouter" : "openai";
       }
       if (value.apiKey) apiKeys.set(profile.id, value.apiKey);
     },
@@ -654,9 +672,9 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
       profile.models = {
         ...profile.models,
         ...value,
-        openRouterSearch: typeof value.openRouterSearch === "boolean"
-          ? value.openRouterSearch
-          : Boolean(profile.models?.openRouterSearch)
+        searchTool: value.searchTool !== undefined
+          ? value.searchTool
+          : profile.models?.searchTool || "omit"
       };
     },
     savePrefixSettings(value) {
@@ -670,7 +688,7 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
         id: `profile-${settings.profiles.length + 1}`,
         name: name || `Connection ${settings.profiles.length + 1}`,
         connection: { baseUrl: "", verifyCertificate: true },
-        models: { available: [], transcription: "", instruction: "", instructionReasoning: "low" }
+        models: { available: [], transcription: "", instruction: "", instructionReasoning: "low", searchTool: "omit" }
       };
       settings.profiles.push(profile);
       settings.activeProfileId = profile.id;
@@ -694,7 +712,7 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
           id: "default",
           name: "Default",
           connection: { baseUrl: "", verifyCertificate: true },
-          models: { available: [], transcription: "", instruction: "", instructionReasoning: "low" }
+          models: { available: [], transcription: "", instruction: "", instructionReasoning: "low", searchTool: "omit" }
         }],
         activeProfileId: "default",
         prefixes: []

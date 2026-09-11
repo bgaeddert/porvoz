@@ -1,4 +1,5 @@
 import electron from "electron";
+import { normalizeRadialScale } from "./radial-menu.js";
 
 const { BrowserWindow, screen } = electron;
 
@@ -25,6 +26,7 @@ export async function createRadialOverlay({
   let isOpen = false;
   let selectedSlot = "center";
   let currentMenu;
+  let currentSize = RADIAL_OVERLAY_SIZE;
 
   overlayWindow = new BrowserWindowImpl({
     width: RADIAL_OVERLAY_SIZE,
@@ -61,19 +63,19 @@ export async function createRadialOverlay({
     // Some Linux window managers do not expose this flag through Electron.
   }
 
-  const positionAtCursor = () => {
+  const positionAtCursor = (cursorPoint) => {
     if (!overlayWindow || overlayWindow.isDestroyed()) return;
     let point;
     let display;
     try {
-      point = screenApi.getCursorScreenPoint();
+      point = toDipPoint(cursorPoint, screenApi) || screenApi.getCursorScreenPoint();
       display = screenApi.getDisplayNearestPoint(point);
     } catch {
       point = { x: 0, y: 0 };
       display = screenApi.getPrimaryDisplay();
     }
     const workArea = display.workArea;
-    const [width, height] = overlayWindow.getContentSize();
+    const [width, height] = [currentSize, currentSize];
     const x = clamp(Math.round(point.x - width / 2), workArea.x + RADIAL_OVERLAY_MARGIN,
       workArea.x + workArea.width - width - RADIAL_OVERLAY_MARGIN);
     const y = clamp(Math.round(point.y - height / 2), workArea.y + RADIAL_OVERLAY_MARGIN,
@@ -94,15 +96,21 @@ export async function createRadialOverlay({
     send("porvoz:radial-close", { reason });
   };
 
-  const open = (menu) => {
+  const open = (menu, cursorPoint) => {
     if (!overlayWindow || overlayWindow.isDestroyed()) return false;
     currentMenu = structuredClone(menu || {});
+    const scale = normalizeRadialScale(currentMenu.scale);
+    const size = Math.round(RADIAL_OVERLAY_SIZE * scale);
+    currentSize = size;
+    if (typeof overlayWindow.setContentSize === "function") {
+      overlayWindow.setContentSize(size, size, false);
+    }
     selectedSlot = "center";
     isOpen = true;
-    positionAtCursor();
+    positionAtCursor(cursorPoint);
     overlayWindow.setIgnoreMouseEvents(false);
     overlayWindow.setAlwaysOnTop(true);
-    send("porvoz:radial-open", { menu: currentMenu, selectedSlot });
+    send("porvoz:radial-open", { menu: currentMenu, selectedSlot, scale });
     return true;
   };
 
@@ -168,6 +176,16 @@ export async function createRadialOverlay({
       if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.destroy();
     }
   };
+}
+
+function toDipPoint(point, screenApi) {
+  if (!point || point.physical !== true
+    || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) return null;
+  const physicalPoint = { x: Number(point.x), y: Number(point.y) };
+  if (typeof screenApi?.screenToDipPoint === "function") {
+    return screenApi.screenToDipPoint(physicalPoint);
+  }
+  return null;
 }
 
 function clamp(value, minimum, maximum) {

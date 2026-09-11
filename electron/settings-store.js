@@ -61,7 +61,7 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     return typeof profileId === "string" && profileId ? profileId : settings.activeProfileId;
   }
 
-  function saveConnection({ profileId, baseUrl, apiKey: nextApiKey, verifyCertificate, openRouterSearch } = {}) {
+  function saveConnection({ profileId, baseUrl, apiKey: nextApiKey, verifyCertificate, searchTool, openRouterSearch } = {}) {
     const profile = getProfile(resolveProfileId(profileId));
     if (profile.connection.baseUrl !== baseUrl) {
       profile.models.available = [];
@@ -72,9 +72,11 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     profile.connection.verifyCertificate = typeof verifyCertificate === "boolean"
       ? verifyCertificate
       : profile.connection.verifyCertificate !== false;
-    if (typeof openRouterSearch === "boolean") {
-      profile.connection.openRouterSearch = openRouterSearch;
-      profile.models.openRouterSearch = openRouterSearch;
+    if (searchTool !== undefined || openRouterSearch !== undefined) {
+      profile.models.searchTool = normalizeSearchTool(
+        searchTool !== undefined ? searchTool : openRouterSearch,
+        profile.models.searchTool
+      );
     }
     if (typeof nextApiKey === "string" && nextApiKey.trim()) {
       saveApiKey(profile.id, nextApiKey.trim());
@@ -93,7 +95,7 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     return available;
   }
 
-  function saveModelSelections(profileId, { transcription, instruction, instructionReasoning, openRouterSearch } = {}) {
+  function saveModelSelections(profileId, { transcription, instruction, instructionReasoning, searchTool, openRouterSearch } = {}) {
     const profile = getProfile(resolveProfileId(profileId));
     if (transcription !== undefined) {
       profile.models.transcription = normalizeModel(transcription);
@@ -108,8 +110,11 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
       }
       profile.models.instructionReasoning = nextInstructionReasoning;
     }
-    if (openRouterSearch !== undefined) {
-      profile.models.openRouterSearch = Boolean(openRouterSearch);
+    if (searchTool !== undefined || openRouterSearch !== undefined) {
+      profile.models.searchTool = normalizeSearchTool(
+        searchTool !== undefined ? searchTool : openRouterSearch,
+        profile.models.searchTool
+      );
     }
     saveSettingsFile();
   }
@@ -124,8 +129,8 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     const profile = {
       id: randomUUID(),
       name: finalName,
-      connection: { baseUrl: "", verifyCertificate: true, openRouterSearch: true },
-      models: { available: [], transcription: "", instruction: "", instructionReasoning: "low", openRouterSearch: true }
+      connection: { baseUrl: "", verifyCertificate: true },
+      models: { available: [], transcription: "", instruction: "", instructionReasoning: "low", searchTool: "omit" }
     };
     settings.profiles.push(profile);
     settings.activeProfileId = profile.id;
@@ -317,8 +322,7 @@ function normalizeProfileEntries(value, defaults) {
       name,
       connection: {
         baseUrl: typeof entry?.connection?.baseUrl === "string" ? entry.connection.baseUrl : "",
-        verifyCertificate: entry?.connection?.verifyCertificate !== false,
-        openRouterSearch: Boolean(entry?.connection?.openRouterSearch)
+        verifyCertificate: entry?.connection?.verifyCertificate !== false
       },
       models: {
         available: Array.isArray(entry?.models?.available) ? uniqueStrings(entry.models.available) : [],
@@ -328,7 +332,11 @@ function normalizeProfileEntries(value, defaults) {
           entry?.models?.instructionReasoning,
           defaults.profiles?.[0]?.models?.instructionReasoning
         ),
-        openRouterSearch: Boolean(entry?.models?.openRouterSearch ?? entry?.connection?.openRouterSearch)
+        searchTool: normalizeSearchTool(
+          entry?.models?.searchTool,
+          entry?.models?.openRouterSearch ?? entry?.connection?.openRouterSearch
+            ?? defaults.profiles?.[0]?.models?.searchTool
+        )
       }
     };
   });
@@ -421,6 +429,19 @@ function normalizeInstructionReasoning(value, fallback = "low") {
   if (["low", "medium", "high"].includes(normalizedValue)) return normalizedValue;
   const normalizedFallback = typeof fallback === "string" ? fallback.trim().toLocaleLowerCase() : "";
   return ["low", "medium", "high"].includes(normalizedFallback) ? normalizedFallback : "low";
+}
+
+function normalizeSearchTool(value, fallback = "omit") {
+  if (value === true) return "openrouter";
+  if (value === false) return "openai";
+  const normalizedValue = normalizeText(value).toLocaleLowerCase();
+  if (["omit", "openai", "openrouter"].includes(normalizedValue)) return normalizedValue;
+  if (fallback === true) return "openrouter";
+  if (fallback === false) return "openai";
+  const normalizedFallback = normalizeText(fallback).toLocaleLowerCase();
+  return ["omit", "openai", "openrouter"].includes(normalizedFallback)
+    ? normalizedFallback
+    : "omit";
 }
 
 function normalizeSoundVolume(value, fallback = 0.3) {

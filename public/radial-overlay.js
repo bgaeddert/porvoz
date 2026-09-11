@@ -5,6 +5,9 @@ const INNER_RADIUS = 128;
 const CENTER_RADIUS = 117;
 const SEGMENT_ANGLE = 360 / 12;
 const SEGMENT_GAP = 2.4;
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 1;
+const DEFAULT_SCALE = 1;
 
 const surface = document.querySelector("#radial-surface");
 const segments = document.querySelector("#radial-segments");
@@ -14,10 +17,14 @@ const centerLabel = document.querySelector("#radial-center-label");
 let menu;
 let selectedSlot = "center";
 let lastSentSelection;
+let radialScale = DEFAULT_SCALE;
 
-window.porvozRadial?.onOpen(({ menu: nextMenu, selectedSlot: initialSelection } = {}) => {
+window.porvozRadial?.onOpen(({ menu: nextMenu, selectedSlot: initialSelection, scale } = {}) => {
   surface.dataset.open = "false";
   menu = nextMenu || { slots: [] };
+  radialScale = normalizeScale(scale ?? menu.scale);
+  surface.style.width = `${SIZE * radialScale}px`;
+  surface.style.height = `${SIZE * radialScale}px`;
   selectedSlot = initialSelection || "center";
   render();
   sendSelection(selectedSlot);
@@ -103,8 +110,10 @@ function updateSelection() {
 }
 
 function selectionForPoint(x, y) {
-  const dx = x - CENTER;
-  const dy = y - CENTER;
+  const logicalX = x / radialScale;
+  const logicalY = y / radialScale;
+  const dx = logicalX - CENTER;
+  const dy = logicalY - CENTER;
   const distance = Math.hypot(dx, dy);
   if (distance > OUTER_RADIUS + 8) return "outside";
   if (distance <= CENTER_RADIUS) return "center";
@@ -145,4 +154,11 @@ function displayLabel(slot, fallback) {
 function slotLabel(slot, fallback) {
   const label = displayLabel(slot, fallback);
   return label ? `${fallback}: ${label}` : fallback;
+}
+
+function normalizeScale(value) {
+  const number = Number(value);
+  return Number.isFinite(number)
+    ? Math.min(MAX_SCALE, Math.max(MIN_SCALE, number))
+    : DEFAULT_SCALE;
 }
