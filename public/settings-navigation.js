@@ -14,6 +14,11 @@ const pageDetails = {
     title: "Keyboard",
     summary: "Global shortcut and terminal selection copying."
   },
+  radial: {
+    kicker: "This computer",
+    title: "Radial menu",
+    summary: "Hold a trigger to choose from configurable shortcuts."
+  },
   sound: {
     kicker: "This computer",
     title: "Sound",

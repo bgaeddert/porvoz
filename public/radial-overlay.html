@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Porvoz radial menu</title>
+    <link rel="stylesheet" href="./radial-overlay.css">
+  </head>
+  <body>
+    <main id="radial-surface" class="radial-surface" data-open="false" aria-label="Porvoz radial menu">
+      <svg id="radial-wheel" class="radial-wheel" viewBox="0 0 552 552" role="application" aria-label="Radial shortcuts">
+        <circle class="radial-outline" cx="276" cy="276" r="270"></circle>
+        <g id="radial-segments" class="radial-segments" aria-label="Radial shortcuts"></g>
+        <circle id="radial-center-ring" class="radial-center-ring" cx="276" cy="276" r="122"></circle>
+        <g id="radial-center" class="radial-center" role="button" tabindex="0" aria-label="Center slot">
+          <circle class="radial-center-fill" cx="276" cy="276" r="117"></circle>
+          <text id="radial-center-label" class="radial-center-label" x="276" y="282" text-anchor="middle"></text>
+        </g>
+      </svg>
+    </main>
+    <script type="module" src="./radial-overlay.js"></script>
+  </body>
+</html>

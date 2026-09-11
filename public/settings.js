@@ -5,6 +5,55 @@ import { getUniquePrefixName, parsePrefix, serializePrefix } from "./prefix-tran
 import { bridge } from "./app-bridge.js";
 import { createRecorder, getRecordingSupport } from "./media-support.js";
 
+const RADIAL_SLOT_DEFINITIONS = [
+  ...Array.from({ length: 12 }, (_value, index) => ({
+    id: String(index + 1), number: index + 1,
+    position: `${index === 0 ? 12 : index} o'clock`
+  })),
+  { id: "center", number: 13, position: "Center" }
+];
+
+function formatRadialActionLabel(action) {
+  if (!action) return "";
+  if (action.type === "navigation") return action.command === "forward" ? "Forward" : "Back";
+  return Array.isArray(action.keys) ? action.keys.join(" + ") : "";
+}
+
+function formatMouseButtonLabel(button) {
+  return { 1: "Mouse Left", 2: "Mouse Right", 3: "Mouse Middle", 4: "Mouse Back", 5: "Mouse Forward" }[button]
+    || `Mouse ${button}`;
+}
+
+const RADIAL_PREVIEW_CENTER = 276;
+const RADIAL_PREVIEW_OUTER_RADIUS = 264;
+const RADIAL_PREVIEW_INNER_RADIUS = 128;
+const RADIAL_PREVIEW_SEGMENT_GAP = 2.4;
+
+function radialSettingsSegmentPath(index) {
+  const centerAngle = -90 + index * 30;
+  const startAngle = centerAngle - 15 + RADIAL_PREVIEW_SEGMENT_GAP / 2;
+  const endAngle = centerAngle + 15 - RADIAL_PREVIEW_SEGMENT_GAP / 2;
+  const outerStart = radialSettingsPolarPoint(RADIAL_PREVIEW_OUTER_RADIUS, startAngle);
+  const outerEnd = radialSettingsPolarPoint(RADIAL_PREVIEW_OUTER_RADIUS, endAngle);
+  const innerEnd = radialSettingsPolarPoint(RADIAL_PREVIEW_INNER_RADIUS, endAngle);
+  const innerStart = radialSettingsPolarPoint(RADIAL_PREVIEW_INNER_RADIUS, startAngle);
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${RADIAL_PREVIEW_OUTER_RADIUS} ${RADIAL_PREVIEW_OUTER_RADIUS} 0 0 1 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${RADIAL_PREVIEW_INNER_RADIUS} ${RADIAL_PREVIEW_INNER_RADIUS} 0 0 0 ${innerStart.x} ${innerStart.y}`,
+    "Z"
+  ].join(" ");
+}
+
+function radialSettingsPolarPoint(radius, angle) {
+  const radians = angle * Math.PI / 180;
+  return {
+    x: RADIAL_PREVIEW_CENTER + radius * Math.cos(radians),
+    y: RADIAL_PREVIEW_CENTER + radius * Math.sin(radians)
+  };
+}
+
 const profileSelect = document.querySelector("#profile-select");
 const backendForm = document.querySelector("#backend-form");
 const backendMode = document.querySelector("#backend-mode");
@@ -96,6 +145,22 @@ const captureHotkeyButton = document.querySelector("#capture-hotkey");
 const cancelHotkeyButton = document.querySelector("#cancel-hotkey");
 const hotkeyDisplay = document.querySelector("#hotkey-display");
 const hotkeyStatus = document.querySelector("#hotkey-status");
+const radialEnabledInput = document.querySelector("#radial-enabled");
+const radialTriggerDisplay = document.querySelector("#radial-trigger-display");
+const captureRadialTriggerButton = document.querySelector("#capture-radial-trigger");
+const cancelRadialTriggerButton = document.querySelector("#cancel-radial-trigger");
+const radialTriggerStatus = document.querySelector("#radial-trigger-status");
+const radialSettingsSegments = document.querySelector("#radial-settings-segments");
+const radialSettingsCenter = document.querySelector("#radial-settings-center");
+const radialSettingsCenterRing = document.querySelector("#radial-settings-center-ring");
+const radialSettingsCenterLabel = document.querySelector("#radial-settings-center-label");
+const radialSlotForm = document.querySelector("#radial-slot-form");
+const radialEditorLabel = document.querySelector("#radial-editor-label");
+const radialEditorActionType = document.querySelector("#radial-editor-action-type");
+const radialEditorAction = document.querySelector("#radial-editor-action");
+const cancelRadialSlotEditButton = document.querySelector("#cancel-radial-slot-edit");
+const saveRadialSlotEditButton = document.querySelector("#save-radial-slot-edit");
+const radialSlotStatus = document.querySelector("#radial-slot-status");
 const soundVolumeInput = document.querySelector("#sound-volume");
 const soundVolumeValue = document.querySelector("#sound-volume-value");
 const soundVolumeStatus = document.querySelector("#sound-volume-status");
@@ -111,6 +176,12 @@ const recordingSupport = getRecordingSupport();
 let runtimeConfig;
 let prefixConfig = [];
 let isCapturingHotkey = false;
+let radialMenu;
+let isCapturingRadialTrigger = false;
+let radialSlotCaptureId = "";
+let radialEditorSlotId = "";
+let radialEditorDraft;
+let radialSaveQueue = Promise.resolve();
 let prefixSaveTimer;
 let prefixSaveQueue = Promise.resolve();
 let modelSaveQueue = Promise.resolve();
@@ -162,6 +233,7 @@ async function initializeSettings() {
   if (soundVolumeInput) renderSoundVolume(runtimeConfig.soundVolume);
   if (consoleSelectionInput) renderConsoleSelection(runtimeConfig.consoleSelectionEnabled);
   if (hotkeyDisplay) await initializeHotkey();
+  if (radialEnabledInput && bridge.features.radialMenu) await initializeRadialMenu();
 
   profileSelect.addEventListener("change", switchActiveProfile);
   addProfileButton.addEventListener("click", openAddProfileDialog);
@@ -212,6 +284,21 @@ async function initializeSettings() {
   cancelResetButton.addEventListener("click", () => resetDialog.close());
   captureHotkeyButton?.addEventListener("click", beginHotkeyCapture);
   cancelHotkeyButton?.addEventListener("click", cancelHotkeyCapture);
+  radialEnabledInput?.addEventListener("change", saveRadialEnabled);
+  captureRadialTriggerButton?.addEventListener("click", beginRadialTriggerCapture);
+  // Cancel on pointer-down so its left-button release cannot be mistaken for
+  // the mouse trigger currently being recorded.
+  cancelRadialTriggerButton?.addEventListener("pointerdown", cancelRadialCapture);
+  radialSettingsSegments?.addEventListener("click", handleRadialPreviewClick);
+  radialSettingsSegments?.addEventListener("keydown", handleRadialPreviewKeydown);
+  radialSettingsCenter?.addEventListener("click", () => selectRadialSlot("center"));
+  radialSettingsCenter?.addEventListener("keydown", handleRadialCenterKeydown);
+  radialEditorLabel?.addEventListener("input", () => {
+    if (radialEditorDraft) radialEditorDraft.label = radialEditorLabel.value.slice(0, 64);
+  });
+  radialEditorActionType?.addEventListener("change", handleRadialEditorActionTypeChange);
+  radialSlotForm?.addEventListener("submit", saveRadialSlotEdit);
+  cancelRadialSlotEditButton?.addEventListener("click", cancelRadialSlotEdit);
   soundVolumeInput?.addEventListener("input", updateSoundVolumePreview);
   soundVolumeInput?.addEventListener("change", saveSoundVolume);
   consoleSelectionInput?.addEventListener("change", saveConsoleSelection);
@@ -220,6 +307,11 @@ async function initializeSettings() {
   if (bridge.features.hotkeys) {
     bridge.onHotkeyUpdated(handleHotkeyUpdated);
     bridge.onHotkeyCaptureStatus(handleHotkeyCaptureStatus);
+  }
+  if (bridge.features.radialMenu) {
+    bridge.onRadialMenuUpdated?.(handleRadialMenuUpdated);
+    bridge.onRadialTriggerCaptureStatus?.(handleRadialTriggerCaptureStatus);
+    bridge.onRadialSlotCaptureStatus?.(handleRadialSlotCaptureStatus);
   }
   if (bridge.features.sounds) bridge.onSoundVolumeUpdated(handleSoundVolumeUpdated);
   if (bridge.features.activityEvents) bridge.onActivityCanceled(handleActivityCanceled);
@@ -1392,6 +1484,15 @@ async function resetToDefaults(event) {
       renderConsoleSelection(runtimeConfig.consoleSelectionEnabled);
       consoleSelectionStatus.textContent = "";
     }
+    if (radialEnabledInput && bridge.features.radialMenu) {
+      radialMenu = normalizeRadialMenuForSettings(await bridge.getRadialMenu());
+      radialEditorSlotId = "";
+      radialEditorDraft = undefined;
+      radialSlotForm.hidden = true;
+      renderRadialMenu();
+      radialTriggerStatus.textContent = "Radial menu settings reset.";
+      radialTriggerStatus.dataset.state = "success";
+    }
     await loadConnectionSettings();
     resetDialog.close();
     resetStatus.textContent = "Settings reset to defaults.";
@@ -1412,6 +1513,400 @@ async function initializeHotkey() {
     console.error("Could not load the desktop hotkey:", error);
     hotkeyStatus.textContent = error.message || "Could not load the hotkey.";
   }
+}
+
+async function initializeRadialMenu() {
+  try {
+    radialMenu = normalizeRadialMenuForSettings(await bridge.getRadialMenu());
+    renderRadialMenu();
+  } catch (error) {
+    radialTriggerStatus.textContent = error.message || "Could not load the radial menu.";
+    radialTriggerStatus.dataset.state = "error";
+  }
+}
+
+function normalizeRadialMenuForSettings(value) {
+  const sourceSlots = Array.isArray(value?.slots) ? value.slots : [];
+  return {
+    enabled: value?.enabled === true,
+    trigger: value?.trigger && typeof value.trigger === "object" ? { ...value.trigger } : null,
+    slots: RADIAL_SLOT_DEFINITIONS.map((definition) => {
+      const source = sourceSlots.find((slot) => String(slot?.id) === definition.id);
+      return {
+        id: definition.id,
+        label: typeof source?.label === "string" ? source.label : "",
+        action: source?.action && typeof source.action === "object" ? { ...source.action } : null
+      };
+    })
+  };
+}
+
+function renderRadialMenu() {
+  if (!radialMenu || !radialSettingsSegments) return;
+  radialEnabledInput.checked = radialMenu.enabled === true;
+  const trigger = radialMenu.trigger;
+  radialTriggerDisplay.textContent = trigger
+    ? trigger.label || (trigger.kind === "mouse" ? formatMouseButtonLabel(trigger.button) : "Assigned")
+    : "Not assigned";
+
+  renderRadialPreview();
+  if (radialEditorDraft && radialEditorSlotId) renderRadialSlotEditor();
+}
+
+function renderRadialPreview() {
+  radialSettingsSegments.replaceChildren();
+  const slotMap = new Map(radialMenu.slots.map((slot) => [slot.id, slot]));
+  for (let index = 0; index < 12; index += 1) {
+    const definition = RADIAL_SLOT_DEFINITIONS[index];
+    const slot = slotMap.get(definition.id) || { id: definition.id, label: "", action: null };
+    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    group.classList.add("radial-settings-segment");
+    group.dataset.slotId = definition.id;
+    group.setAttribute("role", "button");
+    group.setAttribute("tabindex", "0");
+    group.setAttribute("aria-label", radialSlotAriaLabel(definition, slot));
+
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.classList.add("radial-settings-segment-shape");
+    path.setAttribute("d", radialSettingsSegmentPath(index));
+    group.append(path);
+
+    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text.classList.add("radial-settings-segment-label");
+    const point = radialSettingsPolarPoint(190, -90 + index * 30);
+    text.setAttribute("x", point.x);
+    text.setAttribute("y", point.y);
+    text.setAttribute("text-anchor", "middle");
+    text.textContent = displayRadialSlotLabel(slot, "");
+    group.append(text);
+    radialSettingsSegments.append(group);
+  }
+
+  const centerSlot = slotMap.get("center") || { id: "center", label: "", action: null };
+  radialSettingsCenterLabel.textContent = displayRadialSlotLabel(centerSlot, "");
+  radialSettingsCenter.setAttribute("aria-label", radialSlotAriaLabel(
+    RADIAL_SLOT_DEFINITIONS.at(-1), centerSlot
+  ));
+  radialSettingsSegments.querySelectorAll(".radial-settings-segment").forEach((segment) => {
+    segment.classList.toggle("selected", segment.dataset.slotId === radialEditorSlotId);
+  });
+  radialSettingsCenter.classList.toggle("selected", radialEditorSlotId === "center");
+  radialSettingsCenterRing.classList.toggle("selected", radialEditorSlotId === "center");
+}
+
+function displayRadialSlotLabel(slot, fallback) {
+  const label = typeof slot?.label === "string" ? slot.label.trim() : "";
+  if (label) return label;
+  if (!slot?.action) return fallback;
+  return formatRadialActionLabel(slot.action) || (
+    slot.action.type === "navigation"
+      ? slot.action.command === "forward" ? "Forward" : "Back"
+      : "Assigned"
+  );
+}
+
+function radialSlotAriaLabel(definition, slot) {
+  const label = displayRadialSlotLabel(slot, "Empty");
+  return `Slot ${definition.number}, ${definition.position}: ${label}`;
+}
+
+function handleRadialPreviewClick(event) {
+  const segment = event.target.closest?.(".radial-settings-segment");
+  if (segment) selectRadialSlot(segment.dataset.slotId);
+}
+
+function handleRadialPreviewKeydown(event) {
+  if (!event.target.classList.contains("radial-settings-segment")) return;
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  selectRadialSlot(event.target.dataset.slotId);
+}
+
+function handleRadialCenterKeydown(event) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  selectRadialSlot("center");
+}
+
+function getRadialDefinition(slotId) {
+  return RADIAL_SLOT_DEFINITIONS.find((definition) => definition.id === slotId);
+}
+
+function getRadialSlot(slotId) {
+  return radialMenu?.slots?.find((slot) => slot.id === slotId);
+}
+
+function selectRadialSlot(slotId) {
+  if (!getRadialDefinition(slotId) || radialSlotCaptureId) return;
+  const slot = getRadialSlot(slotId) || { id: slotId, label: "", action: null };
+  radialEditorSlotId = slotId;
+  radialEditorDraft = {
+    id: slotId,
+    label: slot.label || "",
+    action: slot.action ? structuredClone(slot.action) : null,
+    actionType: slot.action?.type || ""
+  };
+  radialSlotStatus.textContent = "";
+  radialSlotStatus.dataset.state = "idle";
+  renderRadialPreview();
+  renderRadialSlotEditor();
+  radialEditorLabel?.focus();
+}
+
+function renderRadialSlotEditor() {
+  if (!radialSlotForm) return;
+  if (!radialEditorDraft || !radialEditorSlotId) {
+    radialSlotForm.hidden = true;
+    return;
+  }
+  radialSlotForm.hidden = false;
+  radialEditorLabel.value = radialEditorDraft.label || "";
+  radialEditorActionType.value = radialEditorDraft.actionType || radialEditorDraft.action?.type || "";
+  radialEditorAction.replaceChildren();
+
+  if (radialEditorDraft.action?.type === "navigation") {
+    const navigation = document.createElement("select");
+    navigation.className = "radial-editor-navigation";
+    navigation.setAttribute("aria-label", "Navigation action");
+    appendRadialOption(navigation, "back", "Back");
+    appendRadialOption(navigation, "forward", "Forward");
+    navigation.value = radialEditorDraft.action.command === "forward" ? "forward" : "back";
+    navigation.addEventListener("change", () => {
+      radialEditorDraft.action = {
+        type: "navigation",
+        command: navigation.value,
+        label: navigation.value === "forward" ? "Forward" : "Back"
+      };
+    });
+    radialEditorAction.append(navigation, createRadialEditorClearButton());
+  } else if (radialEditorActionType.value === "hotkey") {
+    const readout = document.createElement("kbd");
+    readout.className = "radial-editor-readout";
+    readout.textContent = formatRadialActionLabel(radialEditorDraft.action) || "Not assigned";
+    const record = document.createElement("button");
+    record.type = "button";
+    record.className = "button-secondary";
+    record.disabled = Boolean(radialSlotCaptureId && radialSlotCaptureId !== radialEditorSlotId);
+    setButtonLabel(record, radialSlotCaptureId === radialEditorSlotId ? "Press keys…" : "Record shortcut");
+    record.addEventListener("click", () => beginRadialSlotCapture(radialEditorSlotId));
+    radialEditorAction.append(readout, record, createRadialEditorClearButton());
+  }
+  saveRadialSlotEditButton.disabled = Boolean(radialSlotCaptureId);
+}
+
+function handleRadialEditorActionTypeChange() {
+  if (!radialEditorDraft) return;
+  const type = radialEditorActionType.value;
+  radialEditorDraft.actionType = type;
+  if (type === "navigation") {
+    const command = radialEditorDraft.action?.type === "navigation"
+      && radialEditorDraft.action.command === "forward"
+      ? "forward"
+      : "back";
+    radialEditorDraft.action = {
+      type: "navigation",
+      command,
+      label: command === "forward" ? "Forward" : "Back"
+    };
+  } else if (type === "hotkey") {
+    radialEditorDraft.action = radialEditorDraft.action?.type === "hotkey"
+      ? structuredClone(radialEditorDraft.action)
+      : null;
+  } else {
+    radialEditorDraft.action = null;
+    radialEditorDraft.actionType = "";
+  }
+  renderRadialSlotEditor();
+}
+
+function appendRadialOption(select, value, text) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = text;
+  select.append(option);
+}
+
+function createRadialEditorClearButton() {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "button-secondary";
+  setButtonLabel(button, "Clear slot");
+  button.addEventListener("click", () => {
+    if (!radialEditorDraft) return;
+    radialEditorDraft.label = "";
+    radialEditorDraft.action = null;
+    radialEditorDraft.actionType = "";
+    renderRadialSlotEditor();
+  });
+  return button;
+}
+
+async function saveRadialEnabled() {
+  if (!radialMenu) return;
+  const nextMenu = {
+    ...radialMenu,
+    enabled: radialEnabledInput.checked
+  };
+  radialMenu = nextMenu;
+  radialTriggerStatus.textContent = radialMenu.enabled && !radialMenu.trigger
+    ? "Set a trigger before using the radial menu."
+    : "Saving…";
+  radialTriggerStatus.dataset.state = "saving";
+  try {
+    await queueRadialMenuSave(nextMenu);
+  } catch {
+    // queueRadialMenuSave reports the actionable error beside the setting.
+  }
+}
+
+async function saveRadialSlotEdit(event) {
+  event.preventDefault();
+  if (!radialMenu || !radialEditorDraft || !radialEditorSlotId || radialSlotCaptureId) return;
+  const nextMenu = {
+    ...radialMenu,
+    slots: radialMenu.slots.map((slot) => slot.id === radialEditorSlotId
+      ? {
+        ...slot,
+        label: radialEditorDraft.label.trim(),
+        action: radialEditorDraft.action ? structuredClone(radialEditorDraft.action) : null
+      }
+      : slot)
+  };
+  saveRadialSlotEditButton.disabled = true;
+  cancelRadialSlotEditButton.disabled = true;
+  radialSlotStatus.textContent = "Saving…";
+  radialSlotStatus.dataset.state = "saving";
+  try {
+    radialMenu = normalizeRadialMenuForSettings(await bridge.saveRadialMenu(nextMenu));
+    const savedSlot = getRadialSlot(radialEditorSlotId);
+    radialEditorDraft = savedSlot ? {
+      id: savedSlot.id,
+      label: savedSlot.label || "",
+      action: savedSlot.action ? structuredClone(savedSlot.action) : null,
+      actionType: savedSlot.action?.type || ""
+    } : undefined;
+    radialSlotStatus.textContent = "Saved.";
+    radialSlotStatus.dataset.state = "success";
+    renderRadialPreview();
+    renderRadialSlotEditor();
+  } catch (error) {
+    radialSlotStatus.textContent = error.message || "Could not save this radial slot.";
+    radialSlotStatus.dataset.state = "error";
+  } finally {
+    cancelRadialSlotEditButton.disabled = false;
+    if (!radialSlotCaptureId) saveRadialSlotEditButton.disabled = false;
+  }
+}
+
+function cancelRadialSlotEdit() {
+  if (radialSlotCaptureId) void bridge.cancelRadialCapture?.();
+  radialSlotCaptureId = "";
+  radialEditorSlotId = "";
+  radialEditorDraft = undefined;
+  radialSlotStatus.textContent = "";
+  radialSlotStatus.dataset.state = "idle";
+  radialSlotForm.hidden = true;
+  renderRadialPreview();
+}
+
+async function queueRadialMenuSave(value, { render = true } = {}) {
+  if (!value) return;
+  const requestedMenu = normalizeRadialMenuForSettings(value);
+  radialSaveQueue = radialSaveQueue.catch(() => {}).then(async () => {
+    try {
+      radialMenu = normalizeRadialMenuForSettings(await bridge.saveRadialMenu(requestedMenu));
+      if (render) renderRadialMenu();
+      radialTriggerStatus.textContent = radialMenu.enabled && !radialMenu.trigger
+        ? "Set a trigger before using the radial menu."
+        : "Radial menu settings saved.";
+      radialTriggerStatus.dataset.state = "success";
+    } catch (error) {
+      radialTriggerStatus.textContent = error.message || "Could not save radial menu settings.";
+      radialTriggerStatus.dataset.state = "error";
+      throw error;
+    }
+  });
+  return radialSaveQueue;
+}
+
+async function beginRadialTriggerCapture() {
+  if (isCapturingRadialTrigger) return;
+  isCapturingRadialTrigger = true;
+  captureRadialTriggerButton.disabled = true;
+  setButtonLabel(captureRadialTriggerButton, "Press trigger…");
+  cancelRadialTriggerButton.hidden = false;
+  radialTriggerStatus.textContent = "Press a keyboard key or mouse button, then release it to save. Click Cancel to stop recording.";
+  try {
+    await bridge.beginRadialTriggerCapture();
+  } catch (error) {
+    finishRadialTriggerCapture();
+    radialTriggerStatus.textContent = error.message || "Could not capture the radial trigger.";
+    radialTriggerStatus.dataset.state = "error";
+  }
+}
+
+function cancelRadialCapture() {
+  void bridge.cancelRadialCapture?.();
+  finishRadialTriggerCapture();
+  finishRadialSlotCapture();
+  radialTriggerStatus.textContent = "Radial shortcut capture canceled.";
+  radialTriggerStatus.dataset.state = "idle";
+}
+
+function handleRadialTriggerCaptureStatus({ state, message } = {}) {
+  if (message) radialTriggerStatus.textContent = message;
+  radialTriggerStatus.dataset.state = state || "idle";
+  if (state === "saved" || state === "canceled") finishRadialTriggerCapture();
+}
+
+function finishRadialTriggerCapture() {
+  isCapturingRadialTrigger = false;
+  if (captureRadialTriggerButton) {
+    captureRadialTriggerButton.disabled = false;
+    setButtonLabel(captureRadialTriggerButton, "Set trigger");
+  }
+  if (cancelRadialTriggerButton) cancelRadialTriggerButton.hidden = true;
+}
+
+async function beginRadialSlotCapture(slotId) {
+  if (!slotId || radialSlotCaptureId || !radialEditorDraft) return;
+  radialSlotCaptureId = slotId;
+  radialSlotStatus.textContent = "Recording shortcut…";
+  radialSlotStatus.dataset.state = "waiting";
+  renderRadialSlotEditor();
+  try {
+    await bridge.beginRadialSlotCapture(slotId);
+  } catch (error) {
+    finishRadialSlotCapture();
+    radialSlotStatus.textContent = error.message || "Could not capture the slot shortcut.";
+    radialSlotStatus.dataset.state = "error";
+  }
+}
+
+function handleRadialSlotCaptureStatus({ state, message, slotId, action } = {}) {
+  if (slotId && radialSlotCaptureId && slotId !== radialSlotCaptureId) return;
+  if (state === "saved" && action && radialEditorDraft && radialEditorSlotId === slotId) {
+    radialEditorDraft.action = structuredClone(action);
+    radialEditorDraft.actionType = "hotkey";
+    radialSlotStatus.textContent = "Shortcut recorded. Save changes to apply it.";
+  } else if (message) {
+    radialSlotStatus.textContent = message;
+  }
+  radialSlotStatus.dataset.state = state === "saved" ? "success" : state || "idle";
+  if (state === "saved" || state === "canceled") {
+    finishRadialSlotCapture();
+    renderRadialSlotEditor();
+  }
+}
+
+function finishRadialSlotCapture() {
+  radialSlotCaptureId = "";
+  renderRadialSlotEditor();
+}
+
+function handleRadialMenuUpdated(value) {
+  radialMenu = normalizeRadialMenuForSettings(value);
+  renderRadialMenu();
 }
 
 function renderHotkey(hotkey) {

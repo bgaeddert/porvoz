@@ -25,9 +25,6 @@ contextBridge.exposeInMainWorld("porvozOverlay", {
   openExternal(url) {
     return ipcRenderer.invoke("porvoz:overlay-open-external", url);
   },
-  sendKeyCommand(keyCommand) {
-    return ipcRenderer.invoke("porvoz:overlay-key-command", keyCommand);
-  },
   dismiss() {
     ipcRenderer.send("porvoz:overlay-dismiss");
   },

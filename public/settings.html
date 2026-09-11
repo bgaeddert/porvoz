@@ -28,6 +28,10 @@
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M10 14h4"/></svg>
             <span>Keyboard</span>
           </a>
+          <a class="nav-link" href="settings.html#radial" title="Radial" data-desktop-only>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+            <span>Radial</span>
+          </a>
           <a class="nav-link" href="settings.html#sound" title="Sound" data-desktop-only>
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2l3.5-4.5a.8.8 0 0 1 1.5.5v14a.8.8 0 0 1-1.5.5z"/><path d="M15 8a5 5 0 0 1 0 8M17.7 5a9 9 0 0 1 0 14"/></svg>
             <span>Sound</span>
@@ -297,6 +301,75 @@
             <p id="console-selection-warning" class="console-selection-warning"><strong>Warning:</strong> Porvoz sends Control-Shift-C. With nothing selected, a terminal may pass it through as Control-C and cancel whatever is running.</p>
             <p id="console-selection-scope" class="field-note">Unknown terminals and editor terminal panes are not covered.</p>
             <p id="console-selection-status" class="field-note" aria-live="polite"></p>
+          </section>
+
+          <section data-desktop-only id="radial" class="settings-card" data-settings-page="radial" aria-labelledby="radial-heading" hidden>
+            <div class="settings-heading">
+              <div>
+                <h2 id="radial-heading">Radial menu</h2>
+                <p class="section-description">Set the trigger, then select a slice or the center to edit its label and action.</p>
+              </div>
+            </div>
+            <label class="checkbox-line radial-enabled-line">
+              <input id="radial-enabled" type="checkbox" />
+              <span>Enable radial menu</span>
+            </label>
+            <div class="radial-trigger-setting">
+              <div class="hotkey-readout">
+                <span class="hotkey-caption">Menu trigger</span>
+                <kbd id="radial-trigger-display">Not assigned</kbd>
+              </div>
+              <div class="hotkey-actions">
+                <button id="capture-radial-trigger" class="button-secondary button-with-icon" type="button">
+                  <svg class="icon icon-tabler icon-tabler-keyboard" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 8a2 2 0 0 1 2 -2h16a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2l0 -8"/><path d="M6 10l0 .01M10 10l0 .01M14 10l0 .01M18 10l0 .01M6 14l0 .01M18 14l0 .01M10 14l4 .01"/></svg>
+                  <span class="button-label">Set trigger</span>
+                </button>
+                <button id="cancel-radial-trigger" class="button-secondary button-with-icon" type="button" hidden>
+                  <svg class="icon icon-tabler icon-tabler-x" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6l-12 12M6 6l12 12"/></svg>
+                  <span class="button-label">Cancel</span>
+                </button>
+              </div>
+            </div>
+            <p id="radial-trigger-status" class="field-note" aria-live="polite">Set a trigger before enabling the menu. Keyboard keys and mouse buttons 1–5 are supported.</p>
+
+            <div class="radial-configurator">
+              <div class="radial-preview-panel">
+                <div class="radial-preview-heading">
+                  <h3>Wheel preview</h3>
+                </div>
+                <div class="radial-settings-preview">
+                  <svg id="radial-settings-wheel" class="radial-settings-wheel" viewBox="0 0 552 552" role="application" aria-label="Radial menu preview">
+                    <circle class="radial-settings-outline" cx="276" cy="276" r="270"></circle>
+                    <g id="radial-settings-segments" class="radial-settings-segments" aria-label="Radial menu slices"></g>
+                    <circle id="radial-settings-center-ring" class="radial-settings-center-ring" cx="276" cy="276" r="122"></circle>
+                    <g id="radial-settings-center" class="radial-settings-center" role="button" tabindex="0" aria-label="Center slot">
+                      <circle class="radial-settings-center-fill" cx="276" cy="276" r="117"></circle>
+                      <text id="radial-settings-center-label" class="radial-settings-center-label" x="276" y="282" text-anchor="middle"></text>
+                    </g>
+                  </svg>
+                </div>
+              </div>
+
+              <form id="radial-slot-form" class="radial-slot-form" hidden>
+                <div class="radial-editor-heading">
+                  <h3>Edit selection</h3>
+                </div>
+                <label class="field-label" for="radial-editor-label">Label</label>
+                <input id="radial-editor-label" class="radial-editor-label" type="text" maxlength="64" placeholder="Shown in the wheel (optional)" />
+                <label class="field-label" for="radial-editor-action-type">Action</label>
+                <select id="radial-editor-action-type" class="radial-editor-action-type">
+                  <option value="">Empty</option>
+                  <option value="hotkey">Keyboard shortcut</option>
+                  <option value="navigation">Back / Forward navigation</option>
+                </select>
+                <div id="radial-editor-action" class="radial-editor-action"></div>
+                <p id="radial-slot-status" class="field-note" aria-live="polite"></p>
+                <div class="form-actions radial-editor-actions">
+                  <button id="cancel-radial-slot-edit" class="button-secondary" type="button">Cancel</button>
+                  <button id="save-radial-slot-edit" class="button-primary" type="submit">Save changes</button>
+                </div>
+              </form>
+            </div>
           </section>
 
           <section data-desktop-only id="sound" class="settings-card" data-settings-page="sound" aria-labelledby="sound-heading" hidden>

@@ -1,0 +1,88 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  user-select: none;
+}
+
+.radial-surface {
+  position: relative;
+  width: 552px;
+  height: 552px;
+  color: #dce6df;
+}
+
+.radial-surface[data-open="false"] {
+  visibility: hidden;
+}
+
+.radial-wheel {
+  display: block;
+  width: 552px;
+  height: 552px;
+}
+
+.radial-outline {
+  fill: #151a17;
+  stroke: #274b35;
+  stroke-width: 2;
+}
+
+.radial-segment-shape {
+  fill: #19261f;
+  stroke: #101914;
+  stroke-width: 4;
+}
+
+.radial-segment.selected .radial-segment-shape {
+  fill: #2f5d43;
+  stroke: #76b78c;
+}
+
+.radial-segment-label,
+.radial-center-label {
+  fill: #d8e2da;
+  font-size: 16px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.radial-segment-label {
+  dominant-baseline: middle;
+}
+
+.radial-center-ring {
+  fill: #17231c;
+  stroke: #2a4b37;
+  stroke-width: 3;
+}
+
+.radial-center-fill {
+  fill: #17231c;
+  pointer-events: none;
+}
+
+.radial-center-ring.selected {
+  fill: #223b2d;
+  stroke: #76b78c;
+}
+
+.radial-center:focus-visible {
+  outline: none;
+}
+
+.radial-center-label {
+  font-size: 20px;
+  font-weight: 600;
+}

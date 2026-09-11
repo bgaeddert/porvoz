@@ -20,13 +20,25 @@ import { createBackendManager } from "./backend-manager.js";
 import { createDesktopPreferences } from "./desktop-preferences.js";
 import { createStatusOverlay } from "./status-overlay.js";
 import { createHotkeyGesture } from "./hotkey-gesture.js";
+import { createRadialGesture } from "./radial-gesture.js";
+import { createRadialOverlay } from "./radial-overlay.js";
+import { createRadialInputHook } from "./radial-input-hook.js";
+import {
+  captureToRadialHotkey,
+  isRadialMenuConfigured,
+  normalizeRadialAction,
+  normalizeRadialMenu,
+  normalizeRadialTrigger
+} from "./radial-menu.js";
 import { createSelectedTextReader } from "./selected-text.js";
 import {
   captureTextInputTarget,
   disposeTextInput,
   isSyntheticCopyActive,
   isSyntheticEscapeActive,
+  isSyntheticRadialInputActive,
   readSelectedTextFromClipboard,
+  sendRadialAction,
   typeText
 } from "./text-input.js";
 import {
@@ -49,7 +61,8 @@ const allowedRendererPaths = new Set([
   "index.html",
   "logs.html",
   "settings.html",
-  "status-overlay.html"
+  "status-overlay.html",
+  "radial-overlay.html"
 ].map((page) => fileURLToPath(new URL(`../public/${page}`, import.meta.url))));
 
 const MODIFIER_KEYCODES = {
@@ -99,6 +112,7 @@ let appService;
 let mainWindow;
 let captureWindow;
 let statusOverlay;
+let radialOverlay;
 let tray;
 let isQuitting = false;
 let isHotkeyRecording = false;
@@ -116,6 +130,17 @@ let hookStarted = false;
 let backendManager;
 let desktopPreferences;
 let currentHotkey;
+let currentRadialMenu;
+let radialInputHook;
+let voiceInputHook;
+let radialNativeHookActive = false;
+let radialNativeCaptureActive = false;
+let voiceNativeHookActive = false;
+let radialTargetWindow;
+let isCapturingRadialTrigger = false;
+let isCapturingRadialSlot = false;
+let hotkeyCaptureMode = "";
+let radialCaptureSlotId;
 let suppressedHotkeyKeyCode;
 let hotkeyCaptureTimer;
 let textTypingQueue = Promise.resolve();
@@ -127,6 +152,30 @@ const capturePressedCodes = new Set();
 const captureSeenCodes = new Set();
 let captureTriggerCode;
 let captureTriggerModifiers = [];
+let captureTriggerButton;
+let captureSeenButton;
+const radialGesture = createRadialGesture({
+  onOpen: () => {
+    if (!radialGesture.isPressed() || !isRadialMenuConfigured(currentRadialMenu)) return;
+    radialOverlay?.open(currentRadialMenu);
+  },
+  onCenterRelease: () => {
+    const target = radialTargetWindow;
+    radialTargetWindow = undefined;
+    const slot = currentRadialMenu?.slots?.find((candidate) => candidate.id === "center");
+    const action = normalizeRadialAction(slot?.action);
+    if (action) void dispatchRadialAction(action, target);
+  },
+  onSelectionRelease: () => {
+    const slotId = radialOverlay?.commit();
+    const target = radialTargetWindow;
+    radialTargetWindow = undefined;
+    if (!slotId || slotId === "outside") return;
+    const slot = currentRadialMenu?.slots?.find((candidate) => candidate.id === slotId);
+    const action = normalizeRadialAction(slot?.action);
+    if (action) void dispatchRadialAction(action, target);
+  }
+});
 
 if (!hasSingleInstanceLock) {
   app.quit();
@@ -168,6 +217,7 @@ async function startApplication() {
   await backendManager.start();
   appService = backendManager.getClient();
   currentHotkey = loadHotkey();
+  currentRadialMenu = loadRadialMenu();
 
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const rendererPath = getRendererFilePath(webContents.getURL());
@@ -186,6 +236,11 @@ async function startApplication() {
     preloadPath: fileURLToPath(new URL("./status-overlay-preload.cjs", import.meta.url)),
     secureWindow: secureRendererWindow
   });
+  radialOverlay = await createRadialOverlay({
+    overlayPath: fileURLToPath(new URL("../public/radial-overlay.html", import.meta.url)),
+    preloadPath: fileURLToPath(new URL("./radial-overlay-preload.cjs", import.meta.url)),
+    secureWindow: secureRendererWindow
+  });
   registerGlobalHotkey();
   if (!app.isPackaged && process.env.PORVOZ_SHOW_WINDOW_FOR_TESTS === "1") showMainWindow();
 }
@@ -195,6 +250,11 @@ function loadHotkey() {
   const hotkey = normalizeHotkey(desktopPreferences.getHotkey());
   if (!hotkey) throw new Error("The saved hotkey is invalid.");
   return hotkey;
+}
+
+function loadRadialMenu() {
+  if (!desktopPreferences) throw new Error("The desktop preferences are not initialized.");
+  return normalizeRadialMenu(desktopPreferences.getRadialMenu());
 }
 
 async function createMainWindow() {
@@ -219,7 +279,8 @@ async function createMainWindow() {
   secureRendererWindow(mainWindow);
   mainWindow.webContents.on("before-input-event", handleSettingsHotkeyInput);
   mainWindow.on("blur", () => {
-    if (isCapturingHotkey && !capturePressedCodes.size) {
+    if ((isCapturingHotkey || isCapturingRadialTrigger || isCapturingRadialSlot)
+      && !capturePressedCodes.size && !captureSeenButton) {
       cancelHotkeyCapture("Hotkey capture canceled because Porvoz lost focus.");
     }
   });
@@ -331,22 +392,40 @@ function createTrayIcon() {
 function registerGlobalHotkey() {
   uIOhook.on("keydown", handleGlobalKeyDown);
   uIOhook.on("keyup", handleGlobalKeyUp);
+  uIOhook.on("mousedown", handleGlobalMouseDown);
+  uIOhook.on("mouseup", handleGlobalMouseUp);
   uIOhook.start();
   hookStarted = true;
+  radialInputHook = createRadialInputHook({
+    onPress: handleRadialTriggerPress,
+    onRelease: handleRadialTriggerRelease
+  });
+  // Keep the radial and voice hooks separate so both modifier-only shortcuts
+  // can be consumed when they are configured at the same time. The voice
+  // hook only blocks the matching events; uIOhook still owns the gesture.
+  voiceInputHook = createRadialInputHook({
+    onPress: handleVoiceNativeHotkeyPress,
+    onRelease: handleVoiceNativeHotkeyRelease
+  });
+  configureInputHooks();
 }
 
 function handleSettingsHotkeyInput(event, input) {
-  if (!isCapturingHotkey || !["keyDown", "keyUp"].includes(input.type)) return;
+  if (!isAnyCaptureActive() || !["keyDown", "keyUp"].includes(input.type)) return;
 
   event.preventDefault();
 
   if (input.type === "keyDown") {
-    if (input.code === "Escape") {
+    if (input.code === "Escape" && getCaptureMode() === "voice") {
       cancelHotkeyCapture("Hotkey capture canceled.");
       return;
     }
+    if (typeof input.code !== "string" || !input.code) {
+      notifyCaptureStatus("waiting", "That key is not supported for recording.");
+      return;
+    }
     if (input.isAutoRepeat || capturePressedCodes.has(input.code)) return;
-    if (input.code === "Space") {
+    if (input.code === "Space" && getCaptureMode() === "voice") {
       notifyHotkeyCaptureStatus("waiting", "Space is not available because it inserts a character.");
       return;
     }
@@ -354,13 +433,13 @@ function handleSettingsHotkeyInput(event, input) {
     capturePressedCodes.add(input.code);
     captureSeenCodes.add(input.code);
     if (MODIFIER_CODES.has(input.code)) {
-      notifyHotkeyCaptureStatus("waiting", "Keep holding the modifiers and press the trigger key, or release a Control/Alt key or modifier combination to use it alone.");
+      notifyCaptureStatus("waiting", "Keep holding the modifiers and press the trigger key, or release a modifier or modifier combination to use it alone.");
       return;
     }
 
     captureTriggerCode = input.code;
     captureTriggerModifiers = getCaptureModifiers(input);
-    notifyHotkeyCaptureStatus("waiting", "Release the trigger key to save this hotkey.");
+    notifyCaptureStatus("waiting", "Release the trigger key to save this shortcut.");
     return;
   }
 
@@ -370,14 +449,18 @@ function handleSettingsHotkeyInput(event, input) {
 
   capturePressedCodes.delete(input.code);
   if (captureTriggerCode && input.code === captureTriggerCode) {
-    const nextHotkey = normalizeHotkey({
-      key: captureTriggerCode,
-      modifiers: captureTriggerModifiers
-    });
-    if (nextHotkey) {
-      saveHotkey(nextHotkey);
+    const captureMode = getCaptureMode();
+    const nextValue = captureMode === "radial"
+      ? normalizeRadialTrigger({ kind: "keyboard", code: captureTriggerCode, modifiers: captureTriggerModifiers })
+      : captureMode === "radial-slot"
+        ? captureToRadialHotkey(captureTriggerCode, captureTriggerModifiers)
+        : normalizeHotkey({ key: captureTriggerCode, modifiers: captureTriggerModifiers });
+    if (nextValue) {
+      if (captureMode === "radial") saveRadialTrigger(nextValue);
+      else if (captureMode === "radial-slot") saveRadialSlotAction(radialCaptureSlotId, nextValue);
+      else saveHotkey(nextValue);
     } else {
-      notifyHotkeyCaptureStatus("waiting", "Choose a supported non-modifier key.");
+      notifyCaptureStatus("waiting", "Choose a supported non-modifier key.");
       clearHotkeyCaptureState();
     }
     return;
@@ -385,14 +468,35 @@ function handleSettingsHotkeyInput(event, input) {
 
   if (captureTriggerCode || capturePressedCodes.size) return;
 
-  const modifierOnlyHotkey = normalizeModifierOnlyHotkey([...captureSeenCodes]);
-  if (modifierOnlyHotkey) {
-    saveHotkey(modifierOnlyHotkey);
+  const captureMode = getCaptureMode();
+  const modifierOnlyValue = captureMode === "radial"
+    ? normalizeModifierOnlyRadialTrigger([...captureSeenCodes])
+    : captureMode === "radial-slot"
+      ? normalizeModifierOnlyRadialAction([...captureSeenCodes])
+      : normalizeModifierOnlyHotkey([...captureSeenCodes]);
+  if (modifierOnlyValue) {
+    if (captureMode === "radial") {
+      saveRadialTrigger(modifierOnlyValue);
+    } else if (captureMode === "radial-slot") {
+      saveRadialSlotAction(radialCaptureSlotId, modifierOnlyValue);
+    } else {
+      saveHotkey(modifierOnlyValue);
+    }
     return;
   }
 
   clearHotkeyCaptureState();
-  notifyHotkeyCaptureStatus("waiting", "Press one Control/Alt key, hold modifiers and press a trigger key, or use a Control/Alt modifier combination.");
+  notifyCaptureStatus("waiting", "Press a key, hold modifiers and press a trigger key, or use a modifier combination.");
+}
+
+function isAnyCaptureActive() {
+  return isCapturingHotkey
+    || (typeof isCapturingRadialTrigger !== "undefined" && isCapturingRadialTrigger)
+    || (typeof isCapturingRadialSlot !== "undefined" && isCapturingRadialSlot);
+}
+
+function getCaptureMode() {
+  return typeof hotkeyCaptureMode === "string" && hotkeyCaptureMode ? hotkeyCaptureMode : "voice";
 }
 
 function getCaptureModifiers(input) {
@@ -417,6 +521,8 @@ function clearHotkeyCaptureState() {
   captureSeenCodes.clear();
   captureTriggerCode = undefined;
   captureTriggerModifiers = [];
+  captureTriggerButton = undefined;
+  captureSeenButton = undefined;
 }
 
 function normalizeModifierOnlyHotkey(codes) {
@@ -430,22 +536,65 @@ function normalizeModifierOnlyHotkey(codes) {
   return normalizeHotkey({ key, modifiers });
 }
 
+function normalizeModifierOnlyRadialTrigger(codes) {
+  if (!codes.length || codes.some((code) => !MODIFIER_CODES.has(code))) return null;
+  const key = codes[0];
+  const modifiers = codes
+    .filter((code) => code !== key)
+    .map((code) => MODIFIER_FOR_CODE.get(code))
+    .filter(Boolean);
+  return normalizeRadialTrigger({ kind: "keyboard", code: key, modifiers });
+}
+
+function normalizeModifierOnlyRadialAction(codes) {
+  if (!codes.length || codes.some((code) => !MODIFIER_CODES.has(code))) return null;
+  const key = codes[0];
+  const modifiers = codes
+    .slice(1)
+    .map((code) => MODIFIER_FOR_CODE.get(code))
+    .filter(Boolean);
+  return captureToRadialHotkey(key, modifiers);
+}
+
+function notifyCaptureStatus(state, message) {
+  const captureMode = getCaptureMode();
+  if (captureMode === "radial"
+    && typeof notifyRadialTriggerCaptureStatus === "function") {
+    notifyRadialTriggerCaptureStatus(state, message);
+  } else if (captureMode === "radial-slot"
+    && typeof notifyRadialSlotCaptureStatus === "function") {
+    notifyRadialSlotCaptureStatus(state, message);
+  } else if (typeof notifyHotkeyCaptureStatus === "function") {
+    notifyHotkeyCaptureStatus(state, message);
+  }
+}
+
 async function handleGlobalKeyDown(event) {
-  if (isCapturingHotkey) {
-    handleGlobalHotkeyInput("keyDown", event);
+  if (isSyntheticRadialInputActive()) return;
+  if (isGlobalCaptureActive()) {
+    if (!radialNativeCaptureActive) handleGlobalHotkeyInput("keyDown", event);
     return;
   }
   if (isSyntheticCopyActive()) return;
   if (event.keycode === UiohookKey.Escape) {
     if (isSyntheticEscapeActive()) return;
+    if (radialGesture.isPressed() || radialGesture.isOpened()) {
+      cancelRadialMenuGesture();
+      return;
+    }
     hotkeyGesture.cancel();
     cancelActiveActivity();
     statusOverlay?.dismiss();
     return;
   }
-  if (isCapturingHotkey) return;
+  if (shouldBypassUiohookHotkey(event)) return;
+  if (isGlobalCaptureActive()) return;
   if (event.keycode === suppressedHotkeyKeyCode) return;
   pressedKeys.add(event.keycode);
+  if (radialFallbackEnabled() && isConfiguredRadialKeyboardPressed(event)) {
+    handleRadialTriggerPress();
+    return;
+  }
   if (isConfiguredHotkeyPressed(event)) hotkeyGesture.press();
 }
 
@@ -485,20 +634,219 @@ async function startHotkeyRecording() {
 }
 
 function handleGlobalKeyUp(event) {
-  if (isCapturingHotkey) {
-    handleGlobalHotkeyInput("keyUp", event);
+  if (isSyntheticRadialInputActive()) return;
+  if (isGlobalCaptureActive()) {
+    if (!radialNativeCaptureActive) handleGlobalHotkeyInput("keyUp", event);
     return;
   }
+  if (shouldBypassUiohookHotkey(event)) return;
   if (event.keycode === suppressedHotkeyKeyCode) {
     pressedKeys.delete(event.keycode);
     suppressedHotkeyKeyCode = undefined;
     return;
   }
   pressedKeys.delete(event.keycode);
+  if (radialFallbackEnabled() && isConfiguredRadialKeyboardTriggerKey(event)) {
+    handleRadialTriggerRelease();
+    return;
+  }
   const chord = getConfiguredHotkeyKeyCodes();
   if (chord.includes(event.keycode)) {
     hotkeyGesture.release(chord.every((keycode) => !pressedKeys.has(keycode)));
   }
+}
+
+function isGlobalCaptureActive() {
+  return isCapturingHotkey
+    || (typeof isCapturingRadialTrigger !== "undefined" && isCapturingRadialTrigger)
+    || (typeof isCapturingRadialSlot !== "undefined" && isCapturingRadialSlot);
+}
+
+function radialFallbackEnabled() {
+  return typeof radialNativeHookActive !== "undefined"
+    && typeof currentRadialMenu !== "undefined"
+    && radialNativeHookActive !== true;
+}
+
+function handleGlobalMouseDown(event) {
+  if (isSyntheticRadialInputActive()) return;
+  if (isCapturingRadialTrigger) {
+    captureMouseTrigger("down", event);
+    return;
+  }
+  if (radialFallbackEnabled() && isConfiguredRadialMouseEvent(event)) {
+    handleRadialTriggerPress();
+  }
+}
+
+function handleGlobalMouseUp(event) {
+  if (isSyntheticRadialInputActive()) return;
+  if (isCapturingRadialTrigger) {
+    captureMouseTrigger("up", event);
+    return;
+  }
+  if (radialFallbackEnabled() && isConfiguredRadialMouseEvent(event)) {
+    handleRadialTriggerRelease();
+  }
+}
+
+function handleRadialTriggerPress() {
+  if (!isRadialMenuConfigured(currentRadialMenu) || radialOverlay?.isOpen()) return;
+  if (isCapturingHotkey || isCapturingRadialTrigger || isHotkeyRecording || activeOperations.size) return;
+  radialTargetWindow = captureTextInputTarget();
+  radialGesture.press();
+}
+
+function handleRadialTriggerRelease() {
+  radialGesture.release();
+}
+
+function cancelRadialMenuGesture() {
+  radialGesture.cancel();
+  radialTargetWindow = undefined;
+  radialOverlay?.cancel();
+}
+
+function handleVoiceNativeHotkeyPress() {
+  if (!voiceNativeHookActive || isGlobalCaptureActive()) return;
+  hotkeyGesture.press();
+}
+
+function handleVoiceNativeHotkeyRelease(event = {}) {
+  if (!voiceNativeHookActive || isGlobalCaptureActive()) return;
+  hotkeyGesture.release(event.allReleased === true);
+}
+
+function dispatchRadialAction(action, target) {
+  const operation = textTypingQueue.then(() => sendRadialAction(action, { target }));
+  textTypingQueue = operation.catch(() => {});
+  void operation.catch(async (error) => {
+    console.error("Could not send radial action:", error);
+    await appService?.logError?.({ stage: "typing", error });
+  });
+}
+
+function configureRadialInputHook() {
+  if (!radialInputHook) return;
+  radialNativeCaptureActive = false;
+  radialInputHook.setCaptureHandler(null);
+  const configured = isRadialMenuConfigured(currentRadialMenu);
+  if (!configured) {
+    radialInputHook.setTrigger(null);
+    radialInputHook.stop();
+    radialNativeHookActive = false;
+    return;
+  }
+  radialInputHook.setTrigger(currentRadialMenu.trigger);
+  if (radialInputHook.supported) {
+    try {
+      radialInputHook.start();
+      radialNativeHookActive = true;
+    } catch (error) {
+      radialNativeHookActive = false;
+      console.error("Could not enable the radial input hook:", error.message);
+    }
+  }
+}
+
+function configureInputHooks() {
+  configureRadialInputHook();
+  configureVoiceHotkeyInputHook();
+}
+
+function configureVoiceHotkeyInputHook() {
+  if (!voiceInputHook) return;
+  voiceNativeHookActive = false;
+  voiceInputHook.setCaptureHandler(null);
+  if (!isModifierOnlyHotkey(currentHotkey)) {
+    voiceInputHook.setTrigger(null);
+    voiceInputHook.stop();
+    return;
+  }
+
+  voiceInputHook.setTrigger({
+    kind: "keyboard",
+    code: currentHotkey.key,
+    modifiers: [...(currentHotkey.modifiers || [])],
+    label: currentHotkey.label
+  });
+  if (!voiceInputHook.supported) return;
+  try {
+    voiceInputHook.start();
+    voiceNativeHookActive = true;
+  } catch (error) {
+    voiceNativeHookActive = false;
+    console.error("Could not enable the voice hotkey input hook:", error.message);
+  }
+}
+
+function enableNativeCaptureHook() {
+  if (!radialInputHook?.supported) return false;
+  radialInputHook.setTrigger(null);
+  radialInputHook.setCaptureHandler({
+    onKeyboardEvent: (input) => handleSettingsHotkeyInput({ preventDefault() {} }, input),
+    onMouseEvent: (input) => captureMouseTrigger(
+      input.type === "mouseDown" ? "down" : "up",
+      input
+    )
+  });
+  try {
+    radialInputHook.start();
+    radialNativeCaptureActive = true;
+    return true;
+  } catch (error) {
+    radialInputHook.setCaptureHandler(null);
+    radialNativeCaptureActive = false;
+    console.error("Could not enable the shortcut capture hook:", error.message);
+    return false;
+  }
+}
+
+function isConfiguredRadialKeyboardPressed(event) {
+  const trigger = currentRadialMenu?.trigger;
+  if (!isRadialMenuConfigured(currentRadialMenu) || trigger.kind !== "keyboard") return false;
+  const keycode = getUiohookKeyCode(trigger.code);
+  if (keycode === undefined) return false;
+  if (MODIFIER_CODES.has(trigger.code) && trigger.modifiers.length) {
+    const keyModifier = MODIFIER_FOR_CODE.get(trigger.code);
+    return event.keycode === keycode
+      && [keyModifier, ...trigger.modifiers].every((modifier) => isModifierPressed(modifier, event));
+  }
+  return event.keycode === keycode
+    && trigger.modifiers.every((modifier) => isModifierPressed(modifier, event));
+}
+
+function isConfiguredRadialKeyboardTriggerKey(event) {
+  const trigger = currentRadialMenu?.trigger;
+  return Boolean(isRadialMenuConfigured(currentRadialMenu)
+    && trigger.kind === "keyboard"
+    && event.keycode === getUiohookKeyCode(trigger.code));
+}
+
+function isConfiguredRadialMouseEvent(event) {
+  return isRadialMenuConfigured(currentRadialMenu)
+    && currentRadialMenu.trigger.kind === "mouse"
+    && Number(event?.button) === Number(currentRadialMenu.trigger.button);
+}
+
+function captureMouseTrigger(type, event) {
+  if (!isCapturingRadialTrigger) return;
+  const button = Number(event?.button);
+  if (![1, 2, 3, 4, 5].includes(button)) return;
+  if (type === "down") {
+    if (captureSeenButton) return;
+    captureSeenButton = button;
+    captureTriggerButton = button;
+    notifyRadialTriggerCaptureStatus("waiting", "Release the mouse button to save this trigger.");
+    return;
+  }
+  if (captureTriggerButton !== button || captureSeenButton !== button) return;
+  saveRadialTrigger({
+    kind: "mouse",
+    button,
+    modifiers: [],
+    label: ""
+  });
 }
 
 function stopHotkeyRecording() {
@@ -587,6 +935,13 @@ function getConfiguredHotkeyKeyCodes() {
     getUiohookKeyCode(currentHotkey?.key),
     ...(currentHotkey?.modifiers || []).flatMap((modifier) => MODIFIER_KEYCODES[modifier] || [])
   ].filter((code) => code !== undefined);
+}
+
+function shouldBypassUiohookHotkey(event) {
+  return typeof voiceNativeHookActive !== "undefined"
+    && voiceNativeHookActive
+    && isModifierOnlyHotkey(currentHotkey)
+    && getConfiguredHotkeyKeyCodes().includes(event.keycode);
 }
 
 function isModifierPressed(modifier, event) {
@@ -798,9 +1153,13 @@ function registerIpcHandlers() {
       readFile(fileURLToPath(new URL("./defaults.json", import.meta.url)), "utf8")));
     desktopPreferences.resetCaptureSettings(defaults);
     currentHotkey = loadHotkey();
+    currentRadialMenu = loadRadialMenu();
+    cancelRadialMenuGesture();
+    configureInputHooks();
     suppressedHotkeyKeyCode = undefined;
     tray?.setToolTip(`Porvoz · Hold ${currentHotkey.label} to transcribe`);
     notifyHotkeyUpdated();
+    notifyRadialMenuUpdated();
     notifySetupUpdated();
     updateTrayMenu();
     return { ...runtimeConfig, soundVolume: desktopPreferences.getSoundVolume(),
@@ -854,10 +1213,18 @@ function registerIpcHandlers() {
   ipcMain.handle("porvoz:begin-hotkey-capture", () => {
     hotkeyGesture.cancel();
     hotkeyGesture.release(true);
+    cancelRadialMenuGesture();
     isCapturingHotkey = true;
+    isCapturingRadialTrigger = false;
+    isCapturingRadialSlot = false;
+    hotkeyCaptureMode = "voice";
     isHotkeyRecording = false;
+    radialInputHook?.stop();
+    voiceInputHook?.stop();
+    radialNativeHookActive = false;
     pressedKeys.clear();
     clearHotkeyCaptureState();
+    enableNativeCaptureHook();
     startHotkeyCaptureWatchdog();
     return currentHotkey;
   });
@@ -869,6 +1236,19 @@ function registerIpcHandlers() {
     const nextHotkey = normalizeHotkey(value);
     if (!nextHotkey) throw new Error("Choose a supported non-modifier key.");
     return saveHotkey(nextHotkey);
+  });
+  ipcMain.handle("porvoz:get-radial-menu", () => currentRadialMenu);
+  ipcMain.handle("porvoz:save-radial-menu", (_event, value) => saveRadialMenu(value));
+  ipcMain.handle("porvoz:begin-radial-trigger-capture", () => beginRadialCapture("radial"));
+  ipcMain.handle("porvoz:begin-radial-slot-capture", (_event, slotId) => {
+    if (!currentRadialMenu?.slots?.some((slot) => slot.id === slotId)) {
+      throw new Error("Choose a valid radial menu slot.");
+    }
+    return beginRadialCapture("radial-slot", slotId);
+  });
+  ipcMain.handle("porvoz:cancel-radial-capture", () => {
+    cancelHotkeyCapture("Radial shortcut capture canceled.");
+    return currentRadialMenu;
   });
   ipcMain.handle("porvoz:save-sound-volume", (_event, value) => {
     const soundVolume = desktopPreferences.saveSoundVolume(value);
@@ -889,19 +1269,8 @@ function registerIpcHandlers() {
   ipcMain.on("porvoz:overlay-hover", (event) => {
     if (statusOverlay?.isSender(event.sender)) statusOverlay.onHover();
   });
-  ipcMain.handle("porvoz:overlay-key-command", async (event, keyCommand) => {
-    if (!statusOverlay?.isSender(event.sender) || typeof keyCommand !== "string") return false;
-    statusOverlay.onHover();
-    const target = captureTextInputTarget() || statusOverlay.getLastTargetWindow();
-    const keyOperation = textTypingQueue.then(() => typeText(keyCommand, { target }));
-    textTypingQueue = keyOperation.catch(() => {});
-    try {
-      await keyOperation;
-      return true;
-    } catch (error) {
-      await appService.logError({ stage: "typing", error });
-      return false;
-    }
+  ipcMain.on("porvoz:radial-selection", (event, slotId) => {
+    if (radialOverlay?.isSender(event.sender)) radialOverlay.select(slotId);
   });
   ipcMain.handle("porvoz:overlay-copy", (event) => {
     if (!statusOverlay?.isSender(event.sender)) return false;
@@ -989,9 +1358,14 @@ function saveHotkey(nextHotkey) {
   currentHotkey = nextHotkey;
   desktopPreferences.saveHotkey(currentHotkey);
   isCapturingHotkey = false;
+  isCapturingRadialTrigger = false;
+  isCapturingRadialSlot = false;
+  hotkeyCaptureMode = "";
+  radialCaptureSlotId = undefined;
   isHotkeyRecording = false;
   pressedKeys.clear();
   clearHotkeyCaptureState();
+  configureInputHooks();
   suppressedHotkeyKeyCode = isModifierOnlyHotkey(currentHotkey)
     ? undefined
     : getUiohookKeyCode(currentHotkey.key);
@@ -999,6 +1373,80 @@ function saveHotkey(nextHotkey) {
   notifyHotkeyUpdated();
   updateTrayMenu();
   return currentHotkey;
+}
+
+function saveRadialMenu(value) {
+  cancelRadialMenuGesture();
+  currentRadialMenu = normalizeRadialMenu(value);
+  desktopPreferences.saveRadialMenu(currentRadialMenu);
+  configureRadialInputHook();
+  notifyRadialMenuUpdated();
+  return currentRadialMenu;
+}
+
+function beginRadialCapture(mode, slotId) {
+  hotkeyGesture.cancel();
+  hotkeyGesture.release(true);
+  cancelRadialMenuGesture();
+  isCapturingHotkey = false;
+  isCapturingRadialTrigger = mode === "radial";
+  isCapturingRadialSlot = mode === "radial-slot";
+  hotkeyCaptureMode = mode;
+  radialCaptureSlotId = slotId;
+  isHotkeyRecording = false;
+  radialInputHook?.stop();
+  voiceInputHook?.stop();
+  radialNativeHookActive = false;
+  pressedKeys.clear();
+  clearHotkeyCaptureState();
+  enableNativeCaptureHook();
+  startHotkeyCaptureWatchdog();
+  notifyCaptureStatus("waiting", mode === "radial"
+    ? "Press the key or mouse button that should open the radial menu, then release it to save."
+    : "Press the shortcut for this slot, then release it to save. Click Cancel to stop recording.");
+  return mode === "radial" ? currentRadialMenu?.trigger : currentRadialMenu?.slots
+    ?.find((slot) => slot.id === slotId)?.action || null;
+}
+
+function saveRadialTrigger(nextTrigger) {
+  if (nextTrigger?.kind === "keyboard" && getUiohookKeyCode(nextTrigger.code) === undefined) {
+    notifyRadialTriggerCaptureStatus("waiting", "That key is not supported as a global trigger.");
+    clearHotkeyCaptureState();
+    return null;
+  }
+  currentRadialMenu = normalizeRadialMenu({
+    ...currentRadialMenu,
+    trigger: normalizeRadialTrigger(nextTrigger)
+  });
+  desktopPreferences.saveRadialMenu(currentRadialMenu);
+  finishRadialCapture();
+  notifyRadialMenuUpdated();
+  notifyRadialTriggerCaptureStatus("saved", `Radial trigger saved: ${currentRadialMenu.trigger.label}.`);
+  return currentRadialMenu.trigger;
+}
+
+function saveRadialSlotAction(slotId, action) {
+  const normalizedAction = normalizeRadialAction(action);
+  if (!normalizedAction || !currentRadialMenu?.slots?.some((slot) => slot.id === slotId)) {
+    notifyRadialSlotCaptureStatus("waiting", "Choose a supported key or key combination.", slotId);
+    clearHotkeyCaptureState();
+    return null;
+  }
+  finishRadialCapture();
+  notifyRadialSlotCaptureStatus("saved", `Shortcut recorded: ${normalizedAction.label}.`, slotId, normalizedAction);
+  return normalizedAction;
+}
+
+function finishRadialCapture() {
+  clearHotkeyCaptureWatchdog();
+  isCapturingRadialTrigger = false;
+  isCapturingRadialSlot = false;
+  hotkeyCaptureMode = "";
+  radialCaptureSlotId = undefined;
+  pressedKeys.clear();
+  clearHotkeyCaptureState();
+  configureRadialInputHook();
+  configureVoiceHotkeyInputHook();
 }
 
 function updateTrayMenu() {
@@ -1011,18 +1459,29 @@ function updateTrayMenu() {
 }
 
 function cancelHotkeyCapture(message) {
+  const mode = hotkeyCaptureMode;
   clearHotkeyCaptureWatchdog();
   isCapturingHotkey = false;
+  isCapturingRadialTrigger = false;
+  isCapturingRadialSlot = false;
+  hotkeyCaptureMode = "";
+  const slotId = radialCaptureSlotId;
+  radialCaptureSlotId = undefined;
   isHotkeyRecording = false;
   pressedKeys.clear();
   clearHotkeyCaptureState();
-  notifyHotkeyCaptureStatus("canceled", message);
+  configureInputHooks();
+  if (mode === "radial") notifyRadialTriggerCaptureStatus("canceled", message);
+  else if (mode === "radial-slot") notifyRadialSlotCaptureStatus("canceled", message, slotId);
+  else notifyHotkeyCaptureStatus("canceled", message);
 }
 
 function startHotkeyCaptureWatchdog() {
   clearHotkeyCaptureWatchdog();
   hotkeyCaptureTimer = setTimeout(() => {
-    if (isCapturingHotkey) cancelHotkeyCapture("Hotkey capture timed out.");
+    if (isCapturingHotkey || isCapturingRadialTrigger || isCapturingRadialSlot) {
+      cancelHotkeyCapture("Shortcut capture timed out.");
+    }
   }, 15000);
   hotkeyCaptureTimer.unref?.();
 }
@@ -1059,6 +1518,26 @@ function notifySetupUpdated() {
 function notifyHotkeyCaptureStatus(state, message) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("porvoz:hotkey-capture-status", { state, message });
+  }
+}
+
+function notifyRadialMenuUpdated() {
+  for (const browserWindow of getRendererWindows()) {
+    browserWindow.webContents.send("porvoz:radial-menu-updated", currentRadialMenu);
+  }
+}
+
+function notifyRadialTriggerCaptureStatus(state, message) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("porvoz:radial-trigger-capture-status", { state, message });
+  }
+}
+
+function notifyRadialSlotCaptureStatus(state, message, slotId = radialCaptureSlotId, action) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("porvoz:radial-slot-capture-status", {
+      state, message, slotId, ...(action ? { action } : {})
+    });
   }
 }
 
@@ -1153,6 +1632,9 @@ async function waitForRecordingHotkeyRelease(signal) {
 }
 
 function isRecordingHotkeyPressed() {
+  if (voiceNativeHookActive && isModifierOnlyHotkey(currentHotkey)) {
+    return voiceInputHook?.isTriggerPressed?.() === true;
+  }
   return getConfiguredHotkeyKeyCodes().some((code) => pressedKeys.has(code));
 }
 
@@ -1188,6 +1670,13 @@ function wait(milliseconds) {
 
 function shutdownApplication() {
   isQuitting = true;
+  cancelRadialMenuGesture();
+  radialInputHook?.stop();
+  radialInputHook = undefined;
+  voiceInputHook?.stop();
+  voiceInputHook = undefined;
+  voiceNativeHookActive = false;
+  radialNativeHookActive = false;
   if (hookStarted) {
     uIOhook.stop();
     hookStarted = false;
@@ -1197,6 +1686,8 @@ function shutdownApplication() {
   captureAttempts.clear();
   statusOverlay?.destroy();
   statusOverlay = undefined;
+  radialOverlay?.destroy();
+  radialOverlay = undefined;
   if (captureWindow && !captureWindow.isDestroyed()) captureWindow.destroy();
   captureWindow = undefined;
   void backendManager?.stop();

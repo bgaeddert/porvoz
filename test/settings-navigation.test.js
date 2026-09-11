@@ -6,7 +6,7 @@ import vm from "node:vm";
 const navigationSource = readFileSync(new URL("../public/settings-navigation.js", import.meta.url), "utf8");
 const settingsHtml = readFileSync(new URL("../public/settings.html", import.meta.url), "utf8");
 
-const PAGES = ["provider", "prefixes", "keyboard", "sound"];
+const PAGES = ["provider", "prefixes", "keyboard", "radial", "sound"];
 
 function createLink(hash) {
   const attributes = new Map();
@@ -86,13 +86,16 @@ test("the sidebar lists what you configure first, then what you check it with", 
     settingsHtml.indexOf('<nav class="main-nav"'),
     settingsHtml.indexOf("</nav>", settingsHtml.indexOf('<nav class="main-nav"'))
   );
-  const order = ["#provider", "#prefixes", "#keyboard", "#sound", "index.html", "logs.html"]
+  const order = ["#provider", "#prefixes", "#keyboard", "#radial", "#sound", "index.html", "logs.html"]
     .map((href) => navigation.indexOf(href));
   assert.ok(order.every((position) => position >= 0), "every destination is present");
   assert.deepEqual([...order].sort((first, second) => first - second), order);
 
   // There is no second level of navigation left to fall into.
   assert.equal(settingsHtml.includes('class="section-nav"'), false);
+  assert.match(settingsHtml, /id="capture-radial-trigger"/);
+  assert.match(settingsHtml, /id="radial-settings-wheel"/);
+  assert.match(settingsHtml, /id="radial-slot-form"/);
   // Log out belongs to the website and stays hidden in the desktop app.
   assert.match(navigation, /id="sign-out"[^>]*data-web-only/);
 });

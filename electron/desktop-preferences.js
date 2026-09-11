@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { createDefaultRadialMenu, normalizeRadialMenu } from "./radial-menu.js";
 
 export function createDesktopPreferences({ preferencesPath, safeStorage, legacySettings = {} }) {
   let state = readState();
@@ -11,6 +12,8 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
     setActiveProfileId,
     getHotkey: () => structuredClone(state.hotkey),
     saveHotkey,
+    getRadialMenu: () => structuredClone(state.radialMenu),
+    saveRadialMenu,
     getSoundVolume: () => state.soundVolume,
     saveSoundVolume,
     getConsoleSelectionEnabled: () => state.consoleSelectionEnabled,
@@ -49,6 +52,7 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
       hotkey: value?.hotkey && typeof value.hotkey === "object"
         ? structuredClone(value.hotkey)
         : { key: "ControlRight", modifiers: [], label: "Right Ctrl" },
+      radialMenu: normalizeRadialMenu(value?.radialMenu),
       soundVolume: normalizeVolume(value?.soundVolume),
       consoleSelectionEnabled: value?.consoleSelectionEnabled === true
     };
@@ -114,6 +118,12 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
     return structuredClone(state.hotkey);
   }
 
+  function saveRadialMenu(value) {
+    state.radialMenu = normalizeRadialMenu(value);
+    save();
+    return structuredClone(state.radialMenu);
+  }
+
   function saveSoundVolume(value) {
     state.soundVolume = normalizeVolume(value);
     save();
@@ -122,6 +132,7 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
 
   function resetCaptureSettings(defaults = {}) {
     state.hotkey = structuredClone(defaults.hotkey || { key: "ControlRight", modifiers: [], label: "Right Ctrl" });
+    state.radialMenu = createDefaultRadialMenu();
     state.soundVolume = normalizeVolume(defaults.soundVolume);
     state.consoleSelectionEnabled = false;
     save();

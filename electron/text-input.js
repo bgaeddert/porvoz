@@ -6,8 +6,11 @@ import { abortableDelay, throwIfAborted } from "./operation-cancellation.js";
 import { getX11 } from "./linux-x11.js";
 import { isTerminalWindow } from "./terminal-detection.js";
 
+const INPUT_MOUSE = 0;
 const INPUT_KEYBOARD = 1;
 const KEYEVENTF_KEYUP = 0x0002;
+const MOUSEEVENTF_XDOWN = 0x0080;
+const MOUSEEVENTF_XUP = 0x0100;
 const WINDOWS_INPUT_EXTRA_INFO = 0x5056;
 const TEXT_TARGET_FOCUS_DELAY_MS = 100;
 const MODIFIER_POLL_INTERVAL_MS = 25;
@@ -64,7 +67,12 @@ const WINDOWS_KEY_CODES = new Map([
   ["NumpadAdd", 0x6b],
   ["NumpadSubtract", 0x6d],
   ["NumpadDecimal", 0x6e],
-  ["NumpadDivide", 0x6f]
+  ["NumpadDivide", 0x6f],
+  ["NumpadEnter", 0x0d],
+  ["NumpadEnd", 0x23], ["NumpadArrowDown", 0x28], ["NumpadPageDown", 0x22],
+  ["NumpadArrowLeft", 0x25], ["NumpadArrowRight", 0x27], ["NumpadHome", 0x24],
+  ["NumpadArrowUp", 0x26], ["NumpadPageUp", 0x21], ["NumpadInsert", 0x2d],
+  ["NumpadDelete", 0x2e]
 ]);
 for (let functionNumber = 1; functionNumber <= 24; functionNumber += 1) {
   WINDOWS_KEY_CODES.set(`F${functionNumber}`, 0x70 + functionNumber - 1);
@@ -108,6 +116,7 @@ const X11_KEY_NAMES = new Map([
 let textInputForPlatform;
 let syntheticEscapeSuppressedUntil = 0;
 let syntheticCopySuppressedUntil = 0;
+let syntheticRadialInputSuppressedUntil = 0;
 
 if (process.platform === "win32") {
   textInputForPlatform = createWindowsTextInput();
@@ -136,6 +145,10 @@ export function isSyntheticEscapeActive() {
 
 export function isSyntheticCopyActive() {
   return Date.now() < syntheticCopySuppressedUntil;
+}
+
+export function isSyntheticRadialInputActive() {
+  return Date.now() < syntheticRadialInputSuppressedUntil;
 }
 
 export async function readSelectedTextFromClipboard({
@@ -172,6 +185,23 @@ export async function typeText(text, { target = null, signal } = {}) {
       );
     }
   }
+}
+
+export async function sendRadialAction(action, { target = null, signal } = {}) {
+  if (!action || typeof action !== "object") return false;
+  await textInputForPlatform.prepareTarget(target, signal);
+  throwIfAborted(signal);
+  if (action.type === "hotkey" && Array.isArray(action.keys) && action.keys.length) {
+    suppressSyntheticRadialInput();
+    await textInputForPlatform.pressKeyCombination(action.keys, signal);
+    return true;
+  }
+  if (action.type === "navigation" && ["back", "forward"].includes(action.command)) {
+    suppressSyntheticRadialInput();
+    await textInputForPlatform.sendNavigation(action.command, signal);
+    return true;
+  }
+  return false;
 }
 
 function createWindowsTextInput() {
@@ -320,6 +350,15 @@ function createWindowsTextInput() {
         createWindowsKeyInput(0x11, 0, KEYEVENTF_KEYUP)
       ]);
     },
+    async sendNavigation(command, signal) {
+      throwIfAborted(signal);
+      const mouseData = command === "forward" ? 2 : 1;
+      sendInput([
+        createWindowsMouseInput(mouseData, MOUSEEVENTF_XDOWN),
+        createWindowsMouseInput(mouseData, MOUSEEVENTF_XUP)
+      ]);
+      await wait(MODIFIER_POLL_INTERVAL_MS, signal);
+    },
     isTerminalTarget(target) {
       const window = target || GetForegroundWindow();
       return Boolean(window && isTerminalForeground(window));
@@ -447,6 +486,22 @@ function createWindowsTextInput() {
       }
     };
   }
+
+  function createWindowsMouseInput(mouseData, flags) {
+    return {
+      type: INPUT_MOUSE,
+      u: {
+        mi: {
+          dx: 0,
+          dy: 0,
+          mouseData,
+          dwFlags: flags,
+          time: 0,
+          dwExtraInfo: WINDOWS_INPUT_EXTRA_INFO
+        }
+      }
+    };
+  }
 }
 
 function createLinuxTextInput() {
@@ -461,6 +516,7 @@ function createLinuxTextInput() {
   const XTestFakeKeyEvent = xtst.func(
     "int XTestFakeKeyEvent(void *display, uint8_t keycode, int is_press, uint64_t delay)"
   );
+  let XTestFakeButtonEvent;
   const keycodes = new Map();
   let display;
   let preparedTarget;
@@ -500,6 +556,13 @@ function createLinuxTextInput() {
       verifyTarget(preparedTarget);
       verifyTarget(foregroundWindow);
       sendControlShortcut("v", terminal);
+    },
+    async sendNavigation(command, signal) {
+      throwIfAborted(signal);
+      const button = command === "forward" ? 9 : 8;
+      sendButton(button, true);
+      sendButton(button, false);
+      await wait(MODIFIER_POLL_INTERVAL_MS, signal);
     },
     async pressKeyCombination(keys, signal) {
       throwIfAborted(signal);
@@ -605,6 +668,18 @@ function createLinuxTextInput() {
     }
     XFlush(getDisplay());
   }
+
+  function sendButton(button, isPressed) {
+    if (!XTestFakeButtonEvent) {
+      XTestFakeButtonEvent = xtst.func(
+        "int XTestFakeButtonEvent(void *display, uint32_t button, int is_press, uint64_t delay)"
+      );
+    }
+    if (!XTestFakeButtonEvent(getDisplay(), button, isPressed ? 1 : 0, 0)) {
+      throw new Error("Linux rejected the requested navigation input.");
+    }
+    XFlush(getDisplay());
+  }
 }
 
 function createUnsupportedTextInput() {
@@ -627,6 +702,9 @@ function createUnsupportedTextInput() {
     async pressKeyCombination() {
       throw new Error(`Clipboard paste input is not available on ${process.platform}.`);
     },
+    async sendNavigation() {
+      throw new Error(`Navigation input is not available on ${process.platform}.`);
+    },
     async pressEnter() {
       throw new Error(`Clipboard paste input is not available on ${process.platform}.`);
     },
@@ -638,4 +716,11 @@ const wait = abortableDelay;
 
 function suppressSyntheticEscape() {
   syntheticEscapeSuppressedUntil = Math.max(syntheticEscapeSuppressedUntil, Date.now() + 100);
+}
+
+function suppressSyntheticRadialInput() {
+  syntheticRadialInputSuppressedUntil = Math.max(
+    syntheticRadialInputSuppressedUntil,
+    Date.now() + 250
+  );
 }

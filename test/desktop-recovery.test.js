@@ -30,7 +30,10 @@ function createHotkeyHarness({
     SINGLE_MODIFIER_HOTKEY_CODES: new Set(["ControlLeft", "ControlRight"]), captureAttempts: new Map(),
     activeOperations: new Set(), rendererActivities: new Set(),
     suppressedHotkeyKeyCode: undefined, getUiohookKeyCode: (code) => keycodes[code],
+    radialGesture: { isPressed: () => false, isOpened: () => false, cancel() {} },
+    radialTargetWindow: undefined,
     isSyntheticCopyActive: () => false, isSyntheticEscapeActive: () => false,
+    isSyntheticRadialInputActive: () => false,
     isModifierPressed: () => true,
     createOperationCanceledError: () => new Error("Canceled by user."),
     setOverlayStatus: () => {}, notifyActivityCanceled: () => {},
@@ -113,6 +116,59 @@ function createHotkeyCaptureHarness() {
   return { context, saved, statuses };
 }
 
+function createRadialSlotCaptureHarness() {
+  const saved = [];
+  const statuses = [];
+  const context = vm.createContext({
+    isCapturingHotkey: false,
+    isCapturingRadialTrigger: false,
+    isCapturingRadialSlot: true,
+    hotkeyCaptureMode: "radial-slot",
+    radialCaptureSlotId: "center",
+    capturePressedCodes: new Set(), captureSeenCodes: new Set(),
+    captureTriggerCode: undefined, captureTriggerModifiers: [],
+    MODIFIER_CODES: new Set(["ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight", "MetaLeft", "MetaRight"]),
+    MODIFIER_FOR_CODE: new Map([
+      ["ControlLeft", "CTRL"], ["ControlRight", "CTRL"], ["AltLeft", "ALT"], ["AltRight", "ALT"],
+      ["ShiftLeft", "SHIFT"], ["ShiftRight", "SHIFT"], ["MetaLeft", "META"], ["MetaRight", "META"]
+    ]),
+    SINGLE_MODIFIER_HOTKEY_CODES: new Set(["ControlLeft", "ControlRight", "AltLeft", "AltRight"]),
+    captureToRadialHotkey: (code, modifiers) => ({ type: "hotkey", keys: [code, ...modifiers], label: code }),
+    saveRadialSlotAction: (slotId, action) => saved.push({ slotId, action }),
+    notifyRadialSlotCaptureStatus: (state, message, slotId) => statuses.push({ state, message, slotId })
+  });
+  vm.runInContext(mainSource.slice(mainSource.indexOf("function handleSettingsHotkeyInput"),
+    mainSource.indexOf("async function handleGlobalKeyDown")), context);
+  return { context, saved, statuses };
+}
+
+function createRadialFallbackReleaseHarness() {
+  let releases = 0;
+  const context = vm.createContext({
+    suppressedHotkeyKeyCode: undefined,
+    pressedKeys: new Set([10, 20]),
+    currentHotkey: { key: "F9", modifiers: [] },
+    currentRadialMenu: {
+      enabled: true,
+      trigger: { kind: "keyboard", code: "KeyR", modifiers: ["CTRL"] }
+    },
+    isGlobalCaptureActive: () => false,
+    isSyntheticRadialInputActive: () => false,
+    shouldBypassUiohookHotkey: () => false,
+    radialFallbackEnabled: () => true,
+    isRadialMenuConfigured: (menu) => Boolean(menu?.enabled && menu?.trigger),
+    getUiohookKeyCode: (code) => ({ KeyR: 20 }[code]),
+    handleRadialTriggerRelease: () => { releases += 1; },
+    getConfiguredHotkeyKeyCodes: () => [],
+    hotkeyGesture: { release() {} }
+  });
+  vm.runInContext(mainSource.slice(mainSource.indexOf("function handleGlobalKeyUp"),
+    mainSource.indexOf("function isGlobalCaptureActive")), context);
+  vm.runInContext(mainSource.slice(mainSource.indexOf("function isConfiguredRadialKeyboardTriggerKey"),
+    mainSource.indexOf("function isConfiguredRadialMouseEvent")), context);
+  return { context, getReleases: () => releases };
+}
+
 test("hotkey capture saves Control plus Super as a modifier-only combination", () => {
   const { context, saved } = createHotkeyCaptureHarness();
   const input = (type, code) => context.handleSettingsHotkeyInput(
@@ -127,6 +183,30 @@ test("hotkey capture saves Control plus Super as a modifier-only combination", (
   assert.equal(saved.length, 1);
   assert.equal(saved[0].key, "ControlLeft");
   assert.deepEqual([...saved[0].modifiers], ["META"]);
+});
+
+test("radial slot capture records Escape instead of treating it as cancellation", () => {
+  const { context, saved } = createRadialSlotCaptureHarness();
+  const input = (type) => context.handleSettingsHotkeyInput(
+    { preventDefault() {} }, { type, code: "Escape", isAutoRepeat: false }
+  );
+
+  input("keyDown");
+  input("keyUp");
+
+  assert.deepEqual(saved, [{
+    slotId: "center",
+    action: { type: "hotkey", keys: ["Escape"], label: "Escape" }
+  }]);
+});
+
+test("the radial fallback closes when the trigger key is released after its modifier", () => {
+  const { context, getReleases } = createRadialFallbackReleaseHarness();
+
+  context.handleGlobalKeyUp({ keycode: 10, ctrlKey: false });
+  assert.equal(getReleases(), 0);
+  context.handleGlobalKeyUp({ keycode: 20, ctrlKey: false });
+  assert.equal(getReleases(), 1);
 });
 
 test("modifier-only hotkeys activate regardless of modifier press order", async () => {

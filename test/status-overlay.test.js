@@ -3,7 +3,6 @@ import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createStatusOverlay } from "../electron/status-overlay.js";
-import { parseTextCommands } from "../electron/text-command-parser.js";
 
 class FakeWindow extends EventEmitter {
   constructor(options) {
@@ -125,7 +124,7 @@ test("status changes keep the pill collapsed and transparent to pointer input", 
   }
 });
 
-test("the overlay renderer exposes copy, dismiss, and quick key controls", () => {
+test("the response overlay exposes only response actions", () => {
   const html = readFileSync(new URL("../public/status-overlay.html", import.meta.url), "utf8");
   const preload = readFileSync(new URL("../electron/status-overlay-preload.cjs", import.meta.url), "utf8");
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
@@ -134,36 +133,13 @@ test("the overlay renderer exposes copy, dismiss, and quick key controls", () =>
   assert.match(html, /id="copy-response"/);
   assert.match(html, /id="dismiss-response"/);
 
-  const keyMatches = [...html.matchAll(/class="key-button"[^>]*data-key="([^"]+)"/g)].map((m) => m[1]);
-  assert.equal(keyMatches.length, 10);
-  assert.deepEqual(keyMatches.slice(0, 5), [
-    "[Escape]",
-    "[Tab]",
-    "[Space]",
-    "[Control+Z]",
-    "[Control+A]"
-  ]);
-  assert.deepEqual(keyMatches.slice(5), [
-    "[Enter]",
-    "[Backspace]",
-    "[Delete]",
-    "[Control+C]",
-    "[Control+V]"
-  ]);
-
-  for (const key of keyMatches) {
-    const parsed = parseTextCommands(key);
-    assert.equal(parsed.length, 1);
-    assert.equal(parsed[0].type, "key");
-    assert.ok(parsed[0].keys.length >= 1);
-  }
-
+  assert.doesNotMatch(html, /key-button|side-keys/);
   assert.match(html, /script type="module"/);
   assert.match(preload, /porvoz:overlay-copy/);
   assert.match(preload, /porvoz:overlay-open-external/);
   assert.match(preload, /porvoz:overlay-dismiss/);
-  assert.match(preload, /porvoz:overlay-key-command/);
-  assert.match(overlayRenderer, /sendKeyCommand/);
+  assert.doesNotMatch(preload, /porvoz:overlay-key-command/);
+  assert.doesNotMatch(overlayRenderer, /sendKeyCommand/);
   assert.match(overlayRenderer, /mouseenter|hover/);
   assert.match(preload, /porvoz:overlay-hover/);
   assert.match(app, /mimeType: audio\.type,\s+captureId/);

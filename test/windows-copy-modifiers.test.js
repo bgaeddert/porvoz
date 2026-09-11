@@ -35,7 +35,8 @@ function fixture({ held = [], onWait = () => {}, windowClass = "Notepad", execut
     } })
   };
   const input = vm.runInNewContext(`(${factory})()`, {
-    koffi, Buffer, isTerminalWindow, process: { pid: 123 }, INPUT_KEYBOARD: 1, KEYEVENTF_KEYUP: 2,
+    koffi, Buffer, isTerminalWindow, process: { pid: 123 }, INPUT_KEYBOARD: 1, INPUT_MOUSE: 0,
+    KEYEVENTF_KEYUP: 2, MOUSEEVENTF_XDOWN: 0x0080, MOUSEEVENTF_XUP: 0x0100,
     WINDOWS_INPUT_EXTRA_INFO: 0x5056, MAX_MODIFIER_RELEASE_CHECKS: 32,
     MAX_MODIFIER_RELEASE_CHECKS_AFTER_NORMALIZATION: 8,
     MODIFIER_POLL_INTERVAL_MS: 25, TEXT_TARGET_FOCUS_DELAY_MS: 100,
@@ -105,6 +106,17 @@ test("Windows paste remains Ctrl+V in terminals", () => {
   input.sendPaste();
   assert.deepEqual(sent.map(event => [event.u.ki.wVk, event.u.ki.dwFlags]),
     [[0x11, 0], [0x56, 0], [0x56, 2], [0x11, 2]]);
+});
+
+test("Windows radial navigation sends XButton back and forward events", async () => {
+  const state = fixture();
+  await state.input.prepareTarget(100);
+  await state.input.sendNavigation("back");
+  await state.input.sendNavigation("forward");
+  assert.deepEqual(state.sent.map(event => [event.type, event.u.mi.mouseData, event.u.mi.dwFlags]), [
+    [0, 1, 0x0080], [0, 1, 0x0100],
+    [0, 2, 0x0080], [0, 2, 0x0100]
+  ]);
 });
 
 test("console selection defaults off at the Windows input boundary", () => {

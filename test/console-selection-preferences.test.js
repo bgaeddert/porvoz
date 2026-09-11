@@ -20,8 +20,18 @@ test("console selection defaults off for new and existing desktops, persists, an
   assert.equal(preferences.getConsoleSelectionEnabled(), true);
   assert.equal(preferences.getSoundVolume(), 0.7);
   assert.equal(preferences.getHotkey().key, "F9");
+  const radialMenu = {
+    enabled: true,
+    trigger: { kind: "mouse", button: 4 },
+    slots: [{ id: "1", label: "Back", action: { type: "navigation", command: "back" } }]
+  };
+  preferences.saveRadialMenu(radialMenu);
+  assert.equal(load().getRadialMenu().trigger.button, 4);
+  assert.equal(load().getRadialMenu().slots[0].action.command, "back");
   assert.throws(() => preferences.saveConsoleSelectionEnabled("false"), /on or off/);
   assert.equal(preferences.getConsoleSelectionEnabled(), true);
   preferences.resetCaptureSettings();
   assert.equal(load().getConsoleSelectionEnabled(), false);
+  assert.equal(load().getRadialMenu().enabled, false);
+  assert.equal(load().getRadialMenu().trigger, null);
 });

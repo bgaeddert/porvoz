@@ -6,19 +6,19 @@ Instead of forcing you into a fixed vocabulary or workflow, Porvoz adapts to the
 
 ## Download and install
 
-The current release is [Porvoz v2.6.0](https://github.com/bgaeddert/porvoz/releases/tag/v2.6.0). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
+The current release is [Porvoz v2.7.0-alpha-1](https://github.com/bgaeddert/porvoz/releases/tag/v2.7.0-alpha-1). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v2.6.0/Porvoz-2.6.0-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v2.7.0-alpha-1/Porvoz-2.7.0-alpha-1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v2.6.0/Porvoz-2.6.0-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v2.7.0-alpha-1/Porvoz-2.7.0-alpha-1-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-2.6.0-linux-x86_64.AppImage
-./Porvoz-2.6.0-linux-x86_64.AppImage
+chmod +x Porvoz-2.7.0-alpha-1-linux-x86_64.AppImage
+./Porvoz-2.7.0-alpha-1-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to start the local backend and protect its encryption key. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -27,7 +27,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6 xclip
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v2.6.0/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v2.7.0-alpha-1/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -81,7 +81,9 @@ Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe
 
 **Keyboard → Console selection** controls automatic selection copying only in recognized terminal windows. It is **off by default**, including for existing desktops. Dictation, paste, and selection copying in other applications are unaffected. Enable it to attempt `Ctrl+Shift+C` in recognized terminals. **Warning:** if nothing is selected, a terminal can pass that shortcut through as Control-C, likely canceling or exiting running applications or commands. Unknown terminals and terminal panes inside editors are not covered by this setting. The preference is saved on this computer and applies immediately.
 
-While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. Double-tap the configured hotkey to open the last completed response, even after the pill disappears. When web search is used, the response panel displays automatically for two seconds unless hovered, staying open until dismissed. Hold the hotkey for 300 ms to start recording; short taps do not record audio or touch the clipboard. Hovering over an ordinary status pill has no effect. The response panel renders common Markdown and provides **Copy** and **×** controls. Press **Escape** to dismiss it. An open response panel also shows quick keyboard-action buttons (Escape, Tab, Enter, Ctrl+A, and similar) that send the corresponding key press to the application that owns the cursor. The non-activating overlay does not become the typing target.
+While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. Double-tap the configured hotkey to open the last completed response, even after the pill disappears. When web search is used, the response panel displays automatically for two seconds unless hovered, staying open until dismissed. Hold the hotkey for 300 ms to start recording; short taps do not record audio or touch the clipboard. Hovering over an ordinary status pill has no effect. The response panel renders common Markdown and provides **Copy** and **×** controls. Press **Escape** to dismiss it. The non-activating overlay does not become the typing target.
+
+Use **Radial → Set trigger** to assign the global key or mouse button that opens the radial menu. Hold it for 200 ms to show the 12-segment wheel; releasing sooner sends the center action without showing the wheel. Once open, move over a segment and release to send its assigned keyboard shortcut or Back/Forward navigation action. The center is slot 13: releasing there sends its action when assigned; releasing outside the wheel cancels. All slots are optional. The radial trigger and every slot shortcut are recorded from actual input, including Windows-key combinations, and labels can be customized in the Radial settings page. The radial wheel uses a 552 × 552 pixel overlay modeled on the reference design. The non-activating overlay does not become the typing target.
 
 The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. With no selected text, Porvoz matches consecutive prefixes at the beginning of the transcript, removes the matched phrases, and sends only those matched prefix instructions and the remaining spoken request to the instruction model. A transcript without a matched prefix bypasses the instruction model and is returned directly.
 
@@ -102,7 +104,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `2.6.0` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
+Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `2.7.0-alpha-1` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
 
 To build the image from the current source checkout instead, run `docker compose up -d --build`.
 
@@ -112,9 +114,9 @@ The server exposes `GET /v1/models` and `POST /v1/audio/transcriptions` for Open
 
 ## Browser administration
 
-The server also hosts a website for administering itself. Open the server's address in a browser, enter its admin key — there is no user name — and it opens on the Provider page. The site's navigation matches the desktop's: **Provider** and **Prefixes**, then **Test** and **Activity**, then **Log out**. Keyboard and Sound are desktop-only and do not appear. The site administers only the server hosting it.
+The server also hosts a website for administering itself. Open the server's address in a browser, enter its admin key — there is no user name — and it opens on the Provider page. The site's navigation matches the desktop's: **Provider** and **Prefixes**, then **Test** and **Activity**, then **Log out**. Keyboard, Radial, and Sound are desktop-only and do not appear. The site administers only the server hosting it.
 
-Provider profiles, credentials, models, prefixes, prefix import and export, inference-key viewing and rotation, activity, and Reset are all available. Server switching, keyboard and hotkey settings, console selection, recording sounds, desktop overlays, and typing into other applications stay in the desktop app and are absent from the website. Because one server's configuration is shared, Reset and Clear activity say so before you confirm.
+Provider profiles, credentials, models, prefixes, prefix import and export, inference-key viewing and rotation, activity, and Reset are all available. Server switching, keyboard and hotkey settings, radial-menu settings, console selection, recording sounds, desktop overlays, and typing into other applications stay in the desktop app and are absent from the website. Because one server's configuration is shared, Reset and Clear activity say so before you confirm.
 
 **Test and voice prefix creation** record with the microphone of the computer visiting the site, so the container needs no audio device. Browsers offer microphone access only in a secure context, so recording requires an HTTPS connection or a localhost address; over ordinary remote HTTP both recording controls are disabled and explain why, while the rest of administration still works. The Test page shows its transcript and instruction response in the page with explicit Copy controls. It never types into other applications, never runs returned keyboard notation, and never reads your clipboard or selected text.
 

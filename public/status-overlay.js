@@ -8,7 +8,6 @@ const panel = document.querySelector("#response-panel");
 const responseText = document.querySelector("#response-text");
 const copyButton = document.querySelector("#copy-response");
 const dismissButton = document.querySelector("#dismiss-response");
-const keyButtons = document.querySelectorAll(".key-button");
 let copyFeedbackTimer;
 
 copyButton.addEventListener("click", async () => {
@@ -24,17 +23,6 @@ responseText.addEventListener("click", (event) => {
   if (!link) return;
   event.preventDefault();
   window.porvozOverlay?.openExternal(link.dataset.externalUrl);
-});
-
-keyButtons.forEach((button) => {
-  button.addEventListener("click", async (event) => {
-    event.preventDefault();
-    const key = button.dataset.key;
-    if (key && window.porvozOverlay?.sendKeyCommand) {
-      await window.porvozOverlay.sendKeyCommand(key);
-    }
-    button.blur();
-  });
 });
 
 const reportHover = () => window.porvozOverlay?.hover();

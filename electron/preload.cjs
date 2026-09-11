@@ -89,6 +89,21 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   setHotkey(value) {
     return ipcRenderer.invoke("porvoz:set-hotkey", value);
   },
+  getRadialMenu() {
+    return ipcRenderer.invoke("porvoz:get-radial-menu");
+  },
+  saveRadialMenu(value) {
+    return ipcRenderer.invoke("porvoz:save-radial-menu", value);
+  },
+  beginRadialTriggerCapture() {
+    return ipcRenderer.invoke("porvoz:begin-radial-trigger-capture");
+  },
+  beginRadialSlotCapture(slotId) {
+    return ipcRenderer.invoke("porvoz:begin-radial-slot-capture", slotId);
+  },
+  cancelRadialCapture() {
+    return ipcRenderer.invoke("porvoz:cancel-radial-capture");
+  },
   saveSoundVolume(value) {
     return ipcRenderer.invoke("porvoz:save-sound-volume", value);
   },
@@ -115,6 +130,24 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on("porvoz:hotkey-capture-status", listener);
     return () => ipcRenderer.removeListener("porvoz:hotkey-capture-status", listener);
+  },
+  onRadialMenuUpdated(callback) {
+    if (typeof callback !== "function") return () => {};
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on("porvoz:radial-menu-updated", listener);
+    return () => ipcRenderer.removeListener("porvoz:radial-menu-updated", listener);
+  },
+  onRadialTriggerCaptureStatus(callback) {
+    if (typeof callback !== "function") return () => {};
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on("porvoz:radial-trigger-capture-status", listener);
+    return () => ipcRenderer.removeListener("porvoz:radial-trigger-capture-status", listener);
+  },
+  onRadialSlotCaptureStatus(callback) {
+    if (typeof callback !== "function") return () => {};
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on("porvoz:radial-slot-capture-status", listener);
+    return () => ipcRenderer.removeListener("porvoz:radial-slot-capture-status", listener);
   },
   onHotkey(callback) {
     if (typeof callback !== "function") return () => {};

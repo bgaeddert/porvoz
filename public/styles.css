@@ -878,7 +878,8 @@ kbd {
 }
 
 .hotkey-setting,
-.sound-setting {
+.sound-setting,
+.radial-trigger-setting {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -897,6 +898,161 @@ kbd {
   color: var(--n-200);
   font-size: var(--fs-200);
   font-weight: 600;
+}
+
+.radial-enabled-line {
+  margin: 4px 0 12px;
+}
+
+.radial-trigger-setting {
+  border-top: 1px solid var(--n-700);
+  border-bottom: 1px solid var(--n-700);
+}
+
+.radial-configurator {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
+  align-items: start;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.radial-preview-panel,
+.radial-slot-form {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--n-700);
+  border-radius: var(--radius-md);
+  background: var(--n-900);
+}
+
+.radial-preview-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 2px 8px;
+}
+
+.radial-preview-heading h3,
+.radial-editor-heading h3 {
+  margin: 0;
+  color: var(--n-100);
+  font-size: var(--fs-400);
+}
+
+.radial-settings-preview {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.radial-settings-wheel {
+  display: block;
+  width: min(100%, 552px);
+  height: auto;
+  filter: drop-shadow(0 14px 20px rgb(0 0 0 / 28%));
+}
+
+.radial-settings-outline {
+  fill: var(--n-950);
+  stroke: var(--accent-line);
+  stroke-width: 2;
+}
+
+.radial-settings-segment-shape {
+  fill: var(--n-800);
+  stroke: var(--n-950);
+  stroke-width: 4;
+  cursor: pointer;
+}
+
+.radial-settings-segment:hover .radial-settings-segment-shape,
+.radial-settings-segment.selected .radial-settings-segment-shape {
+  fill: var(--accent-fill);
+  stroke: var(--accent);
+}
+
+.radial-settings-segment-label,
+.radial-settings-center-label {
+  fill: var(--n-100);
+  font-family: var(--body);
+  font-size: 16px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.radial-settings-segment-label {
+  dominant-baseline: middle;
+}
+
+.radial-settings-center-ring,
+.radial-settings-center-fill {
+  fill: var(--n-850);
+  stroke: var(--n-700);
+  stroke-width: 3;
+}
+
+.radial-settings-center-fill {
+  stroke: none;
+  cursor: pointer;
+}
+
+.radial-settings-center.selected .radial-settings-center-fill,
+.radial-settings-center-ring.selected {
+  fill: var(--accent-fill);
+  stroke: var(--accent);
+}
+
+.radial-settings-segment:focus-visible,
+.radial-settings-center:focus-visible {
+  outline: none;
+}
+
+.radial-settings-segment:focus-visible .radial-settings-segment-shape,
+.radial-settings-center:focus-visible .radial-settings-center-fill {
+  stroke: var(--accent);
+  stroke-width: 6;
+}
+
+.radial-editor-heading {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 18px;
+}
+
+.radial-slot-form {
+  display: grid;
+  gap: 7px;
+}
+
+.radial-slot-form .field-label {
+  margin-top: 4px;
+}
+
+.radial-editor-action {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-height: 34px;
+}
+
+.radial-editor-readout {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.radial-editor-navigation {
+  min-width: 150px;
+}
+
+.radial-editor-actions {
+  margin-top: 12px;
 }
 
 .sound-setting-copy p {
@@ -2232,6 +2388,7 @@ kbd {
   .settings-heading-actions,
   .hotkey-setting,
   .sound-setting,
+  .radial-trigger-setting,
   .logs-section-heading,
   .log-session-header,
   .logs-toolbar {
@@ -2272,6 +2429,10 @@ kbd {
 
   .sound-volume-control {
     width: 100%;
+  }
+
+  .radial-configurator {
+    grid-template-columns: 1fr;
   }
 
   /* A phone has no room for a row of side-by-side buttons; each one takes the

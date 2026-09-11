@@ -9,6 +9,7 @@ const PROFILE_STORAGE_KEY = "porvoz.web.activeProfileId";
 
 const DESKTOP_FEATURES = Object.freeze({
   hotkeys: true,
+  radialMenu: true,
   sounds: true,
   consoleSelection: true,
   serverSwitching: true,
@@ -21,6 +22,7 @@ const DESKTOP_FEATURES = Object.freeze({
 
 const BROWSER_FEATURES = Object.freeze({
   hotkeys: false,
+  radialMenu: false,
   sounds: false,
   consoleSelection: false,
   serverSwitching: false,
