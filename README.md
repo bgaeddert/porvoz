@@ -4,6 +4,52 @@ Porvoz turns your voice into a deeply customizable control layer for your comput
 
 Instead of forcing you into a fixed vocabulary or workflow, Porvoz adapts to the way you want to speak and work. You choose the transcription and instruction models, create your own instruction prefixes, decide which prefixes receive clipboard context, and tune the hotkey, feedback, and behavior to fit your setup. It can be a fast voice keyboard, a collection of specialized assistants, or a powerful hands-free interface for controlling your machine.
 
+## Screenshots
+
+The desktop settings follow the sidebar from initial connection through daily use. The screenshots below show the main configuration pages, a test capture, the activity history, and the last-response panel.
+
+### 1. Connect a provider
+
+Configure the Porvoz server, an API provider profile, the transcription and instruction models, and the search-tool mode from one page.
+
+![Provider and models settings](docs/images/porvoz-provider-models.png)
+
+### 2. Create instruction prefixes
+
+Manage reusable voice shortcuts such as `digits`, `letters`, `clipboard`, and custom prefixes. Each row can be edited or copied as portable JSON.
+
+![Instruction prefix registry](docs/images/porvoz-prefixes.png)
+
+### 3. Choose the global hotkey
+
+Set the key or key combination Porvoz uses to start recording, and optionally enable selection copying in recognized terminal windows.
+
+![Keyboard settings](docs/images/porvoz-keyboard.png)
+
+### 4. Configure the radial menu
+
+Enable the radial menu, choose its trigger and size, and assign labels and keyboard actions to its twelve outer slots and center action.
+
+![Radial menu settings](docs/images/porvoz-radial-menu.png)
+
+### 5. Test a voice request
+
+Use the built-in recorder to confirm that transcription and instruction-prefix responses are working before dictating into another application.
+
+![Test page](docs/images/porvoz-test.png)
+
+### 6. Review activity
+
+Activity history records recent transcripts, applied prefixes, routed outputs, search usage, and per-stage timing so a request can be inspected after it runs.
+
+![Activity history](docs/images/porvoz-activity.png)
+
+### 7. Reopen the last response
+
+Double-tap the configured hotkey to bring back the most recent response. The panel provides a quick copy action and can be dismissed when it is no longer needed.
+
+![Last response panel](docs/images/porvoz-last-output.png)
+
 ## Download and install
 
 The current release is [Porvoz v3.0.0-alpha-1](https://github.com/bgaeddert/porvoz/releases/tag/v3.0.0-alpha-1). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
