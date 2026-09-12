@@ -1,8 +1,8 @@
 # Porvoz
 
-Porvoz turns your voice into a deeply customizable control layer for your computer. Dictate into nearly any application, transform rough speech into polished text, trigger reusable workflows with phrases that feel natural to you, and use spoken requests to send keyboard actions wherever your cursor is active.
+Porvoz turns your voice into a deeply customizable control layer for your computer. Dictate into nearly any application, transform rough speech into polished text, trigger reusable workflows with phrases that feel natural to you, send spoken keyboard actions wherever your cursor is active, and open a radial menu for quick access to configurable shortcuts and navigation actions.
 
-Instead of forcing you into a fixed vocabulary or workflow, Porvoz adapts to the way you want to speak and work. You choose the transcription and instruction models, create your own instruction prefixes, decide which prefixes receive clipboard context, and tune the hotkey, feedback, and behavior to fit your setup. It can be a fast voice keyboard, a collection of specialized assistants, or a powerful hands-free interface for controlling your machine.
+Instead of forcing you into a fixed vocabulary or workflow, Porvoz adapts to the way you want to speak and work. You choose the transcription and instruction models, create your own instruction prefixes, decide which prefixes receive clipboard context, configure a trigger-driven radial menu for common actions, and tune the hotkey, feedback, and behavior to fit your setup. It can be a fast voice keyboard, a collection of specialized assistants, a configurable command wheel, or a powerful hands-free interface for controlling your machine.
 
 ## Screenshots
 
