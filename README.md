@@ -52,19 +52,19 @@ Double-tap the configured hotkey to bring back the most recent response. The pan
 
 ## Download and install
 
-The current release is [Porvoz v3.0.0-alpha-1](https://github.com/bgaeddert/porvoz/releases/tag/v3.0.0-alpha-1). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
+The current release is [Porvoz v3.0.1-alpha-1](https://github.com/bgaeddert/porvoz/releases/tag/v3.0.1-alpha-1). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v3.0.0-alpha-1/Porvoz-3.0.0-alpha-1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v3.0.1-alpha-1/Porvoz-3.0.1-alpha-1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v3.0.0-alpha-1/Porvoz-3.0.0-alpha-1-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v3.0.1-alpha-1/Porvoz-3.0.1-alpha-1-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-3.0.0-alpha-1-linux-x86_64.AppImage
-./Porvoz-3.0.0-alpha-1-linux-x86_64.AppImage
+chmod +x Porvoz-3.0.1-alpha-1-linux-x86_64.AppImage
+./Porvoz-3.0.1-alpha-1-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to start the local backend and protect its encryption key. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -73,7 +73,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6 xclip
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v3.0.0-alpha-1/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v3.0.1-alpha-1/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -150,7 +150,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `3.0.0-alpha-1` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
+Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `3.0.1-alpha-1` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
 
 To build the image from the current source checkout instead, run `docker compose up -d --build`.
 

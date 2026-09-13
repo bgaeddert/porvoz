@@ -299,9 +299,9 @@ export function createRadialInputHook({
         kind: "keyboard", code: trigger.code, modifiers: [...(trigger.modifiers || [])]
       }));
       shouldConsume = true;
+    // Let a required modifier reach Windows until the trigger chord is
+    // established; otherwise an isolated Meta key is swallowed.
     } else if (activeTrigger && (triggerKey || modifierIsRequired)) {
-      shouldConsume = true;
-    } else if (modifierIsRequired && consumeRequiredModifier(modifier)) {
       shouldConsume = true;
     }
     return matchKeyboardEventConsumption(vk, isDown, wasPressed, shouldConsume);

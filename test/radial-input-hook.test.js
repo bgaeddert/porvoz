@@ -84,6 +84,42 @@ test("the Windows radial hook consumes key-up only when it consumed key-down", (
   hook.stop();
 });
 
+test("the Windows hook passes a standalone Meta key through", async () => {
+  const events = [];
+  const { hook, dispatch } = createHarness({
+    onPress: (event) => events.push(["press", event]),
+    onRelease: (event) => events.push(["release", event])
+  });
+  hook.setTrigger({ kind: "keyboard", code: "ControlLeft", modifiers: ["META"] });
+  hook.start();
+
+  assert.equal(dispatch(0x0100, { vkCode: 0x5b, flags: 0 }), 0, "Meta down reaches the target");
+  assert.equal(dispatch(0x0101, { vkCode: 0x5b, flags: 0 }), 0, "Meta up reaches the target");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(events, [], "A standalone Meta press does not activate the hotkey");
+
+  hook.stop();
+});
+
+test("the Windows hook still consumes a matching Control plus Meta chord", async () => {
+  const events = [];
+  const { hook, dispatch } = createHarness({
+    onPress: (event) => events.push(["press", event]),
+    onRelease: (event) => events.push(["release", event])
+  });
+  hook.setTrigger({ kind: "keyboard", code: "ControlLeft", modifiers: ["META"] });
+  hook.start();
+
+  assert.equal(dispatch(0x0100, { vkCode: 0x5b, flags: 0 }), 0, "Meta down is not preemptively consumed");
+  assert.equal(dispatch(0x0100, { vkCode: 0xa2, flags: 0 }), 1, "Control down is the matching trigger");
+  assert.equal(dispatch(0x0101, { vkCode: 0xa2, flags: 0 }), 1, "Control up is consumed");
+  assert.equal(dispatch(0x0101, { vkCode: 0x5b, flags: 0 }), 0, "Meta up matches its passed-down event");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(events[0]?.[0], "press", "The matching chord activates the hotkey");
+
+  hook.stop();
+});
+
 test("native mouse capture reports buttons while leaving the Cancel click usable", async () => {
   const mouseEvents = [];
   const { hook, dispatch } = createHarness();
