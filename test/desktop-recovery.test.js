@@ -10,6 +10,7 @@ const mainSource = readFileSync(new URL("../electron/main.js", import.meta.url),
 function createHotkeyHarness({
   autoHold = true,
   deferSelection = false,
+  selectionCaptureEnabled = true,
   platform = "win32",
   hotkey = { key: "ControlRight", modifiers: [] },
   actualModifierState = false
@@ -37,6 +38,7 @@ function createHotkeyHarness({
     isModifierPressed: () => true,
     createOperationCanceledError: () => new Error("Canceled by user."),
     setOverlayStatus: () => {}, notifyActivityCanceled: () => {},
+    desktopPreferences: { getSelectionCaptureEnabled: () => selectionCaptureEnabled },
     statusOverlay: { prepareForCapture() {}, dismiss() {}, openResponse() { panelOpens += 1; } },
     selectedTextReader: {
       read: (options) => deferSelection
@@ -240,6 +242,20 @@ test("Windows captures selection after the recording hotkey is released", async 
   assert.equal(selectionRequests.length, 1);
   assert.equal(selectionRequests[0].options.target, 456);
   selectionRequests[0].resolve("selected text");
+  assert.deepEqual(actions, ["start", "stop"]);
+});
+
+test("disabling selection capture skips the copy transaction on hotkey release", async () => {
+  const { context, actions, requests, selectionRequests } = createHotkeyHarness({
+    deferSelection: true,
+    selectionCaptureEnabled: false
+  });
+  const pending = context.handleGlobalKeyDown({ keycode: 99 });
+  requests[0].resolve({ ready: true });
+  await pending;
+  context.handleGlobalKeyUp({ keycode: 99 });
+
+  assert.equal(selectionRequests.length, 0);
   assert.deepEqual(actions, ["start", "stop"]);
 });
 

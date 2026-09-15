@@ -1188,7 +1188,8 @@ kbd {
   white-space: nowrap;
 }
 
-.radial-editor-navigation {
+.radial-editor-navigation,
+.radial-editor-media {
   min-width: 150px;
 }
 

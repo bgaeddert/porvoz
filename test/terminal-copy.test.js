@@ -91,6 +91,13 @@ test("Linux paste aborts if focus changes during terminal detection", async () =
   assert.equal(sent.length, 0);
 });
 
+test("Linux media play/pause sends XF86AudioPlay", async () => {
+  const { input, sent } = linuxFixture(["Gedit"]);
+  await input.prepareTarget(100);
+  await input.sendMedia("play-pause");
+  assert.deepEqual(sent, [["XF86AudioPlay", 1], ["XF86AudioPlay", 0]]);
+});
+
 test("Linux terminal shortcuts pace modifier and letter events at the X server", async () => {
   for (const classes of [["com.mitchellh.ghostty"], ["Gnome-terminal"], ["Gedit"]]) {
     const { input, delays } = linuxFixture(classes);

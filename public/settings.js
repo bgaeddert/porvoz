@@ -16,6 +16,7 @@ const RADIAL_SLOT_DEFINITIONS = [
 function formatRadialActionLabel(action) {
   if (!action) return "";
   if (action.type === "navigation") return action.command === "forward" ? "Forward" : "Back";
+  if (action.type === "media") return action.command === "play-pause" ? "Play/Pause" : "";
   return Array.isArray(action.keys) ? action.keys.join(" + ") : "";
 }
 
@@ -166,6 +167,9 @@ const radialSlotStatus = document.querySelector("#radial-slot-status");
 const soundVolumeInput = document.querySelector("#sound-volume");
 const soundVolumeValue = document.querySelector("#sound-volume-value");
 const soundVolumeStatus = document.querySelector("#sound-volume-status");
+const selectionCaptureInput = document.querySelector("#selection-capture-enabled");
+const selectionCaptureStatus = document.querySelector("#selection-capture-status");
+let savedSelectionCaptureEnabled = true;
 const consoleSelectionInput = document.querySelector("#console-selection-enabled");
 const consoleSelectionStatus = document.querySelector("#console-selection-status");
 let savedConsoleSelectionEnabled = false;
@@ -233,6 +237,7 @@ async function initializeSettings() {
   renderPrefixes();
   renderVoicePrefixSupport();
   if (soundVolumeInput) renderSoundVolume(runtimeConfig.soundVolume);
+  if (selectionCaptureInput) renderSelectionCapture(runtimeConfig.selectionCaptureEnabled);
   if (consoleSelectionInput) renderConsoleSelection(runtimeConfig.consoleSelectionEnabled);
   if (hotkeyDisplay) await initializeHotkey();
   if (radialEnabledInput && bridge.features.radialMenu) await initializeRadialMenu();
@@ -305,6 +310,7 @@ async function initializeSettings() {
   cancelRadialSlotEditButton?.addEventListener("click", cancelRadialSlotEdit);
   soundVolumeInput?.addEventListener("input", updateSoundVolumePreview);
   soundVolumeInput?.addEventListener("change", saveSoundVolume);
+  selectionCaptureInput?.addEventListener("change", saveSelectionCapture);
   consoleSelectionInput?.addEventListener("change", saveConsoleSelection);
   previewCueButton?.addEventListener("click", playCuePreview);
 
@@ -1484,6 +1490,10 @@ async function resetToDefaults(event) {
     renderModels();
     renderPrefixes();
     if (soundVolumeInput) renderSoundVolume(runtimeConfig.soundVolume);
+    if (selectionCaptureInput) {
+      renderSelectionCapture(runtimeConfig.selectionCaptureEnabled);
+      selectionCaptureStatus.textContent = "";
+    }
     if (consoleSelectionInput) {
       renderConsoleSelection(runtimeConfig.consoleSelectionEnabled);
       consoleSelectionStatus.textContent = "";
@@ -1696,6 +1706,20 @@ function renderRadialSlotEditor() {
       };
     });
     radialEditorAction.append(navigation, createRadialEditorClearButton());
+  } else if (radialEditorDraft.action?.type === "media") {
+    const media = document.createElement("select");
+    media.className = "radial-editor-media";
+    media.setAttribute("aria-label", "Media action");
+    appendRadialOption(media, "play-pause", "Play/Pause");
+    media.value = "play-pause";
+    media.addEventListener("change", () => {
+      radialEditorDraft.action = {
+        type: "media",
+        command: media.value,
+        label: "Play/Pause"
+      };
+    });
+    radialEditorAction.append(media, createRadialEditorClearButton());
   } else if (radialEditorActionType.value === "hotkey") {
     const readout = document.createElement("kbd");
     readout.className = "radial-editor-readout";
@@ -1724,6 +1748,12 @@ function handleRadialEditorActionTypeChange() {
       type: "navigation",
       command,
       label: command === "forward" ? "Forward" : "Back"
+    };
+  } else if (type === "media") {
+    radialEditorDraft.action = {
+      type: "media",
+      command: "play-pause",
+      label: "Play/Pause"
     };
   } else if (type === "hotkey") {
     radialEditorDraft.action = radialEditorDraft.action?.type === "hotkey"
@@ -1954,6 +1984,30 @@ function handleRadialMenuUpdated(value) {
 
 function renderHotkey(hotkey) {
   hotkeyDisplay.textContent = hotkey.label;
+}
+
+function renderSelectionCapture(value) {
+  savedSelectionCaptureEnabled = value !== false;
+  selectionCaptureInput.checked = savedSelectionCaptureEnabled;
+}
+
+async function saveSelectionCapture() {
+  const nextValue = selectionCaptureInput.checked;
+  selectionCaptureInput.disabled = true;
+  selectionCaptureStatus.textContent = "Saving…";
+  selectionCaptureStatus.dataset.state = "saving";
+  try {
+    const saved = await bridge.saveSelectionCaptureEnabled(nextValue);
+    renderSelectionCapture(saved);
+    selectionCaptureStatus.textContent = saved ? "Selection capture is on." : "Selection capture is off.";
+    selectionCaptureStatus.dataset.state = "success";
+  } catch (error) {
+    selectionCaptureInput.checked = savedSelectionCaptureEnabled;
+    selectionCaptureStatus.textContent = error.message || "Could not save selection capture.";
+    selectionCaptureStatus.dataset.state = "error";
+  } finally {
+    selectionCaptureInput.disabled = false;
+  }
 }
 
 function renderConsoleSelection(value) {

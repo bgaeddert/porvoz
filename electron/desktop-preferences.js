@@ -18,6 +18,8 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
     saveSoundVolume,
     getConsoleSelectionEnabled: () => state.consoleSelectionEnabled,
     saveConsoleSelectionEnabled,
+    getSelectionCaptureEnabled: () => state.selectionCaptureEnabled,
+    saveSelectionCaptureEnabled,
     resetCaptureSettings
   };
 
@@ -54,7 +56,10 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
         : { key: "ControlRight", modifiers: [], label: "Right Ctrl" },
       radialMenu: normalizeRadialMenu(value?.radialMenu),
       soundVolume: normalizeVolume(value?.soundVolume),
-      consoleSelectionEnabled: value?.consoleSelectionEnabled === true
+      consoleSelectionEnabled: value?.consoleSelectionEnabled === true,
+      // Selection capture predates this preference. Missing legacy values
+      // therefore retain the existing behavior and remain enabled.
+      selectionCaptureEnabled: value?.selectionCaptureEnabled !== false
     };
   }
 
@@ -135,6 +140,7 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
     state.radialMenu = createDefaultRadialMenu();
     state.soundVolume = normalizeVolume(defaults.soundVolume);
     state.consoleSelectionEnabled = false;
+    state.selectionCaptureEnabled = true;
     save();
   }
 
@@ -144,6 +150,14 @@ export function createDesktopPreferences({ preferencesPath, safeStorage, legacyS
     writeState(next);
     state = next;
     return state.consoleSelectionEnabled;
+  }
+
+  function saveSelectionCaptureEnabled(value) {
+    if (typeof value !== "boolean") throw new Error("Selection capture must be on or off.");
+    const next = { ...state, selectionCaptureEnabled: value };
+    writeState(next);
+    state = next;
+    return state.selectionCaptureEnabled;
   }
 
   function save() {

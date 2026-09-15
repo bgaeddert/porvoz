@@ -1,6 +1,6 @@
 # Porvoz
 
-Porvoz turns your voice into a deeply customizable control layer for your computer. Dictate into nearly any application, transform rough speech into polished text, trigger reusable workflows with phrases that feel natural to you, send spoken keyboard actions wherever your cursor is active, and open a radial menu for quick access to configurable shortcuts and navigation actions.
+Porvoz turns your voice into a deeply customizable control layer for your computer. Dictate into nearly any application, transform rough speech into polished text, trigger reusable workflows with phrases that feel natural to you, send spoken keyboard actions wherever your cursor is active, and open a radial menu for quick access to configurable shortcuts, media controls, and navigation actions.
 
 Instead of forcing you into a fixed vocabulary or workflow, Porvoz adapts to the way you want to speak and work. You choose the transcription and instruction models, create your own instruction prefixes, decide which prefixes receive clipboard context, configure a trigger-driven radial menu for common actions, and tune the hotkey, feedback, and behavior to fit your setup. It can be a fast voice keyboard, a collection of specialized assistants, a configurable command wheel, or a powerful hands-free interface for controlling your machine.
 
@@ -22,13 +22,13 @@ Manage reusable voice shortcuts such as `digits`, `letters`, `clipboard`, and cu
 
 ### 3. Choose the global hotkey
 
-Set the key or key combination Porvoz uses to start recording, and optionally enable selection copying in recognized terminal windows.
+Set the key or key combination Porvoz uses to start recording, control selected-text capture, and optionally enable selection copying in recognized terminal windows.
 
 ![Keyboard settings](docs/images/porvoz-keyboard.png)
 
 ### 4. Configure the radial menu
 
-Enable the radial menu, choose its trigger and size, and assign labels and keyboard actions to its twelve outer slots and center action.
+Enable the radial menu, choose its trigger and size, and assign labels and keyboard, media, or navigation actions to its twelve outer slots and center action.
 
 ![Radial menu settings](docs/images/porvoz-radial-menu.png)
 
@@ -52,19 +52,19 @@ Double-tap the configured hotkey to bring back the most recent response. The pan
 
 ## Download and install
 
-The current release is [Porvoz v3.0.1-alpha-1](https://github.com/bgaeddert/porvoz/releases/tag/v3.0.1-alpha-1). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
+The current release is [Porvoz v3.1.0-alpha-1](https://github.com/bgaeddert/porvoz/releases/tag/v3.1.0-alpha-1). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v3.0.1-alpha-1/Porvoz-3.0.1-alpha-1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v3.1.0-alpha-1/Porvoz-3.1.0-alpha-1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v3.0.1-alpha-1/Porvoz-3.0.1-alpha-1-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v3.1.0-alpha-1/Porvoz-3.1.0-alpha-1-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-3.0.1-alpha-1-linux-x86_64.AppImage
-./Porvoz-3.0.1-alpha-1-linux-x86_64.AppImage
+chmod +x Porvoz-3.1.0-alpha-1-linux-x86_64.AppImage
+./Porvoz-3.1.0-alpha-1-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to start the local backend and protect its encryption key. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -73,7 +73,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6 xclip
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v3.0.1-alpha-1/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v3.1.0-alpha-1/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -125,11 +125,11 @@ Prefix names must be unique, ignoring case. Use **Remove prefix** to delete any 
 
 Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe and type the result into the application that owns the cursor. Use **Keyboard → Set hotkey** to choose another key or combination, such as **Ctrl + Super** or **Ctrl + Shift + F12**; changes take effect immediately.
 
-**Keyboard → Console selection** controls automatic selection copying only in recognized terminal windows. It is **off by default**, including for existing desktops. Dictation, paste, and selection copying in other applications are unaffected. Enable it to attempt `Ctrl+Shift+C` in recognized terminals. **Warning:** if nothing is selected, a terminal can pass that shortcut through as Control-C, likely canceling or exiting running applications or commands. Unknown terminals and terminal panes inside editors are not covered by this setting. The preference is saved on this computer and applies immediately.
+**Keyboard → Selection capture** controls whether Porvoz performs the selected-text discovery flow when recording ends. It is enabled by default for existing and new desktops; turn it off to prevent Porvoz from issuing a synthetic Copy command or reading the selection. **Keyboard → Console selection** separately controls automatic selection copying in recognized terminal windows. It is **off by default**, including for existing desktops. Dictation, paste, and selection copying in other applications are unaffected. Enable it to attempt `Ctrl+Shift+C` in recognized terminals. **Warning:** if nothing is selected, a terminal can pass that shortcut through as Control-C, likely canceling or exiting running applications or commands. Unknown terminals and terminal panes inside editors are not covered by this setting. Both preferences are saved on this computer and apply immediately.
 
 While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. Double-tap the configured hotkey to open the last completed response, even after the pill disappears. When web search is used, the response panel displays automatically for two seconds unless hovered, staying open until dismissed. Hold the hotkey for 300 ms to start recording; short taps do not record audio or touch the clipboard. Hovering over an ordinary status pill has no effect. The response panel renders common Markdown and provides **Copy** and **×** controls. Press **Escape** to dismiss it. The non-activating overlay does not become the typing target.
 
-Use **Radial → Set trigger** to assign the global key or mouse button that opens the radial menu. Hold it for 200 ms to show the 12-segment wheel; releasing sooner sends the center action without showing the wheel. Once open, move over a segment and release to send its assigned keyboard shortcut or Back/Forward navigation action. The center is slot 13: releasing there sends its action when assigned; releasing outside the wheel cancels. All slots are optional. The radial trigger and every slot shortcut are recorded from actual input, including Windows-key combinations, and labels can be customized in the Radial settings page. The menu-size control scales the 552 × 552 pixel reference design from 50% to 100%. The non-activating overlay does not become the typing target.
+Use **Radial → Set trigger** to assign the global key or mouse button that opens the radial menu. Hold it for 200 ms to show the 12-segment wheel; releasing sooner sends the center action without showing the wheel. Once open, move over a segment and release to send its assigned keyboard shortcut, Play/Pause media action, or Back/Forward navigation action. The center is slot 13: releasing there sends its action when assigned; releasing outside the wheel cancels. All slots are optional. The radial trigger and every slot shortcut are recorded from actual input, including Windows-key combinations, and labels can be customized in the Radial settings page. The menu-size control scales the 552 × 552 pixel reference design from 50% to 100%. The non-activating overlay does not become the typing target.
 
 The main window also provides **Start recording**, which displays the raw transcription and any instruction response directly in the app. With no selected text, Porvoz matches consecutive prefixes at the beginning of the transcript, removes the matched phrases, and sends only those matched prefix instructions and the remaining spoken request to the instruction model. A transcript without a matched prefix bypasses the instruction model and is returned directly.
 
@@ -150,7 +150,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `3.0.1-alpha-1` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
+Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `3.1.0-alpha-1` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
 
 To build the image from the current source checkout instead, run `docker compose up -d --build`.
 
@@ -171,7 +171,7 @@ Signing in exchanges the admin key for a session held in an HttpOnly cookie; the
 
 ## Local data and security
 
-The local child server stores its SQLite database and encrypted server master key in the platform user-data directory. Desktop-only preferences—including local/remote mode, the selected profile for each backend, hotkey, sound volume, and console selection—are stored separately. A configured remote admin key is protected with Electron's operating-system-backed credential encryption.
+The local child server stores its SQLite database and encrypted server master key in the platform user-data directory. Desktop-only preferences—including local/remote mode, the selected profile for each backend, hotkey, sound volume, selection capture, and console selection—are stored separately. A configured remote admin key is protected with Electron's operating-system-backed credential encryption.
 
 On the first local-server launch, Porvoz imports existing desktop connection profiles, provider keys, models, and prefixes. Retired custom prompt and Search-access fields are ignored. Hotkey and sound preferences remain local. The previous settings and credentials files are retained; the old activity archive is not imported. See [server setup and migration](docs/server-setup.md) for data locations, backups, and deployment options.
 

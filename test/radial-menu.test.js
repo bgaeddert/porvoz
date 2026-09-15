@@ -21,12 +21,13 @@ test("the default radial menu has twelve clockwise slots and a center slot", () 
   assert.ok(menu.slots.every((slot) => slot.action === null && slot.label === ""));
 });
 
-test("radial settings normalize trigger, labels, keyboard shortcuts, and navigation", () => {
+test("radial settings normalize trigger, labels, keyboard shortcuts, media, and navigation", () => {
   const menu = normalizeRadialMenu({
     enabled: true,
     trigger: { kind: "keyboard", code: "MetaLeft", modifiers: ["ctrl", "META"], label: "" },
     slots: [
       { id: "1", label: "  Copy  ", action: { type: "hotkey", keys: ["Control", "C", "C"] } },
+      { id: "2", action: { type: "media", command: "PLAY PAUSE" } },
       { id: "center", action: { type: "navigation", command: "FORWARD" } },
       { id: "not-a-slot", label: "ignored", action: { type: "navigation", command: "back" } }
     ]
@@ -37,7 +38,7 @@ test("radial settings normalize trigger, labels, keyboard shortcuts, and navigat
     id: "1", label: "Copy", action: { type: "hotkey", keys: ["Control", "C"], label: "Control + C" }
   });
   assert.deepEqual(menu.slots.at(-1).action, { type: "navigation", command: "forward", label: "Forward" });
-  assert.equal(menu.slots[1].action, null);
+  assert.deepEqual(menu.slots[1].action, { type: "media", command: "play-pause", label: "Play/Pause" });
 });
 
 test("radial menu size is constrained to the supported scale range", () => {
@@ -60,6 +61,10 @@ test("recorded DOM codes become sendable key combinations, including Windows", (
   assert.deepEqual(normalizeRadialAction({ type: "navigation", command: "back" }), {
     type: "navigation", command: "back", label: "Back"
   });
+  assert.deepEqual(normalizeRadialAction({ type: "media", command: "play-pause" }), {
+    type: "media", command: "play-pause", label: "Play/Pause"
+  });
+  assert.equal(normalizeRadialAction({ type: "media", command: "skip" }), null);
   assert.equal(normalizeRadialAction({ type: "hotkey", keys: ["NotAKey"] }), null);
 });
 

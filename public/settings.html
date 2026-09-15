@@ -297,11 +297,26 @@
             <p id="hotkey-status" class="field-note" aria-live="polite">Choose Set hotkey, then press your combination. Release to save; Escape cancels.</p>
           </section>
 
+          <section data-desktop-only id="selection-capture" class="settings-card" data-settings-page="keyboard" aria-labelledby="selection-capture-heading" hidden>
+            <div class="settings-heading">
+              <div>
+                <h2 id="selection-capture-heading">Selection capture</h2>
+                <p class="section-description">Copy selected text from the focused application when recording ends. Turn this off to prevent selection capture entirely.</p>
+              </div>
+            </div>
+            <label class="checkbox-line">
+              <input id="selection-capture-enabled" type="checkbox" aria-describedby="selection-capture-scope" checked />
+              <span>Enable selected-text capture</span>
+            </label>
+            <p id="selection-capture-scope" class="field-note">When off, Porvoz will not issue a synthetic Copy command after recording.</p>
+            <p id="selection-capture-status" class="field-note" aria-live="polite"></p>
+          </section>
+
           <section data-desktop-only id="console-selection" class="settings-card" data-settings-page="keyboard" aria-labelledby="console-selection-heading" hidden>
             <div class="settings-heading">
               <div>
                 <h2 id="console-selection-heading">Console selection</h2>
-                <p class="section-description">Copy selected text from recognized terminals. Off by default; other applications are unaffected.</p>
+                <p class="section-description">Allow selected text to be copied from recognized terminals. This only applies while selection capture is enabled.</p>
               </div>
             </div>
             <label class="checkbox-line">
@@ -383,6 +398,7 @@
                 <select id="radial-editor-action-type" class="radial-editor-action-type">
                   <option value="">Empty</option>
                   <option value="hotkey">Keyboard shortcut</option>
+                  <option value="media">Media control</option>
                   <option value="navigation">Back / Forward navigation</option>
                 </select>
                 <div id="radial-editor-action" class="radial-editor-action"></div>

@@ -36,7 +36,8 @@ function fixture({ held = [], onWait = () => {}, windowClass = "Notepad", execut
   };
   const input = vm.runInNewContext(`(${factory})()`, {
     koffi, Buffer, isTerminalWindow, process: { pid: 123 }, INPUT_KEYBOARD: 1, INPUT_MOUSE: 0,
-    KEYEVENTF_KEYUP: 2, MOUSEEVENTF_XDOWN: 0x0080, MOUSEEVENTF_XUP: 0x0100,
+    KEYEVENTF_EXTENDEDKEY: 1, KEYEVENTF_KEYUP: 2, MEDIA_PLAY_PAUSE_VIRTUAL_KEY: 0xb3,
+    MOUSEEVENTF_XDOWN: 0x0080, MOUSEEVENTF_XUP: 0x0100,
     WINDOWS_INPUT_EXTRA_INFO: 0x5056, MAX_MODIFIER_RELEASE_CHECKS: 32,
     MAX_MODIFIER_RELEASE_CHECKS_AFTER_NORMALIZATION: 8,
     MODIFIER_POLL_INTERVAL_MS: 25, TEXT_TARGET_FOCUS_DELAY_MS: 100,
@@ -116,6 +117,16 @@ test("Windows radial navigation sends XButton back and forward events", async ()
   assert.deepEqual(state.sent.map(event => [event.type, event.u.mi.mouseData, event.u.mi.dwFlags]), [
     [0, 1, 0x0080], [0, 1, 0x0100],
     [0, 2, 0x0080], [0, 2, 0x0100]
+  ]);
+});
+
+test("Windows media play/pause sends the native media key", async () => {
+  const state = fixture();
+  await state.input.prepareTarget(100);
+  await state.input.sendMedia("play-pause");
+  assert.deepEqual(state.sent.map(event => [event.type, event.u.ki.wVk, event.u.ki.dwFlags]), [
+    [1, 0xb3, 0x0001],
+    [1, 0xb3, 0x0003]
   ]);
 });
 

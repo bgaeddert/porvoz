@@ -60,6 +60,7 @@ test("the saved response opens without focus and survives dismissal", async () =
   overlay.openResponse();
   assert.equal(browserWindow.ignoresMouse, false);
   assert.deepEqual(browserWindow.size, [548, 244]);
+  assert.deepEqual(browserWindow.position, [420, 544]);
   assert.equal(browserWindow.focusable, false);
   overlay.setLastTargetWindow(9999);
   assert.equal(overlay.getLastTargetWindow(), 9999);
@@ -68,6 +69,11 @@ test("the saved response opens without focus and survives dismissal", async () =
   assert.deepEqual(browserWindow.sent.at(-1), [
     "porvoz:overlay-response",
     { open: true, text: "latest Porvoz output" }
+  ]);
+  overlay.setCaptureSettings({ consoleSelectionEnabled: true, selectionCaptureEnabled: false });
+  assert.deepEqual(browserWindow.sent.at(-1), [
+    "porvoz:overlay-capture-settings",
+    { consoleSelectionEnabled: true, selectionCaptureEnabled: false }
   ]);
 
   overlay.setStatus({ state: "idle" });
@@ -126,21 +132,29 @@ test("status changes keep the pill collapsed and transparent to pointer input", 
 
 test("the response overlay exposes only response actions", () => {
   const html = readFileSync(new URL("../public/status-overlay.html", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../public/status-overlay.css", import.meta.url), "utf8");
   const preload = readFileSync(new URL("../electron/status-overlay-preload.cjs", import.meta.url), "utf8");
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
   const overlayRenderer = readFileSync(new URL("../public/status-overlay.js", import.meta.url), "utf8");
 
   assert.match(html, /id="copy-response"/);
   assert.match(html, /id="dismiss-response"/);
+  assert.match(html, /id="console-selection-toggle"/);
+  assert.match(html, /id="selection-capture-toggle"/);
+  assert.match(styles, /panel-wrapper\.visible ~ \.status-pill/);
 
   assert.doesNotMatch(html, /key-button|side-keys/);
   assert.match(html, /script type="module"/);
   assert.match(preload, /porvoz:overlay-copy/);
   assert.match(preload, /porvoz:overlay-open-external/);
+  assert.match(preload, /porvoz:overlay-get-capture-settings/);
+  assert.match(preload, /porvoz:overlay-save-console-selection/);
+  assert.match(preload, /porvoz:overlay-save-selection-capture/);
   assert.match(preload, /porvoz:overlay-dismiss/);
   assert.doesNotMatch(preload, /porvoz:overlay-key-command/);
   assert.doesNotMatch(overlayRenderer, /sendKeyCommand/);
   assert.match(overlayRenderer, /mouseenter|hover/);
+  assert.match(overlayRenderer, /toggleCaptureSetting/);
   assert.match(preload, /porvoz:overlay-hover/);
   assert.match(app, /mimeType: audio\.type,\s+captureId/);
 });

@@ -241,6 +241,7 @@ async function startApplication() {
     preloadPath: fileURLToPath(new URL("./status-overlay-preload.cjs", import.meta.url)),
     secureWindow: secureRendererWindow
   });
+  notifyCaptureSettingsUpdated();
   radialOverlay = await createRadialOverlay({
     overlayPath: fileURLToPath(new URL("../public/radial-overlay.html", import.meta.url)),
     preloadPath: fileURLToPath(new URL("./radial-overlay-preload.cjs", import.meta.url)),
@@ -879,11 +880,20 @@ function stopHotkeyRecording() {
       if (attempt.state === "recording") {
         attempt.state = "processing";
         attempt.hotkeyReleasedAt = hotkeyReleasedAt;
-        attempt.selectedTextPromise = selectedTextReader.read({ target: attempt.targetWindow });
+        attempt.selectedTextPromise = isSelectionCaptureEnabled()
+          ? selectedTextReader.read({ target: attempt.targetWindow })
+          : Promise.resolve("");
       }
     }
     sendHotkeyAction("stop", { hotkeyReleasedAt });
   }
+}
+
+function isSelectionCaptureEnabled() {
+  // Keep VM-based recovery tests and early startup safe before preferences
+  // have been initialized, while treating a missing legacy value as enabled.
+  return typeof desktopPreferences === "undefined"
+    || desktopPreferences?.getSelectionCaptureEnabled() !== false;
 }
 
 function handleGlobalHotkeyInput(type, event) {
@@ -1093,12 +1103,23 @@ function setOverlayStatus(value) {
   statusOverlay?.setStatus(value);
 }
 
+function getCaptureSettings() {
+  return {
+    consoleSelectionEnabled: desktopPreferences?.getConsoleSelectionEnabled() === true,
+    selectionCaptureEnabled: isSelectionCaptureEnabled()
+  };
+}
+
+function notifyCaptureSettingsUpdated() {
+  statusOverlay?.setCaptureSettings(getCaptureSettings());
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("porvoz:get-app-version", () => app.getVersion());
   ipcMain.handle("porvoz:get-runtime-config", async () => ({
     ...(await appService.getRuntimeConfig()),
     soundVolume: desktopPreferences.getSoundVolume(),
-    consoleSelectionEnabled: desktopPreferences.getConsoleSelectionEnabled()
+    ...getCaptureSettings()
   }));
   ipcMain.handle("porvoz:get-backend-settings", () => backendManager.getSettings());
   ipcMain.handle("porvoz:save-backend-settings", async (_event, value) => {
@@ -1184,14 +1205,16 @@ function registerIpcHandlers() {
     notifyRadialMenuUpdated();
     notifySetupUpdated();
     updateTrayMenu();
+    notifyCaptureSettingsUpdated();
     return { ...runtimeConfig, soundVolume: desktopPreferences.getSoundVolume(),
-      consoleSelectionEnabled: desktopPreferences.getConsoleSelectionEnabled() };
+      ...getCaptureSettings() };
   });
   ipcMain.handle("porvoz:transcribe", (_event, value) => runActiveOperation(async (signal) => {
     setOverlayStatus({ message: "Transcribing…", state: "transcribing", stage: "transcription" });
     try {
       const attempt = getCaptureAttempt(value?.captureId);
-      const selectedText = await (attempt?.selectedTextPromise || selectedTextReader.read());
+      const selectedText = await (attempt?.selectedTextPromise
+        || (isSelectionCaptureEnabled() ? selectedTextReader.read() : ""));
       const hotkeyReleasedAt = attempt?.hotkeyReleasedAt || value?.timing?.hotkeyReleasedAt || value?.hotkeyReleasedAt;
       const transcriptionRequestedAt = Date.now();
       const preTranscriptionMs = hotkeyReleasedAt
@@ -1277,8 +1300,16 @@ function registerIpcHandlers() {
     notifySoundVolumeUpdated(soundVolume);
     return soundVolume;
   });
-  ipcMain.handle("porvoz:save-console-selection", (_event, value) =>
-    desktopPreferences.saveConsoleSelectionEnabled(value));
+  ipcMain.handle("porvoz:save-console-selection", (_event, value) => {
+    const saved = desktopPreferences.saveConsoleSelectionEnabled(value);
+    notifyCaptureSettingsUpdated();
+    return saved;
+  });
+  ipcMain.handle("porvoz:save-selection-capture", (_event, value) => {
+    const saved = desktopPreferences.saveSelectionCaptureEnabled(value);
+    notifyCaptureSettingsUpdated();
+    return saved;
+  });
   ipcMain.on("porvoz:status", (_event, value) => {
     if (!value || typeof value !== "object") return;
     if (ACTIVE_ACTIVITY_STATES.has(value.state)) rendererActivities.add(_event.sender.id);
@@ -1290,6 +1321,22 @@ function registerIpcHandlers() {
   });
   ipcMain.on("porvoz:overlay-hover", (event) => {
     if (statusOverlay?.isSender(event.sender)) statusOverlay.onHover();
+  });
+  ipcMain.handle("porvoz:overlay-get-capture-settings", (event) => {
+    if (!statusOverlay?.isSender(event.sender)) return null;
+    return getCaptureSettings();
+  });
+  ipcMain.handle("porvoz:overlay-save-console-selection", (event, value) => {
+    if (!statusOverlay?.isSender(event.sender)) return false;
+    const saved = desktopPreferences.saveConsoleSelectionEnabled(value);
+    notifyCaptureSettingsUpdated();
+    return saved;
+  });
+  ipcMain.handle("porvoz:overlay-save-selection-capture", (event, value) => {
+    if (!statusOverlay?.isSender(event.sender)) return false;
+    const saved = desktopPreferences.saveSelectionCaptureEnabled(value);
+    notifyCaptureSettingsUpdated();
+    return saved;
   });
   ipcMain.on("porvoz:radial-selection", (event, slotId) => {
     if (radialOverlay?.isSender(event.sender)) radialOverlay.select(slotId);

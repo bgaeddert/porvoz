@@ -19,6 +19,29 @@
           </header>
           <div id="response-text" class="response-text" role="textbox" aria-readonly="true"></div>
         </section>
+        <aside id="capture-controls" class="capture-controls" aria-label="Capture settings">
+          <header class="capture-header">
+            <span class="response-label">Capture</span>
+          </header>
+          <div class="capture-list">
+            <button id="console-selection-toggle" class="capture-toggle" type="button" role="switch" aria-checked="false">
+              <span class="capture-toggle-copy">
+                <span class="capture-toggle-name">Terminal copy</span>
+                <span class="capture-toggle-detail">Recognized terminals</span>
+                <span class="capture-toggle-state">Off</span>
+              </span>
+              <span class="capture-switch" aria-hidden="true"></span>
+            </button>
+            <button id="selection-capture-toggle" class="capture-toggle" type="button" role="switch" aria-checked="true">
+              <span class="capture-toggle-copy">
+                <span class="capture-toggle-name">Selection capture</span>
+                <span class="capture-toggle-detail">Selected text after recording</span>
+                <span class="capture-toggle-state">On</span>
+              </span>
+              <span class="capture-switch" aria-hidden="true"></span>
+            </button>
+          </div>
+        </aside>
       </div>
       <div id="status-pill" class="status-pill" role="status" aria-live="polite">
         <span id="status-indicator" class="status-indicator" aria-hidden="true"></span>

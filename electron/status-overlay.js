@@ -40,6 +40,10 @@ export async function createStatusOverlay({
   let isResponseHeld = false;
   let isAutoClosePending = false;
   let suppressUntilNextRecording = false;
+  let captureSettings = {
+    consoleSelectionEnabled: false,
+    selectionCaptureEnabled: true
+  };
 
   overlayWindow = new BrowserWindowImpl({
     width: COLLAPSED_WIDTH,
@@ -85,7 +89,10 @@ export async function createStatusOverlay({
     }
     const workArea = display.workArea;
     const [width, height] = overlayWindow.getContentSize();
-    const x = Math.round(workArea.x + (workArea.width - width) / 2);
+    // The pill is centered in the collapsed-width anchor. Keep that same
+    // anchor while the response panel grows to the left/right controls.
+    const anchorWidth = width > COLLAPSED_WIDTH ? COLLAPSED_WIDTH : width;
+    const x = Math.round(workArea.x + (workArea.width - anchorWidth) / 2);
     const y = Math.round(workArea.y + workArea.height - height - OVERLAY_BOTTOM_MARGIN);
     overlayWindow.setPosition(x, y, false);
   };
@@ -103,6 +110,11 @@ export async function createStatusOverlay({
       open: isResponseHeld,
       text: lastResponse
     });
+  };
+
+  const sendCaptureSettings = () => {
+    if (!isLoaded || !overlayWindow || overlayWindow.isDestroyed()) return;
+    overlayWindow.webContents.send("porvoz:overlay-capture-settings", captureSettings);
   };
 
   const hide = () => {
@@ -233,6 +245,13 @@ export async function createStatusOverlay({
 
   return {
     setStatus,
+    setCaptureSettings(value = {}) {
+      captureSettings = {
+        consoleSelectionEnabled: value.consoleSelectionEnabled === true,
+        selectionCaptureEnabled: value.selectionCaptureEnabled !== false
+      };
+      sendCaptureSettings();
+    },
     setResponse(value) {
       if (typeof value !== "string" || !value.trim()) return;
       lastResponse = value;

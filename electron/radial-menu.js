@@ -25,6 +25,7 @@ export const RADIAL_SLOT_DEFINITIONS = Object.freeze([
 
 const VALID_MODIFIERS = new Set(["CTRL", "ALT", "SHIFT", "META"]);
 const VALID_NAVIGATION = new Set(["back", "forward"]);
+const VALID_MEDIA_COMMANDS = new Set(["play-pause"]);
 const VALID_MOUSE_BUTTONS = new Set([1, 2, 3, 4, 5]);
 const RECORDED_CODE_TO_ACTION_KEY = new Map([
   ["ControlLeft", "Control"], ["ControlRight", "Control"],
@@ -137,6 +138,12 @@ export function normalizeRadialAction(value) {
       ? { type: "navigation", command, label: normalizeLabel(value.label) || formatNavigationLabel(command) }
       : null;
   }
+  if (value.type === "media") {
+    const command = normalizeMediaCommand(value.command);
+    return VALID_MEDIA_COMMANDS.has(command)
+      ? { type: "media", command, label: normalizeLabel(value.label) || formatMediaLabel(command) }
+      : null;
+  }
   if (value.type !== "hotkey" || !Array.isArray(value.keys) || !value.keys.length) return null;
   const keys = [...new Set(value.keys.map((key) => typeof key === "string" ? key.trim() : "").filter(Boolean))];
   if (!keys.length || keys.length > 5 || keys.some((key) => !VALID_ACTION_KEYS.has(key))) return null;
@@ -168,6 +175,10 @@ export function formatMouseButtonLabel(button) {
 
 export function formatNavigationLabel(command) {
   return command === "forward" ? "Forward" : "Back";
+}
+
+export function formatMediaLabel(command) {
+  return command === "play-pause" ? "Play/Pause" : "";
 }
 
 export function formatKeyboardCodeLabel(code, modifiers = []) {
@@ -204,4 +215,9 @@ export function captureToRadialHotkey(code, modifiers = []) {
 
 function normalizeLabel(value) {
   return typeof value === "string" ? value.trim().slice(0, 64) : "";
+}
+
+function normalizeMediaCommand(value) {
+  const command = String(value || "").toLocaleLowerCase().replace(/[_\s/]+/g, "-");
+  return command === "playpause" ? "play-pause" : command;
 }

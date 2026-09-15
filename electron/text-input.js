@@ -8,7 +8,9 @@ import { isTerminalWindow } from "./terminal-detection.js";
 
 const INPUT_MOUSE = 0;
 const INPUT_KEYBOARD = 1;
+const KEYEVENTF_EXTENDEDKEY = 0x0001;
 const KEYEVENTF_KEYUP = 0x0002;
+const MEDIA_PLAY_PAUSE_VIRTUAL_KEY = 0xb3; // VK_MEDIA_PLAY_PAUSE
 const MOUSEEVENTF_XDOWN = 0x0080;
 const MOUSEEVENTF_XUP = 0x0100;
 const WINDOWS_INPUT_EXTRA_INFO = 0x5056;
@@ -196,6 +198,11 @@ export async function sendRadialAction(action, { target = null, signal } = {}) {
     await textInputForPlatform.pressKeyCombination(action.keys, signal);
     return true;
   }
+  if (action.type === "media" && action.command === "play-pause") {
+    suppressSyntheticRadialInput();
+    await textInputForPlatform.sendMedia(action.command, signal);
+    return true;
+  }
   if (action.type === "navigation" && ["back", "forward"].includes(action.command)) {
     suppressSyntheticRadialInput();
     await textInputForPlatform.sendNavigation(action.command, signal);
@@ -356,6 +363,21 @@ function createWindowsTextInput() {
       sendInput([
         createWindowsMouseInput(mouseData, MOUSEEVENTF_XDOWN),
         createWindowsMouseInput(mouseData, MOUSEEVENTF_XUP)
+      ]);
+      await wait(MODIFIER_POLL_INTERVAL_MS, signal);
+    },
+    async sendMedia(command, signal) {
+      if (command !== "play-pause") {
+        throw new Error(`Windows does not recognize media action '${command}'.`);
+      }
+      throwIfAborted(signal);
+      sendInput([
+        createWindowsKeyInput(MEDIA_PLAY_PAUSE_VIRTUAL_KEY, 0, KEYEVENTF_EXTENDEDKEY),
+        createWindowsKeyInput(
+          MEDIA_PLAY_PAUSE_VIRTUAL_KEY,
+          0,
+          KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP
+        )
       ]);
       await wait(MODIFIER_POLL_INTERVAL_MS, signal);
     },
@@ -564,6 +586,17 @@ function createLinuxTextInput() {
       sendButton(button, false);
       await wait(MODIFIER_POLL_INTERVAL_MS, signal);
     },
+    async sendMedia(command, signal) {
+      if (command !== "play-pause") {
+        throw new Error(`Linux does not recognize media action '${command}'.`);
+      }
+      throwIfAborted(signal);
+      verifyTarget(preparedTarget);
+      const keycode = getKeycode("XF86AudioPlay");
+      sendKey(keycode, true);
+      sendKey(keycode, false);
+      await wait(MODIFIER_POLL_INTERVAL_MS, signal);
+    },
     async pressKeyCombination(keys, signal) {
       throwIfAborted(signal);
       verifyTarget(preparedTarget);
@@ -704,6 +737,9 @@ function createUnsupportedTextInput() {
     },
     async sendNavigation() {
       throw new Error(`Navigation input is not available on ${process.platform}.`);
+    },
+    async sendMedia() {
+      throw new Error(`Media input is not available on ${process.platform}.`);
     },
     async pressEnter() {
       throw new Error(`Clipboard paste input is not available on ${process.platform}.`);

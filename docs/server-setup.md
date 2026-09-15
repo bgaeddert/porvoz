@@ -1,6 +1,6 @@
 # Server setup and migration
 
-Porvoz 3.0.1-alpha-1 supports a private local backend and a shared remote backend. Both run the same server and store configuration in a SQLite database. Microphone capture, clipboard access, selected-text discovery, global hotkeys, the radial menu, and typing into applications remain on the desktop.
+Porvoz 3.1.0-alpha-1 supports a private local backend and a shared remote backend. Both run the same server and store configuration in a SQLite database. Microphone capture, clipboard access, selected-text discovery, global hotkeys, the radial menu (including Play/Pause media actions), and typing into applications remain on the desktop.
 
 ## Local desktop
 
@@ -14,25 +14,25 @@ The platform user-data directory contains:
 | --- | --- |
 | `porvoz.db` | Server profiles, encrypted provider keys, inference keys, prefixes, and activity |
 | `server-master-key.bin` | Server encryption key protected by the operating system |
-| `desktop-preferences.json` | Backend selection, encrypted remote admin key, active profile per backend, hotkey, cue volume, and console selection |
+| `desktop-preferences.json` | Backend selection, encrypted remote admin key, active profile per backend, hotkey, cue volume, selection capture, and console selection |
 
 The directory is normally `%APPDATA%/Porvoz` on Windows or `$XDG_CONFIG_HOME/Porvoz` (default `~/.config/Porvoz`) on Linux. Local encryption depends on the operating system's credential service. Copying the database alone does not transfer its provider credentials to a different machine.
 
 ## Docker
 
-Copy the repository's `.env.example` to `.env` and replace both key placeholders with independent random secrets. Set `PORVOZ_IMAGE_TAG=3.0.1-alpha-1` to pin this release, then run:
+Copy the repository's `.env.example` to `.env` and replace both key placeholders with independent random secrets. Set `PORVOZ_IMAGE_TAG=3.1.0-alpha-1` to pin this release, then run:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-The image is `bgaeddert/porvoz:3.0.1-alpha-1` and supports Linux amd64. Compose stores the database in the `porvoz-data` volume. To run the published image directly:
+The image is `bgaeddert/porvoz:3.1.0-alpha-1` and supports Linux amd64. Compose stores the database in the `porvoz-data` volume. To run the published image directly:
 
 ```bash
 docker run -d --name porvoz --restart unless-stopped \
   --env-file .env -p 8080:8080 \
-  -v porvoz-data:/data bgaeddert/porvoz:3.0.1-alpha-1
+  -v porvoz-data:/data bgaeddert/porvoz:3.1.0-alpha-1
 ```
 
 The image listens on `0.0.0.0:8080` and writes `/data/porvoz.db` by default. If changing the direct-run server port through `.env`, also adjust both sides of `-p`. The server provides plain HTTP; use an HTTPS reverse proxy for access beyond a trusted local network.

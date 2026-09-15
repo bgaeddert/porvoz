@@ -100,6 +100,7 @@ test("the sidebar lists what you configure first, then what you check it with", 
   assert.match(settingsHtml, /id="radial-scale-value"[^>]*>100%<\/output>/);
   assert.match(settingsHtml, /id="radial-settings-wheel"/);
   assert.match(settingsHtml, /id="radial-slot-form"/);
+  assert.match(settingsHtml, /value="media">Media control/);
   // Log out belongs to the website and stays hidden in the desktop app.
   assert.match(navigation, /id="sign-out"[^>]*data-web-only/);
 });

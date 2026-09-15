@@ -19,6 +19,21 @@ contextBridge.exposeInMainWorld("porvozOverlay", {
     ipcRenderer.on("porvoz:overlay-response", listener);
     return () => ipcRenderer.removeListener("porvoz:overlay-response", listener);
   },
+  onCaptureSettings(callback) {
+    if (typeof callback !== "function") return () => {};
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on("porvoz:overlay-capture-settings", listener);
+    return () => ipcRenderer.removeListener("porvoz:overlay-capture-settings", listener);
+  },
+  getCaptureSettings() {
+    return ipcRenderer.invoke("porvoz:overlay-get-capture-settings");
+  },
+  saveConsoleSelectionEnabled(value) {
+    return ipcRenderer.invoke("porvoz:overlay-save-console-selection", value);
+  },
+  saveSelectionCaptureEnabled(value) {
+    return ipcRenderer.invoke("porvoz:overlay-save-selection-capture", value);
+  },
   copyResponse() {
     return ipcRenderer.invoke("porvoz:overlay-copy");
   },

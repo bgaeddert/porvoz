@@ -110,6 +110,9 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   saveConsoleSelectionEnabled(value) {
     return ipcRenderer.invoke("porvoz:save-console-selection", value);
   },
+  saveSelectionCaptureEnabled(value) {
+    return ipcRenderer.invoke("porvoz:save-selection-capture", value);
+  },
   setStatus(value) {
     ipcRenderer.send("porvoz:status", value);
   },
