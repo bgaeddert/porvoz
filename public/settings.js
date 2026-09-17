@@ -91,6 +91,22 @@ const instructionModel = document.querySelector("#instruction-model");
 const instructionReasoning = document.querySelector("#instruction-reasoning");
 const populateModelsButton = document.querySelector("#populate-models");
 const modelStatus = document.querySelector("#model-status");
+const routingControls = {
+  transcription: {
+    provider: document.querySelector("#transcription-provider"),
+    status: document.querySelector("#transcription-model-status"),
+    loadButton: document.querySelector("#populate-transcription-models"),
+    model: transcriptionModel,
+    picker: document.querySelector("#open-transcription-model-picker")
+  },
+  instruction: {
+    provider: document.querySelector("#instruction-provider"),
+    status: modelStatus,
+    loadButton: populateModelsButton,
+    model: instructionModel,
+    picker: document.querySelector("#open-instruction-model-picker")
+  }
+};
 const openTranscriptionModelPickerButton = document.querySelector("#open-transcription-model-picker");
 const openInstructionModelPickerButton = document.querySelector("#open-instruction-model-picker");
 const modelPickerDialog = document.querySelector("#model-picker-dialog");
@@ -191,7 +207,8 @@ let radialSaveQueue = Promise.resolve();
 let prefixSaveTimer;
 let prefixSaveQueue = Promise.resolve();
 let modelSaveQueue = Promise.resolve();
-let modelSaveTimer;
+const modelSaveTimers = new Map();
+const modelSaveFailures = new Set();
 let soundVolumeSaveTimer;
 let prefixRecorder;
 let prefixRecordingStream;
@@ -253,11 +270,14 @@ async function initializeSettings() {
   connectionForm.addEventListener("submit", saveConnection);
   copyInferenceApiKeyButton.addEventListener("click", copyInferenceApiKey);
   rotateInferenceApiKeyButton.addEventListener("click", rotateInferenceApiKey);
-  populateModelsButton.addEventListener("click", populateModels);
+  for (const [stage, controls] of Object.entries(routingControls)) {
+    controls.provider.addEventListener("change", () => switchRoutingProvider(stage));
+    controls.loadButton.addEventListener("click", () => populateModels(stage));
+  }
   transcriptionModel.addEventListener("input", handleModelInput);
   instructionModel.addEventListener("input", handleModelInput);
-  instructionReasoning.addEventListener("change", saveModelSelections);
-  searchToolInputs.forEach((input) => input.addEventListener("change", saveModelSelections));
+  instructionReasoning.addEventListener("change", () => saveModelSelections("instruction"));
+  searchToolInputs.forEach((input) => input.addEventListener("change", () => saveModelSelections("instruction")));
   openTranscriptionModelPickerButton.addEventListener("click", () => openModelPicker("transcription"));
   openInstructionModelPickerButton.addEventListener("click", () => openModelPicker("instruction"));
   modelPickerInput.addEventListener("input", () => {
@@ -349,7 +369,9 @@ function renderVoicePrefixSupport() {
 
 function handleActivityCanceled() {
   const prefixActive = prefixDialog.open && ["recording", "processing"].includes(prefixRecordStatus.dataset.state);
-  const modelsActive = modelStatus.dataset.state === "loading";
+  const loadingStatuses = Object.values(routingControls).map(({ status }) => status)
+    .filter((status) => status.dataset.state === "loading");
+  const modelsActive = loadingStatuses.length > 0;
   if (!prefixActive && !modelsActive) return;
 
   if (prefixActive) {
@@ -364,8 +386,10 @@ function handleActivityCanceled() {
     bridge.setStatus?.({ state: "idle" });
   }
   if (modelsActive) {
-    modelStatus.textContent = "Model loading canceled.";
-    modelStatus.dataset.state = "idle";
+    for (const status of loadingStatuses) {
+      status.textContent = "Model loading canceled.";
+      status.dataset.state = "idle";
+    }
   }
 }
 
@@ -442,6 +466,7 @@ async function switchActiveProfile() {
   profileStatus.textContent = "Switching connection profile…";
   profileStatus.dataset.state = "saving";
   try {
+    await flushModelSaves();
     runtimeConfig = await bridge.setActiveProfile({ id: nextProfileId });
     renderProfiles();
     await loadConnectionSettings();
@@ -503,6 +528,7 @@ async function saveProfileDialog() {
   profileDialogStatus.textContent = "Saving…";
   profileDialogStatus.dataset.state = "saving";
   try {
+    await flushModelSaves();
     runtimeConfig = profileDialogMode === "add"
       ? await bridge.createProfile({ name })
       : await bridge.renameProfile({ id: runtimeConfig.activeProfileId, name });
@@ -511,7 +537,7 @@ async function saveProfileDialog() {
     renderModels();
     profileDialog.close();
     profileStatus.textContent = profileDialogMode === "add"
-      ? `Added “${name}” and made it the active profile.`
+      ? `Added “${name}”. Choose it in a routing section to use it.`
       : `Renamed the profile to “${name}”.`;
     profileStatus.dataset.state = "success";
   } catch (error) {
@@ -532,12 +558,13 @@ async function confirmDeleteProfile() {
   confirmDeleteProfileButton.disabled = true;
   const deletedName = getActiveProfileName();
   try {
+    await flushModelSaves();
     runtimeConfig = await bridge.deleteProfile({ id: runtimeConfig.activeProfileId });
     renderProfiles();
     await loadConnectionSettings();
     renderModels();
     deleteProfileDialog.close();
-    profileStatus.textContent = `Deleted “${deletedName}”. Now using “${getActiveProfileName()}”.`;
+    profileStatus.textContent = `Deleted “${deletedName}”. Provider configuration and routing updated.`;
     profileStatus.dataset.state = "success";
   } catch (error) {
     profileStatus.textContent = error.message || "Could not delete the connection profile.";
@@ -608,6 +635,7 @@ async function saveConnection(event) {
   connectionStatus.dataset.state = "saving";
 
   try {
+    await flushModelSaves();
     const result = await bridge.saveConnection({
       baseUrl: baseUrlInput.value,
       apiKey: apiKeyInput.value,
@@ -627,78 +655,134 @@ async function saveConnection(event) {
 }
 
 function renderModels() {
-  const models = Array.isArray(runtimeConfig.models.available) ? runtimeConfig.models.available : [];
-  transcriptionModel.value = runtimeConfig.models.selected.transcription || "";
-  instructionModel.value = runtimeConfig.models.selected.instruction || "";
-  instructionReasoning.value = ["low", "medium", "high"].includes(runtimeConfig.models.selected.instructionReasoning)
-    ? runtimeConfig.models.selected.instructionReasoning
-    : "low";
-  setSearchTool(runtimeConfig.models.selected.searchTool);
-  const hasModels = models.length > 0;
-  openTranscriptionModelPickerButton.disabled = !hasModels;
-  openInstructionModelPickerButton.disabled = !hasModels;
-  openTranscriptionModelPickerButton.title = hasModels
-    ? "Browse transcription models"
-    : "Load models to browse the catalog";
-  openInstructionModelPickerButton.title = hasModels
-    ? "Browse instruction models"
-    : "Load models to browse the catalog";
-  modelStatus.textContent = hasModels
-    ? `${models.length} models loaded. Type a model ID or browse the catalog.`
-    : "No models loaded yet. You can type a model ID or load the catalog.";
-  modelStatus.dataset.state = hasModels ? "success" : "idle";
+  for (const stage of Object.keys(routingControls)) renderRouting(stage);
 }
 
-async function populateModels() {
-  populateModelsButton.disabled = true;
-  modelStatus.textContent = "Loading every model from the endpoint…";
-  modelStatus.dataset.state = "loading";
-  try {
-    runtimeConfig = await bridge.populateModels();
-    renderModels();
-  } catch (error) {
-    if (isCancellationError(error)) {
-      modelStatus.textContent = "Model loading canceled.";
-      modelStatus.dataset.state = "idle";
-      return;
-    }
-    console.error("Could not load models:", error);
-    modelStatus.textContent = error.message || "Could not load models.";
-    modelStatus.dataset.state = "error";
-  } finally {
-    populateModelsButton.disabled = false;
+function renderRouting(stage) {
+  const controls = routingControls[stage];
+  const route = runtimeConfig.routing[stage];
+  controls.provider.replaceChildren(...runtimeConfig.profiles.map(({ id, name }) => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = name;
+    return option;
+  }));
+  controls.provider.value = route.profileId;
+  controls.model.value = route.model || "";
+  if (stage === "instruction") {
+    instructionReasoning.value = route.instructionReasoning;
+    setSearchTool(route.searchTool);
+  }
+  const hasModels = route.available.length > 0;
+  controls.picker.disabled = !hasModels;
+  controls.picker.title = hasModels ? `Browse ${stage} models` : "Load models to browse the catalog";
+  controls.status.textContent = hasModels
+    ? `${route.available.length} models loaded. Type a model ID or browse the catalog.`
+    : "No models loaded yet. You can type a model ID or load the catalog.";
+  controls.status.dataset.state = hasModels ? "success" : "idle";
+}
+
+function setRoutingControlsDisabled(stage, disabled) {
+  const controls = routingControls[stage];
+  controls.provider.disabled = disabled;
+  controls.model.disabled = disabled;
+  controls.loadButton.disabled = disabled;
+  controls.picker.disabled = disabled || !runtimeConfig.routing[stage].available.length;
+  if (stage === "instruction") {
+    instructionReasoning.disabled = disabled;
+    for (const input of searchToolInputs) input.disabled = disabled;
   }
 }
 
-function saveModelSelections() {
+async function switchRoutingProvider(stage) {
+  const controls = routingControls[stage];
+  const profileId = controls.provider.value;
+  if (profileId === runtimeConfig.routing[stage].profileId) return;
+  setRoutingControlsDisabled(stage, true);
+  try {
+    await flushModelSaves();
+    runtimeConfig = await bridge.saveRouting({ [stage]: profileId });
+    renderRouting(stage);
+    controls.status.textContent = `${stage === "transcription" ? "Transcription" : "Instruction"} provider saved.`;
+    controls.status.dataset.state = "success";
+  } catch (error) {
+    controls.provider.value = runtimeConfig.routing[stage].profileId;
+    controls.status.textContent = error.message || "Could not save provider routing.";
+    controls.status.dataset.state = "error";
+  } finally {
+    setRoutingControlsDisabled(stage, false);
+  }
+}
+
+async function flushModelSaves() {
+  for (const stage of new Set([...modelSaveTimers.keys(), ...modelSaveFailures])) {
+    clearTimeout(modelSaveTimers.get(stage));
+    modelSaveTimers.delete(stage);
+    void saveModelSelections(stage);
+  }
+  await modelSaveQueue;
+  if (modelSaveFailures.size) {
+    throw new Error("Could not save model selections. Try again before changing providers.");
+  }
+}
+
+async function populateModels(stage) {
+  const controls = routingControls[stage];
+  setRoutingControlsDisabled(stage, true);
+  try {
+    await flushModelSaves();
+    controls.status.textContent = "Loading every model from the endpoint…";
+    controls.status.dataset.state = "loading";
+    await bridge.populateModels({ profileId: runtimeConfig.routing[stage].profileId });
+    runtimeConfig = await bridge.getRuntimeConfig();
+    renderRouting(stage);
+    const otherStage = stage === "transcription" ? "instruction" : "transcription";
+    // A shared provider has one catalog, but the other model's draft stays intact.
+    routingControls[otherStage].picker.disabled = !runtimeConfig.routing[otherStage].available.length;
+  } catch (error) {
+    if (isCancellationError(error)) {
+      controls.status.textContent = "Model loading canceled.";
+      controls.status.dataset.state = "idle";
+    } else {
+      console.error("Could not load models:", error);
+      controls.status.textContent = error.message || "Could not load models.";
+      controls.status.dataset.state = "error";
+    }
+  } finally {
+    setRoutingControlsDisabled(stage, false);
+  }
+}
+
+function saveModelSelections(stage) {
+  clearTimeout(modelSaveTimers.get(stage));
+  modelSaveTimers.delete(stage);
+  const controls = routingControls[stage];
+  const profileId = runtimeConfig.routing[stage].profileId;
   const selections = {
-    transcription: transcriptionModel.value.trim(),
-    instruction: instructionModel.value.trim(),
-    instructionReasoning: instructionReasoning.value,
-    searchTool: getSearchTool()
+    profileId,
+    [stage]: controls.model.value.trim(),
+    ...(stage === "instruction" ? {
+      instructionReasoning: instructionReasoning.value,
+      searchTool: getSearchTool()
+    } : {})
   };
-  const previousStatus = modelStatus.textContent;
-  modelStatus.textContent = "Saving model selections…";
-  modelStatus.dataset.state = "saving";
+  controls.status.textContent = "Saving model selections…";
+  controls.status.dataset.state = "saving";
   const saveOperation = modelSaveQueue.catch(() => {}).then(async () => {
     try {
-      runtimeConfig = await bridge.saveModelSelections(selections);
-      transcriptionModel.value = runtimeConfig.models.selected.transcription || "";
-      instructionModel.value = runtimeConfig.models.selected.instruction || "";
-      instructionReasoning.value = runtimeConfig.models.selected.instructionReasoning || "low";
-      setSearchTool(runtimeConfig.models.selected.searchTool);
-      modelStatus.textContent = `${runtimeConfig.models.available.length} models loaded. Selections saved.`;
-      modelStatus.dataset.state = "success";
+      const result = await bridge.saveModelSelections(selections);
+      if (runtimeConfig.routing[stage].profileId === profileId && result.routing[stage].profileId === profileId) {
+        runtimeConfig.routing[stage] = result.routing[stage];
+      }
+      modelSaveFailures.delete(stage);
+      // Keep editing the current draft while earlier saves finish.
+      controls.status.textContent = "Selections saved.";
+      controls.status.dataset.state = "success";
       return true;
     } catch (error) {
-      try {
-        runtimeConfig = await bridge.getRuntimeConfig();
-        renderModels();
-      } catch (refreshError) {
-        console.error("Could not restore model selections:", refreshError);
-      }
-      modelStatus.textContent = error.message || previousStatus;
-      modelStatus.dataset.state = "error";
+      modelSaveFailures.add(stage);
+      controls.status.textContent = error.message || "Could not save model selections.";
+      controls.status.dataset.state = "error";
       return false;
     }
   });
@@ -706,13 +790,14 @@ function saveModelSelections() {
   return saveOperation;
 }
 
-function handleModelInput() {
-  clearTimeout(modelSaveTimer);
-  modelStatus.textContent = "Saving model selections…";
-  modelStatus.dataset.state = "saving";
-  modelSaveTimer = setTimeout(() => {
-    void saveModelSelections();
-  }, 250);
+function handleModelInput(event) {
+  const stage = event.target === transcriptionModel ? "transcription" : "instruction";
+  clearTimeout(modelSaveTimers.get(stage));
+  routingControls[stage].status.textContent = "Saving model selections…";
+  routingControls[stage].status.dataset.state = "saving";
+  modelSaveTimers.set(stage, setTimeout(() => {
+    void saveModelSelections(stage);
+  }, 250));
 }
 
 function openModelPicker(target) {
@@ -721,7 +806,7 @@ function openModelPicker(target) {
   document.documentElement.classList.add("model-picker-open");
   document.body.classList.add("model-picker-open");
   modelPickerHeading.textContent = `Browse ${target} models`;
-  modelPickerDescription.textContent = `Filter the catalog, choose a ${target} model, then save it.`;
+  modelPickerDescription.textContent = `Filter the catalog, choose ${target === "instruction" ? "an" : "a"} ${target} model, then save it.`;
   modelPickerInput.value = "";
   renderModelPickerOptions();
   modelPickerDialog.showModal();
@@ -729,7 +814,7 @@ function openModelPicker(target) {
 }
 
 function renderModelPickerOptions() {
-  const models = Array.isArray(runtimeConfig.models.available) ? runtimeConfig.models.available : [];
+  const models = runtimeConfig.routing[modelPickerTarget].available;
   const query = modelPickerInput.value.trim().toLocaleLowerCase();
   const filteredModels = models.filter((model) => model.toLocaleLowerCase().includes(query));
   modelPickerMenu.replaceChildren(...createModelMenuOptions(filteredModels));
@@ -758,7 +843,7 @@ async function saveModelPickerSelection() {
   input.value = selectedModel;
   saveModelPickerButton.disabled = true;
   cancelModelPickerButton.disabled = true;
-  const saved = await saveModelSelections();
+  const saved = await saveModelSelections(modelPickerTarget);
   saveModelPickerButton.disabled = false;
   cancelModelPickerButton.disabled = false;
   if (saved) modelPickerDialog.close();
@@ -1478,6 +1563,8 @@ async function resetToDefaults(event) {
   event.preventDefault();
   clearTimeout(prefixSaveTimer);
   clearTimeout(soundVolumeSaveTimer);
+  for (const timer of modelSaveTimers.values()) clearTimeout(timer);
+  modelSaveTimers.clear();
   confirmResetButton.disabled = true;
   resetStatus.textContent = "Resetting settings…";
   resetStatus.dataset.state = "saving";
@@ -1485,6 +1572,7 @@ async function resetToDefaults(event) {
     await prefixSaveQueue.catch(() => {});
     await modelSaveQueue.catch(() => {});
     runtimeConfig = await bridge.resetToDefaults();
+    modelSaveFailures.clear();
     prefixConfig = runtimeConfig.prefixes.map(normalizePrefix);
     renderProfiles();
     renderModels();

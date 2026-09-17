@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createSqliteDatabase } from "./sqlite-database.js";
+import { normalizeRouting, updateRouting } from "../electron/provider-routing.js";
 
 const STATE_ID = 1;
 
@@ -44,6 +45,7 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
     saveConnection,
     saveModelCatalog,
     saveModelSelections,
+    saveRouting,
     savePrefixSettings,
     addProfile,
     renameProfile,
@@ -151,6 +153,11 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
     saveSettings();
   }
 
+  function saveRouting(value) {
+    settings.routing = updateRouting(settings, value);
+    saveSettings();
+  }
+
   function addProfile({ name } = {}) {
     if (settings.profiles.length >= defaults.limits.maxProfiles) {
       throw new Error(`You can save up to ${defaults.limits.maxProfiles} connection profiles.`);
@@ -190,6 +197,7 @@ export async function createServerStore({ databasePath, defaultsPath, masterKey 
       database.prepare("DELETE FROM provider_credentials WHERE profile_id = ?").run(id);
       database.prepare("DELETE FROM inference_keys WHERE profile_id = ?").run(id);
       if (settings.activeProfileId === id) settings.activeProfileId = settings.profiles[0].id;
+      settings.routing = normalizeRouting(settings);
       saveSettings();
     });
     transaction();
@@ -319,11 +327,13 @@ function createInitialSettings(defaults) {
 
 function normalizeSettings(value, defaults) {
   const profiles = normalizeProfiles(value?.profiles, defaults);
+  const activeProfileId = profiles.some((profile) => profile.id === value?.activeProfileId)
+    ? value.activeProfileId
+    : profiles[0].id;
   return {
     profiles,
-    activeProfileId: profiles.some((profile) => profile.id === value?.activeProfileId)
-      ? value.activeProfileId
-      : profiles[0].id,
+    activeProfileId,
+    routing: normalizeRouting({ profiles, activeProfileId, routing: value?.routing }),
     prefixes: normalizePrefixes(value?.prefixes, defaults.limits.maxPrefixes)
   };
 }

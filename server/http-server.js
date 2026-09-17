@@ -79,7 +79,6 @@ export function createPorvozHttpServer({
     if (request.method === "POST" && url.pathname === "/v1/audio/transcriptions") {
       const multipart = await readMultipart(request, store.getLimits().maxUploadBytes);
       const profileId = auth.type === "inference" ? auth.profileId : multipart.fields.model;
-      if (!profileId) return sendOpenAiError(response, 400, "The client must send a profile ID in model.", "invalid_request_error");
       if (multipart.fields.response_format && multipart.fields.response_format !== "json") {
         return sendOpenAiError(response, 400, "Porvoz supports only the json transcription response format.", "invalid_request_error");
       }
@@ -137,6 +136,9 @@ export function createPorvozHttpServer({
     }
     if (request.method === "GET" && url.pathname === "/v1/porvoz/setup") {
       return sendJson(response, 200, service.getSetupStatus(url.searchParams.get("profileId") || undefined));
+    }
+    if (request.method === "PUT" && url.pathname === "/v1/porvoz/routing") {
+      return sendJson(response, 200, service.saveRouting(await readJson(request)));
     }
     if (request.method === "POST" && url.pathname === "/v1/porvoz/profiles") {
       return sendJson(response, 201, service.createProfile(await readJson(request)));

@@ -610,6 +610,7 @@ textarea:focus {
   border: 0;
 }
 
+.routing-provider-field,
 .instruction-reasoning-field {
   align-self: start;
 }

@@ -111,12 +111,13 @@
           <section id="connection" class="settings-card connection-card" data-settings-page="provider" aria-labelledby="connection-heading" hidden>
             <div class="settings-heading">
               <div>
-                <h2 id="connection-heading">API provider</h2>
+                <h2 id="connection-heading">AI providers</h2>
+                <p class="section-description">Configure provider connections, then choose where each model runs below.</p>
               </div>
             </div>
             <div class="profile-switcher">
               <label class="field-label" for="profile-select">
-                Connection profile
+                Provider configuration
                 <select id="profile-select"></select>
               </label>
               <div class="profile-switcher-actions">
@@ -146,7 +147,7 @@
                 </button>
               </div>
             </div>
-            <p id="profile-status" class="field-note" aria-live="polite">Each profile keeps its own URL, key, and models.</p>
+            <p id="profile-status" class="field-note" aria-live="polite">Each provider keeps its own URL and API key.</p>
             <form id="connection-form" class="connection-form">
               <label class="field-label" for="base-url">
                 Base URL
@@ -191,10 +192,14 @@
           <section id="models" class="settings-card" data-settings-page="provider" aria-labelledby="models-heading" hidden>
             <div class="settings-heading">
               <div>
-                <h2 id="models-heading">Request routing</h2>
+                <h2 id="models-heading">Transcription routing</h2>
               </div>
             </div>
             <div class="model-grid">
+              <label class="field-label routing-provider-field" for="transcription-provider">
+                Provider
+                <select id="transcription-provider"></select>
+              </label>
               <div class="model-field">
                 <label class="field-label" for="transcription-model">Transcription model</label>
                 <div class="model-input-row">
@@ -207,6 +212,30 @@
                   </button>
                 </div>
               </div>
+              <div class="form-actions model-actions">
+                <p id="transcription-model-status" class="field-note" aria-live="polite">No models loaded yet.</p>
+                <button id="populate-transcription-models" class="button-secondary button-with-icon" type="button">
+                  <svg class="icon icon-tabler icon-tabler-refresh" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
+                    <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
+                  </svg>
+                  <span class="button-label">Load models</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section id="instruction-routing" class="settings-card" data-settings-page="provider" aria-labelledby="instruction-routing-heading" hidden>
+            <div class="settings-heading">
+              <div>
+                <h2 id="instruction-routing-heading">Instruction routing</h2>
+              </div>
+            </div>
+            <div class="model-grid">
+              <label class="field-label routing-provider-field" for="instruction-provider">
+                Provider
+                <select id="instruction-provider"></select>
+              </label>
               <div class="model-field">
                 <label class="field-label" for="instruction-model">Instruction model</label>
                 <div class="model-input-row">

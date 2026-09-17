@@ -10,7 +10,7 @@ RUN npm ci --omit=dev --ignore-scripts \
     && npm cache clean --force
 
 COPY server ./server
-COPY electron/app-service.js electron/operation-cancellation.js electron/defaults.json ./electron/
+COPY electron/app-service.js electron/operation-cancellation.js electron/provider-routing.js electron/defaults.json ./electron/
 
 # The browser administration site is served from the same HTTP server and port.
 # Only the files the site's allowlist names are copied; desktop overlay assets

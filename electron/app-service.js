@@ -1,6 +1,7 @@
 import OpenAI, { toFile } from "openai";
 import { randomUUID } from "node:crypto";
 import { Agent } from "undici";
+import { normalizeRouting } from "./provider-routing.js";
 import {
   cancellationErrorFor,
   throwIfAborted
@@ -28,6 +29,7 @@ export function createAppService(settingsStore, logStore) {
     saveConnection,
     populateModels,
     saveModelSelections,
+    saveRouting,
     savePrefixSettings,
     saveSoundVolume,
     createProfile,
@@ -58,6 +60,18 @@ export function createAppService(settingsStore, logStore) {
       limits,
       profiles: settings.profiles.map(({ id, name }) => ({ id, name })),
       activeProfileId: activeProfile.id,
+      routing: Object.fromEntries(Object.entries(normalizeRouting(settings)).map(([stage, id]) => {
+        const profile = getProfile(settings, id);
+        return [stage, {
+          profileId: id,
+          available: profile.models.available,
+          model: profile.models[stage],
+          ...(stage === "instruction" ? {
+            instructionReasoning: normalizeInstructionReasoning(profile.models.instructionReasoning),
+            searchTool: getSearchTool(profile)
+          } : {})
+        }];
+      })),
       models: {
         available: activeProfile.models.available,
         selected: {
@@ -86,13 +100,21 @@ export function createAppService(settingsStore, logStore) {
 
   function getSetupStatus(profileId) {
     const settings = settingsStore.getSettings();
-    const activeProfile = getProfile(settings, profileId);
-    const connection = getConnectionSettings(activeProfile.id);
+    const routing = normalizeRouting(settings);
+    const transcriptionProfile = getProfile(settings, profileId || routing.transcription);
+    const instructionProfile = getProfile(settings, profileId || routing.instruction);
     const missing = [];
-    if (!connection.baseUrl) missing.push("API base URL");
-    if (!connection.apiKeyConfigured) missing.push("API key");
-    if (!activeProfile.models.transcription) missing.push("transcription model");
-    if (!activeProfile.models.instruction) missing.push("instruction model");
+    if (transcriptionProfile.id === instructionProfile.id) {
+      if (!transcriptionProfile.connection.baseUrl) missing.push("API base URL");
+      if (!settingsStore.hasApiKey(transcriptionProfile.id)) missing.push("API key");
+    } else {
+      for (const [stage, profile] of [["transcription", transcriptionProfile], ["instruction", instructionProfile]]) {
+        if (!profile.connection.baseUrl) missing.push(`${stage} API base URL`);
+        if (!settingsStore.hasApiKey(profile.id)) missing.push(`${stage} API key`);
+      }
+    }
+    if (!transcriptionProfile.models.transcription) missing.push("transcription model");
+    if (!instructionProfile.models.instruction) missing.push("instruction model");
     const missingItems = formatList(missing);
 
     return {
@@ -196,6 +218,11 @@ export function createAppService(settingsStore, logStore) {
     return getRuntimeConfig(value.profileId);
   }
 
+  function saveRouting(value) {
+    settingsStore.saveRouting(value);
+    return getRuntimeConfig();
+  }
+
   function savePrefixSettings({ prefixes } = {}) {
     settingsStore.savePrefixSettings({
       prefixes: validatePrefixes(prefixes)
@@ -219,7 +246,9 @@ export function createAppService(settingsStore, logStore) {
   async function transcribe({ audio, mimeType, profileId, timing } = {}, { signal } = {}) {
     const normalizedMimeType = typeof mimeType === "string" ? mimeType.toLowerCase() : "";
     const audioBuffer = toBuffer(audio);
-    const selectedModel = getProfile(settingsStore.getSettings(), profileId).models.transcription;
+    const settings = settingsStore.getSettings();
+    profileId ||= normalizeRouting(settings).transcription;
+    const selectedModel = getProfile(settings, profileId).models.transcription;
 
     try {
       throwIfAborted(signal);
@@ -307,6 +336,7 @@ export function createAppService(settingsStore, logStore) {
     { readClipboard = () => suppliedClipboardText || "", signal } = {}
   ) {
     const settings = settingsStore.getSettings();
+    profileId ||= normalizeRouting(settings).instruction;
     const selectedText = limitSelectedTextContext(suppliedSelectedText);
     const inputs = getInstructionInputs(transcript, settings, profileId, {
       matchPrefixes: !selectedText
@@ -369,17 +399,21 @@ export function createAppService(settingsStore, logStore) {
 
   async function createPrefixFromVoice({ audio, mimeType, profileId } = {}, { signal } = {}) {
     const settings = settingsStore.getSettings();
-    const activeProfile = getProfile(settings, profileId);
+    const routing = normalizeRouting(settings);
+    const transcriptionProfileId = profileId || routing.transcription;
+    const instructionProfileId = profileId || routing.instruction;
     throwIfAborted(signal);
-    if (!hasApiConfig(profileId)) throw new Error("Enter the base URL and API key in Settings.");
-    if (!activeProfile.models.transcription) {
+    if (!hasApiConfig(transcriptionProfileId) || !hasApiConfig(instructionProfileId)) {
+      throw new Error("Enter the base URL and API key in Settings.");
+    }
+    if (!getProfile(settings, transcriptionProfileId).models.transcription) {
       throw new Error("Choose a transcription model in Settings after loading models.");
     }
-    if (!activeProfile.models.instruction) {
+    if (!getProfile(settings, instructionProfileId).models.instruction) {
       throw new Error("Choose an instruction model in Settings after loading models.");
     }
 
-    const { transcript } = await transcribe({ audio, mimeType, profileId }, { signal });
+    const { transcript } = await transcribe({ audio, mimeType, profileId: transcriptionProfileId }, { signal });
     throwIfAborted(signal);
     if (transcript.length > maxTranscriptCharacters) {
       throw new Error("The spoken prefix description is too long. Please try a shorter recording.");
@@ -387,7 +421,7 @@ export function createAppService(settingsStore, logStore) {
 
     return {
       transcript,
-      prefix: await createPrefixWithModel(transcript, settings, signal, profileId)
+      prefix: await createPrefixWithModel(transcript, settings, signal, instructionProfileId)
     };
   }
 

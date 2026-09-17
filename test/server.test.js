@@ -276,6 +276,131 @@ test("provider credentials and inference keys persist without storing provider p
   wrongKey.close();
 });
 
+test("first-party capture routes transcription and instructions to separate providers", async (context) => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "porvoz-routing-"));
+  const requests = [];
+  const speech = http.createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    requests.push({ stage: "speech", url: request.url, key: request.headers.authorization,
+      body: Buffer.concat(chunks).toString("utf8") });
+    if (request.url === "/v1/models") return json(response, 200, { data: [{ id: "speech-only" }] });
+    if (request.url === "/v1/audio/transcriptions") return json(response, 200, { text: "tidy this text" });
+    json(response, 404, { error: { message: "speech provider cannot process instructions" } });
+  });
+  const instructions = http.createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString("utf8");
+    requests.push({ stage: "instructions", url: request.url, key: request.headers.authorization, body });
+    if (request.url === "/v1/models") return json(response, 200, { data: [{ id: "instructions-only" }] });
+    if (request.url === "/v1/responses") {
+      const payload = JSON.parse(body);
+      return json(response, 200, { output_text: payload.instructions.startsWith("You design")
+        ? JSON.stringify({ name: "polish", instruction: "Polish the supplied text." })
+        : "Tidied text." });
+    }
+    json(response, 404, { error: { message: "instruction provider cannot transcribe" } });
+  });
+  await listen(speech);
+  await listen(instructions);
+  const store = await createServerStore({ databasePath: path.join(directory, "porvoz.db"), defaultsPath, masterKey: "routing-master" });
+  const application = createPorvozHttpServer({ store, adminKey: "routing-admin" });
+  const address = await application.start();
+  context.after(async () => {
+    await application.close();
+    await close(speech);
+    await close(instructions);
+    rmSync(directory, { recursive: true, force: true });
+  });
+  let selectedProfile = "";
+  const client = createBackendClient({
+    baseUrl: `http://127.0.0.1:${address.port}`, adminKey: "routing-admin",
+    getActiveProfileId: () => selectedProfile, setActiveProfileId: (id) => { selectedProfile = id; }
+  });
+  const speechId = (await client.getRuntimeConfig()).activeProfileId;
+  await client.saveConnection({ baseUrl: `http://127.0.0.1:${speech.address().port}/v1`, apiKey: "speech-key" });
+  await client.saveModelSelections({ transcription: "speech-only" });
+  const instructionId = (await client.createProfile({ name: "Instructions" })).activeProfileId;
+  await client.saveConnection({ baseUrl: `http://127.0.0.1:${instructions.address().port}/v1`, apiKey: "instruction-key" });
+  await client.saveModelSelections({ instruction: "instructions-only", instructionReasoning: "high", searchTool: "openrouter" });
+  await client.saveRouting({ transcription: speechId, instruction: instructionId });
+  await client.savePrefixSettings({ prefixes: [{ id: "tidy", name: "tidy", instruction: "Tidy the supplied text." }] });
+  // Editing an unconfigured third provider must not affect readiness or capture.
+  const editorId = (await client.createProfile({ name: "Unconfigured" })).activeProfileId;
+  assert.equal((await client.getSetupStatus()).ready, true);
+  await client.populateModels({ profileId: speechId });
+  await client.populateModels({ profileId: instructionId });
+  const runtime = await client.getRuntimeConfig();
+  assert.equal(runtime.activeProfileId, editorId);
+  assert.deepEqual(runtime.routing.transcription.available, ["speech-only"]);
+  assert.deepEqual(runtime.routing.instruction.available, ["instructions-only"]);
+  assert.equal(runtime.routing.instruction.searchTool, "openrouter");
+  for (const value of [null, [], { transcription: "missing" }]) {
+    await assert.rejects(() => api(`http://127.0.0.1:${address.port}`, "/v1/porvoz/routing", {
+      method: "PUT", headers: { authorization: "Bearer routing-admin", "content-type": "application/json" },
+      body: JSON.stringify(value)
+    }), { status: 400 });
+  }
+  const result = await client.transcribe({ audio: Buffer.from("audio"), mimeType: "audio/wav" });
+  assert.equal(result.rawTranscript, "tidy this text");
+  assert.equal(result.transcript, "Tidied text.");
+  assert.equal(result.instructionApplied, true);
+  const proposal = await client.createPrefixFromVoice({ audio: Buffer.from("audio"), mimeType: "audio/wav" });
+  assert.equal(proposal.prefix.name, "polish");
+  const transcriptionRequests = requests.filter(({ url }) => url === "/v1/audio/transcriptions");
+  assert.equal(transcriptionRequests.length, 2);
+  for (const request of transcriptionRequests) {
+    assert.equal(request.stage, "speech");
+    assert.equal(request.key, "Bearer speech-key");
+    assert.match(request.body, /speech-only/);
+  }
+  const instructionRequests = requests.filter(({ url }) => url === "/v1/responses");
+  assert.equal(instructionRequests.length, 2);
+  for (const request of instructionRequests) {
+    assert.equal(request.stage, "instructions");
+    assert.equal(request.key, "Bearer instruction-key");
+    const payload = JSON.parse(request.body);
+    assert.equal(payload.model, "instructions-only");
+    assert.equal(payload.reasoning.effort, "high");
+    assert.equal(payload.tools[0].type, "openrouter:web_search");
+  }
+});
+
+test("routing migrates the active provider, persists, and repairs deleted providers", async (context) => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "porvoz-routing-store-"));
+  const options = { databasePath: path.join(directory, "porvoz.db"), defaultsPath, masterKey: "routing-master" };
+  let store = await createServerStore(options);
+  context.after(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
+  const firstId = store.getSettings().activeProfileId;
+  const secondId = store.addProfile({ name: "Second" }).id;
+  // Simulate settings saved before routing existed.
+  const legacy = store.getSettings();
+  delete legacy.routing;
+  store.getDatabase().prepare("UPDATE state SET settings_json = ? WHERE id = ?").run(JSON.stringify(legacy), 1);
+  store.close();
+  store = await createServerStore(options);
+  assert.deepEqual(store.getSettings().routing, { transcription: secondId, instruction: secondId });
+  store.saveRouting({ transcription: firstId });
+  store.setActiveProfile({ id: firstId });
+  const expected = { transcription: firstId, instruction: secondId };
+  assert.deepEqual(store.getSettings().routing, expected);
+  assert.throws(() => store.saveRouting({ transcription: secondId, instruction: "missing" }), /existing provider/);
+  assert.deepEqual(store.getSettings().routing, expected, "invalid updates are atomic");
+  store.close();
+  store = await createServerStore(options);
+  assert.deepEqual(store.getSettings().routing, expected);
+  const thirdId = store.addProfile({ name: "Third" }).id;
+  assert.deepEqual(store.getSettings().routing, expected, "adding a provider does not route requests to it");
+  store.deleteProfile({ id: thirdId });
+  assert.deepEqual(store.getSettings().routing, expected, "deleting an unused provider preserves routing");
+  store.deleteProfile({ id: secondId });
+  assert.deepEqual(store.getSettings().routing, { transcription: firstId, instruction: firstId });
+  store.resetToDefaults();
+  const resetId = store.getSettings().activeProfileId;
+  assert.deepEqual(store.getSettings().routing, { transcription: resetId, instruction: resetId });
+});
+
 async function api(baseUrl, route, options = {}) {
   const response = await fetch(`${baseUrl}${route}`, options);
   const body = await response.json();

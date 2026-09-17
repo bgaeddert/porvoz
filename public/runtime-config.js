@@ -9,6 +9,12 @@ export async function loadRuntimeConfig() {
     || !result.profiles.length
     || typeof result.activeProfileId !== "string"
     || !result.profiles.some((profile) => profile.id === result.activeProfileId)
+    || !["transcription", "instruction"].every((stage) =>
+      result.profiles.some((profile) => profile.id === result.routing?.[stage]?.profileId)
+      && Array.isArray(result.routing[stage].available)
+      && typeof result.routing[stage].model === "string")
+    || !["low", "medium", "high"].includes(result.routing.instruction.instructionReasoning)
+    || !["omit", "openai", "openrouter"].includes(result.routing.instruction.searchTool)
     || !result?.models
     || !Array.isArray(result.models.available)
     || !result.models.selected

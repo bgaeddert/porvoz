@@ -1135,9 +1135,9 @@ function registerIpcHandlers() {
     notifySetupUpdated();
     return result;
   });
-  ipcMain.handle("porvoz:populate-models", () => runActiveOperation(async (signal) => {
+  ipcMain.handle("porvoz:populate-models", (_event, value) => runActiveOperation(async (signal) => {
     try {
-      const result = await appService.populateModels({ signal });
+      const result = await appService.populateModels({ profileId: value?.profileId, signal });
       notifySetupUpdated();
       return result;
     } catch (error) {
@@ -1147,6 +1147,11 @@ function registerIpcHandlers() {
   }));
   ipcMain.handle("porvoz:save-model-selections", async (_event, value) => {
     const result = await appService.saveModelSelections(value);
+    notifySetupUpdated();
+    return result;
+  });
+  ipcMain.handle("porvoz:save-routing", async (_event, value) => {
+    const result = await appService.saveRouting(value);
     notifySetupUpdated();
     return result;
   });

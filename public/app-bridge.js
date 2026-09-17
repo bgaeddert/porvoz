@@ -67,6 +67,7 @@ function createBrowserBridge() {
     saveConnection,
     populateModels,
     saveModelSelections,
+    saveRouting,
     savePrefixSettings,
     createProfile,
     renameProfile,
@@ -114,8 +115,7 @@ function createBrowserBridge() {
     return runtime;
   }
 
-  // Selecting a profile in this browser must not change which profile other
-  // clients of the same server are using, so the choice is only remembered here.
+  // Remember which provider this browser is editing independently of routing.
   async function setActiveProfile({ id } = {}) {
     const runtime = await request(`/v1/porvoz/runtime?profileId=${encodeURIComponent(id)}`);
     writeStoredProfileId(id);
@@ -127,7 +127,7 @@ function createBrowserBridge() {
   }
 
   async function getSetupStatus() {
-    return request(`/v1/porvoz/setup?profileId=${encodeURIComponent(await activeProfileId())}`);
+    return request("/v1/porvoz/setup");
   }
 
   async function saveConnection(value) {
@@ -137,18 +137,23 @@ function createBrowserBridge() {
     });
   }
 
-  async function populateModels({ signal } = {}) {
-    return request(`/v1/porvoz/profiles/${encodeURIComponent(await activeProfileId())}/models`, {
+  async function populateModels({ signal, profileId } = {}) {
+    return request(`/v1/porvoz/profiles/${encodeURIComponent(profileId || await activeProfileId())}/models`, {
       method: "POST",
       signal
     });
   }
 
   async function saveModelSelections(value) {
-    return request(`/v1/porvoz/profiles/${encodeURIComponent(await activeProfileId())}/models`, {
+    return request(`/v1/porvoz/profiles/${encodeURIComponent(value.profileId || await activeProfileId())}/models`, {
       method: "PUT",
       json: value
     });
+  }
+
+  async function saveRouting(value) {
+    await request("/v1/porvoz/routing", { method: "PUT", json: value });
+    return getRuntimeConfig();
   }
 
   async function savePrefixSettings(value) {
@@ -197,7 +202,6 @@ function createBrowserBridge() {
   // nothing here.
   async function transcribe({ audio, mimeType, timing } = {}, { signal } = {}) {
     const form = new FormData();
-    form.set("model", await activeProfileId());
     form.set("response_format", "json");
     if (timing && typeof timing === "object") {
       form.set("porvoz_timing", JSON.stringify(timing));
@@ -216,7 +220,6 @@ function createBrowserBridge() {
 
   async function createPrefixFromVoice({ audio, mimeType } = {}, { signal } = {}) {
     const form = new FormData();
-    form.set("model", await activeProfileId());
     form.set("file", new Blob([audio], { type: mimeType }), audioFileName(mimeType, "prefix-brief"));
     return request("/v1/porvoz/prefixes/from-audio", { method: "POST", body: form, signal });
   }

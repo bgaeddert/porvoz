@@ -4,7 +4,7 @@ The Porvoz server has two authentication modes. Send either key as `Authorizatio
 
 See [server setup and migration](server-setup.md) for deployment, desktop connections, and backup instructions.
 
-- The admin key comes from `PORVOZ_ADMIN_KEY`. It permits all settings and activity operations. On transcription requests it treats `model` as an internal profile ID.
+- The admin key comes from `PORVOZ_ADMIN_KEY`. It permits all settings and activity operations. On transcription requests an optional `model` pins both stages to an internal profile ID; omitting it uses the configured transcription and instruction providers.
 - Every profile has one readable inference key. It permits only `/v1/models` and `/v1/audio/transcriptions` for its bound profile. The submitted `model` value is accepted for client compatibility and ignored.
 
 A third mode serves the browser administration website only. It uses a session cookie rather than a bearer key and is described under [Browser administration routes](#browser-administration-routes). Inference keys cannot obtain a session.
@@ -36,7 +36,7 @@ An inference key receives exactly one current model description. The admin key r
 Send `multipart/form-data` with:
 
 - `file`: required audio file.
-- `model`: ignored for an inference key; required as a profile ID for the admin key.
+- `model`: ignored for an inference key; optional profile ID for the admin key. First-party clients omit it to use separate transcription and instruction routing.
 - `response_format`: optional, but only `json` is supported.
 - `porvoz_context`: optional JSON used by the first-party desktop. It can contain `clipboard` and `selectedText` strings. The desktop omits `selectedText` when the focused application reports no selection.
 - `porvoz_timing`: optional JSON used by first-party clients to carry capture timing into the shared activity record. Unknown or malformed timing data is ignored.
@@ -73,8 +73,9 @@ All routes below require the admin key, or an authenticated browser session carr
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `GET` | `/v1/porvoz/runtime?profileId=<id>` | Read profiles, selected-profile models, prefixes, and limits |
-| `GET` | `/v1/porvoz/setup?profileId=<id>` | Check whether a profile is ready for inference |
+| `GET` | `/v1/porvoz/runtime?profileId=<id>` | Read profiles, selected-profile models, stage routing, prefixes, and limits |
+| `GET` | `/v1/porvoz/setup?profileId=<id>` | Check routed providers for inference readiness, or a specific profile when supplied |
+| `PUT` | `/v1/porvoz/routing` | Select providers with `{ "transcription": "<profile-id>", "instruction": "<profile-id>" }`; either field may be omitted |
 | `POST` | `/v1/porvoz/profiles` | Create a profile |
 | `PATCH` | `/v1/porvoz/profiles/<id>` | Rename a profile |
 | `DELETE` | `/v1/porvoz/profiles/<id>` | Delete a profile |

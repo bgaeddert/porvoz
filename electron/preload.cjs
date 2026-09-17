@@ -23,11 +23,14 @@ contextBridge.exposeInMainWorld("porvozDesktop", {
   saveConnection(value) {
     return ipcRenderer.invoke("porvoz:save-connection", value);
   },
-  populateModels() {
-    return ipcRenderer.invoke("porvoz:populate-models");
+  populateModels(value) {
+    return ipcRenderer.invoke("porvoz:populate-models", value);
   },
   saveModelSelections(value) {
     return ipcRenderer.invoke("porvoz:save-model-selections", value);
+  },
+  saveRouting(value) {
+    return ipcRenderer.invoke("porvoz:save-routing", value);
   },
   createProfile(value) {
     return ipcRenderer.invoke("porvoz:create-profile", value);

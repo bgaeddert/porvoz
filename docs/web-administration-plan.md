@@ -21,7 +21,7 @@ features in the Electron app. The website administers only the Porvoz server
 hosting it.
 
 The first testing pass will build and run the Docker container in WSL, then
-connect to it from the local Windows browser. Release and Dreamfyre deployment
+connect to it from the local Windows browser. Release and production deployment in WSL
 follow successful testing and review as a separate step.
 
 ## Login and navigation
@@ -219,7 +219,7 @@ work.
 1. Build the updated Docker image in WSL.
 2. Run a test container using a separate database volume, test admin key, and
    test master key. Publish its port so the local Windows browser can reach it.
-   Do not reuse Dreamfyre's production data or keys.
+   Do not reuse the production WSL service's data or keys.
 3. Open `http://localhost:<port>` in the Windows browser and verify that the
    connection reaches the WSL container.
 4. Test login, logout, protected direct links, settings, provider profiles,
@@ -261,5 +261,5 @@ work.
   must be explicit and supported by the browser security context; existing API
   clients must continue to work.
 - Prepare the implementation and test results for review. A subsequent release
-  and Dreamfyre deployment are separate from this planning task and the initial
+  and production deployment in WSL are separate from this planning task and the initial
   WSL testing pass.

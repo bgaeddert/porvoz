@@ -2,6 +2,7 @@ import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { safeStorage } from "electron";
+import { normalizeRouting, updateRouting } from "./provider-routing.js";
 
 // Pre-profiles installs kept one connection/model set at the settings root and
 // a single raw encrypted buffer in the credentials file. This id lets both
@@ -36,6 +37,7 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     saveConnection,
     saveModelCatalog,
     saveModelSelections,
+    saveRouting,
     savePrefixSettings,
     getHotkey,
     saveHotkey,
@@ -138,6 +140,11 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     return clone(profile);
   }
 
+  function saveRouting(value) {
+    settings.routing = updateRouting(settings, value);
+    saveSettingsFile();
+  }
+
   function renameProfile({ id, name } = {}) {
     const profile = getProfile(id);
     const nextName = normalizeProfileName(name, defaults.limits.maxProfileNameCharacters);
@@ -157,6 +164,7 @@ export function createSettingsStore({ defaultsPath, settingsPath, credentialsPat
     if (settings.activeProfileId === id) {
       settings.activeProfileId = settings.profiles[0].id;
     }
+    settings.routing = normalizeRouting(settings);
     saveSettingsFile();
     return clone(getProfile(settings.activeProfileId));
   }
@@ -293,6 +301,7 @@ function normalizeSettingsShape(rawSettings, defaults) {
     ...retainedSettings,
     profiles,
     activeProfileId,
+    routing: normalizeRouting({ profiles, activeProfileId, routing: rawSettings?.routing }),
     prefixes: normalizePrefixEntries(rawSettings?.prefixes, defaults.limits.maxPrefixes),
     soundVolume: normalizeSoundVolume(rawSettings?.soundVolume, defaults.soundVolume),
     hotkey: rawSettings?.hotkey ? clone(rawSettings.hotkey) : clone(defaults.hotkey)
@@ -353,6 +362,7 @@ function createInitialSettings(defaults) {
   return {
     profiles,
     activeProfileId: profiles[0].id,
+    routing: normalizeRouting({ profiles, activeProfileId: profiles[0].id }),
     prefixes: normalizePrefixEntries(defaults.prefixes, defaults.limits.maxPrefixes),
     hotkey: clone(defaults.hotkey),
     soundVolume: normalizeSoundVolume(defaults.soundVolume, 0.3)

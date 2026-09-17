@@ -635,6 +635,7 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
       }
     }],
     activeProfileId: "default",
+    routing: { transcription: "default", instruction: "default" },
     prompt: "This retired prompt must never be sent.",
     prefixes,
     hotkey: { key: "ControlRight", modifiers: [], label: "Right Ctrl" },
@@ -677,6 +678,14 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
           : profile.models?.searchTool || "omit"
       };
     },
+    saveRouting(value) {
+      for (const stage of ["transcription", "instruction"]) {
+        if (value[stage] !== undefined) {
+          if (!getProfile(value[stage])) throw new Error(`Choose an existing provider for ${stage} routing.`);
+          settings.routing[stage] = value[stage];
+        }
+      }
+    },
     savePrefixSettings(value) {
       settings.prefixes = structuredClone(value.prefixes);
     },
@@ -701,6 +710,9 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
       settings.profiles = settings.profiles.filter((profile) => profile.id !== id);
       apiKeys.delete(id);
       if (settings.activeProfileId === id) settings.activeProfileId = settings.profiles[0].id;
+      for (const stage of ["transcription", "instruction"]) {
+        if (settings.routing[stage] === id) settings.routing[stage] = settings.activeProfileId;
+      }
     },
     setActiveProfile({ id } = {}) {
       settings.activeProfileId = id;
@@ -715,6 +727,7 @@ function createService({ prefixes = [], availableModels = [] } = {}) {
           models: { available: [], transcription: "", instruction: "", instructionReasoning: "low", searchTool: "omit" }
         }],
         activeProfileId: "default",
+        routing: { transcription: "default", instruction: "default" },
         prefixes: []
       };
       apiKeys.clear();

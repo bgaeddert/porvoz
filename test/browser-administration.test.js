@@ -253,7 +253,7 @@ test("browser capture uploads audio without clipboard or selected-text context",
 
   const upload = calls.find((call) => call.path === "/v1/audio/transcriptions");
   assert.equal(upload.method, "POST");
-  assert.equal(upload.body.get("model"), "chosen-profile");
+  assert.equal(upload.body.get("model"), null);
   assert.equal(upload.body.get("response_format"), "json");
   assert.equal(upload.body.get("file").name, "transcription.webm");
   // The page never reads the clipboard or the selection, so no context field
@@ -262,7 +262,7 @@ test("browser capture uploads audio without clipboard or selected-text context",
 
   await bridge.createPrefixFromVoice({ audio: new Uint8Array([4]).buffer, mimeType: "audio/mp4" });
   const prefixUpload = calls.find((call) => call.path === "/v1/porvoz/prefixes/from-audio");
-  assert.equal(prefixUpload.body.get("model"), "chosen-profile");
+  assert.equal(prefixUpload.body.get("model"), null);
   assert.equal(prefixUpload.body.get("file").name, "prefix-brief.mp4");
 });
 

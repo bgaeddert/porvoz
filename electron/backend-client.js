@@ -8,6 +8,7 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
     saveConnection,
     populateModels,
     saveModelSelections,
+    saveRouting,
     savePrefixSettings,
     createProfile,
     renameProfile,
@@ -46,8 +47,7 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
   }
 
   async function getSetupStatus() {
-    const profileId = await activeProfileId();
-    return request(`/v1/porvoz/setup?profileId=${encodeURIComponent(profileId)}`);
+    return request("/v1/porvoz/setup");
   }
 
   async function saveConnection(value) {
@@ -58,8 +58,8 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
     });
   }
 
-  async function populateModels({ signal } = {}) {
-    const profileId = await activeProfileId();
+  async function populateModels({ signal, profileId: requestedProfileId } = {}) {
+    const profileId = requestedProfileId || await activeProfileId();
     return request(`/v1/porvoz/profiles/${encodeURIComponent(profileId)}/models`, {
       method: "POST",
       signal
@@ -67,11 +67,16 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
   }
 
   async function saveModelSelections(value) {
-    const profileId = await activeProfileId();
+    const profileId = value.profileId || await activeProfileId();
     return request(`/v1/porvoz/profiles/${encodeURIComponent(profileId)}/models`, {
       method: "PUT",
       json: value
     });
+  }
+
+  async function saveRouting(value) {
+    await request("/v1/porvoz/routing", { method: "PUT", json: value });
+    return getRuntimeConfig();
   }
 
   async function savePrefixSettings(value) {
@@ -112,9 +117,7 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
   }
 
   async function transcribe({ audio, mimeType, clipboardText = "", selectedText = "", timing } = {}, { signal } = {}) {
-    const profileId = await activeProfileId();
     const form = new FormData();
-    form.set("model", profileId);
     form.set("response_format", "json");
     form.set("porvoz_context", serializeContext({ clipboardText, selectedText }));
     if (timing && typeof timing === "object") {
@@ -133,9 +136,7 @@ export function createBackendClient({ baseUrl, adminKey, getActiveProfileId, set
   }
 
   async function createPrefixFromVoice({ audio, mimeType } = {}, { signal } = {}) {
-    const profileId = await activeProfileId();
     const form = new FormData();
-    form.set("model", profileId);
     form.set("file", new Blob([audio], { type: mimeType }), audioFileName(mimeType));
     return request("/v1/porvoz/prefixes/from-audio", { method: "POST", body: form, signal });
   }
