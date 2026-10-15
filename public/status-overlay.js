@@ -7,6 +7,7 @@ const panelWrapper = document.querySelector("#panel-wrapper");
 const panel = document.querySelector("#response-panel");
 const responseText = document.querySelector("#response-text");
 const copyButton = document.querySelector("#copy-response");
+const copyCloseButton = document.querySelector("#copy-close-response");
 const dismissButton = document.querySelector("#dismiss-response");
 const consoleSelectionToggle = document.querySelector("#console-selection-toggle");
 const selectionCaptureToggle = document.querySelector("#selection-capture-toggle");
@@ -24,6 +25,10 @@ copyButton.addEventListener("click", async () => {
   copyFeedbackTimer = setTimeout(() => { copyButton.textContent = "Copy"; }, 1200);
 });
 dismissButton.addEventListener("click", () => window.porvozOverlay?.dismiss());
+copyCloseButton.addEventListener("click", async () => {
+  const copied = await window.porvozOverlay?.copyResponse();
+  if (copied) window.porvozOverlay?.dismiss();
+});
 consoleSelectionToggle?.addEventListener("click", () => toggleCaptureSetting(
   "consoleSelectionEnabled",
   "saveConsoleSelectionEnabled",
@@ -120,6 +125,7 @@ function renderResponse(value = {}) {
   else responseText.textContent = "No previous output yet.";
   responseText.classList.toggle("empty", !text);
   copyButton.disabled = !text;
+  copyCloseButton.disabled = !text;
   if (!open) {
     clearTimeout(copyFeedbackTimer);
     copyButton.textContent = "Copy";

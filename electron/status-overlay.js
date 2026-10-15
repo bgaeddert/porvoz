@@ -179,6 +179,18 @@ export async function createStatusOverlay({
     showCurrentStatus();
   };
 
+  const dismiss = () => {
+    isAutoClosePending = false;
+    isResponseHeld = false;
+    suppressUntilNextRecording = true;
+    currentStatus = { state: "idle", message: "" };
+    clearTimeout(hideTimer);
+    clearTimeout(fadeTimer);
+    resize(false);
+    sendPanelState();
+    hide();
+  };
+
   const openResponse = () => {
     if (!overlayWindow || overlayWindow.isDestroyed()) return false;
     suppressUntilNextRecording = false;
@@ -259,6 +271,10 @@ export async function createStatusOverlay({
     },
     getResponse: () => lastResponse,
     openResponse,
+    toggleResponse() {
+      if (isResponseHeld) dismiss();
+      else openResponse();
+    },
     setLastTargetWindow(target) {
       if (target) lastTargetWindow = target;
     },
@@ -274,17 +290,7 @@ export async function createStatusOverlay({
       resize(false);
       hide();
     },
-    dismiss() {
-      isAutoClosePending = false;
-      isResponseHeld = false;
-      suppressUntilNextRecording = true;
-      currentStatus = { state: "idle", message: "" };
-      clearTimeout(hideTimer);
-      clearTimeout(fadeTimer);
-      resize(false);
-      sendPanelState();
-      hide();
-    },
+    dismiss,
     clear() {
       isAutoClosePending = false;
       isResponseHeld = false;

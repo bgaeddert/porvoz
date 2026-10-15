@@ -46,25 +46,25 @@ Activity history records recent transcripts, applied prefixes, routed outputs, s
 
 ### 7. Reopen the last response
 
-Double-tap the configured hotkey to bring back the most recent response. The panel provides a quick copy action and can be dismissed when it is no longer needed.
+Double-tap the configured hotkey to bring back the most recent response, and double-tap again to close it. Use **Copy** to keep the panel open or **Copy & close** to copy the response and dismiss the panel together.
 
 ![Last response panel](docs/images/porvoz-last-output.png)
 
 ## Download and install
 
-The current release is [Porvoz v3.2.0-alpha-1](https://github.com/bgaeddert/porvoz/releases/tag/v3.2.0-alpha-1). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
+The current release is [Porvoz v3.2.1-alpha-1](https://github.com/bgaeddert/porvoz/releases/tag/v3.2.1-alpha-1). Release packages are x64 builds. See the [release history](https://github.com/bgaeddert/porvoz/releases) for version notes and downloads.
 
 ### Windows
 
-Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v3.2.0-alpha-1/Porvoz-3.2.0-alpha-1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
+Download and run the [Windows installer](https://github.com/bgaeddert/porvoz/releases/download/v3.2.1-alpha-1/Porvoz-3.2.1-alpha-1-win-x64.exe). It is an interactive per-user NSIS installer and can create Start Menu and desktop shortcuts.
 
 ### Linux
 
-Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v3.2.0-alpha-1/Porvoz-3.2.0-alpha-1-linux-x86_64.AppImage), then make it executable and launch it:
+Download the [Linux AppImage](https://github.com/bgaeddert/porvoz/releases/download/v3.2.1-alpha-1/Porvoz-3.2.1-alpha-1-linux-x86_64.AppImage), then make it executable and launch it:
 
 ```bash
-chmod +x Porvoz-3.2.0-alpha-1-linux-x86_64.AppImage
-./Porvoz-3.2.0-alpha-1-linux-x86_64.AppImage
+chmod +x Porvoz-3.2.1-alpha-1-linux-x86_64.AppImage
+./Porvoz-3.2.1-alpha-1-linux-x86_64.AppImage
 ```
 
 The Linux build requires an X11 desktop session for global hotkeys and typing into the active application. Wayland sessions are not currently supported for those desktop-integration features. A Secret Service provider such as GNOME Keyring/libsecret must be available to start the local backend and protect its encryption key. On Ubuntu/Debian, install missing runtime services and libraries with:
@@ -73,7 +73,7 @@ The Linux build requires an X11 desktop session for global hotkeys and typing in
 sudo apt install gnome-keyring libsecret-1-0 libgtk-3-0 libnss3 libgbm1 libasound2 libxss1 libxtst6 xclip
 ```
 
-The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v3.2.0-alpha-1/SHA256SUMS.txt).
+The AppImage does not need to be installed system-wide. The SHA-256 values for both release files are available in [`SHA256SUMS.txt`](https://github.com/bgaeddert/porvoz/releases/download/v3.2.1-alpha-1/SHA256SUMS.txt).
 
 There is no macOS package in the current release.
 
@@ -127,7 +127,7 @@ Hold **Right Ctrl** anywhere to record by default. Release the key to transcribe
 
 **Keyboard → Selection capture** controls whether Porvoz performs the selected-text discovery flow when recording ends. It is enabled by default for existing and new desktops; turn it off to prevent Porvoz from issuing a synthetic Copy command or reading the selection. **Keyboard → Console selection** separately controls automatic selection copying in recognized terminal windows. It is **off by default**, including for existing desktops. Dictation, paste, and selection copying in other applications are unaffected. Enable it to attempt `Ctrl+Shift+C` in recognized terminals. **Warning:** if nothing is selected, a terminal can pass that shortcut through as Control-C, likely canceling or exiting running applications or commands. Unknown terminals and terminal panes inside editors are not covered by this setting. Both preferences are saved on this computer and apply immediately.
 
-While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. Double-tap the configured hotkey to open the last completed response, even after the pill disappears. When web search is used, the response panel displays automatically for two seconds unless hovered, staying open until dismissed. Hold the hotkey for 300 ms to start recording; short taps do not record audio or touch the clipboard. Hovering over an ordinary status pill has no effect. The response panel renders common Markdown and provides **Copy** and **×** controls. Press **Escape** to dismiss it. The non-activating overlay does not become the typing target.
+While a capture is active, the status pill appears near the bottom of the display containing the cursor. It uses short labels for **Recording**, **Transcribing**, **Processing**, and **Placing text**, then briefly shows **Done** or a categorized error. Double-tap the configured hotkey to open the last completed response, even after the pill disappears; double-tap again to close it. When web search is used, the response panel displays automatically for two seconds unless hovered, staying open until dismissed. Hold the hotkey for 300 ms to start recording; short taps do not record audio or touch the clipboard. Hovering over an ordinary status pill has no effect. The response panel renders common Markdown and provides **Copy**, **Copy & close**, and **×** controls. **Copy & close** dismisses the panel after copying succeeds. Press **Escape** to dismiss it. The non-activating overlay does not become the typing target.
 
 Use **Radial → Set trigger** to assign the global key or mouse button that opens the radial menu. Hold it for 200 ms to show the 12-segment wheel; releasing sooner sends the center action without showing the wheel. Once open, move over a segment and release to send its assigned keyboard shortcut, Play/Pause media action, or Back/Forward navigation action. The center is slot 13: releasing there sends its action when assigned; releasing outside the wheel cancels. All slots are optional. The radial trigger and every slot shortcut are recorded from actual input, including Windows-key combinations, and labels can be customized in the Radial settings page. The menu-size control scales the 552 × 552 pixel reference design from 50% to 100%. The non-activating overlay does not become the typing target.
 
@@ -150,7 +150,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `3.2.0-alpha-1` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
+Compose pulls the published `bgaeddert/porvoz` image from Docker Hub. `PORVOZ_IMAGE_TAG` defaults to `latest`; set it to a release such as `3.2.1-alpha-1` to pin that exact server version. Compose reads `.env` for interpolation and explicitly passes only the declared runtime values into the container. `PORVOZ_ADMIN_KEY` authorizes the settings API and first-party profile routing. `PORVOZ_MASTER_KEY` encrypts upstream provider API keys in the database. The database is kept in the `porvoz-data` volume and survives container replacement.
 
 To build the image from the current source checkout instead, run `docker compose up -d --build`.
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import { createStatusOverlay } from "../electron/status-overlay.js";
 
 class FakeWindow extends EventEmitter {
@@ -57,11 +58,17 @@ test("the saved response opens without focus and survives dismissal", async () =
   assert.equal(browserWindow.showCount, initialShowCount);
   overlay.clear();
   assert.equal(browserWindow.visible, false);
-  overlay.openResponse();
+  overlay.toggleResponse();
   assert.equal(browserWindow.ignoresMouse, false);
   assert.deepEqual(browserWindow.size, [548, 244]);
   assert.deepEqual(browserWindow.position, [420, 544]);
   assert.equal(browserWindow.focusable, false);
+  overlay.toggleResponse();
+  assert.equal(browserWindow.visible, false);
+  assert.equal(browserWindow.ignoresMouse, true);
+  assert.deepEqual(browserWindow.size, [360, 44]);
+  overlay.toggleResponse();
+  assert.equal(browserWindow.visible, true);
   overlay.setLastTargetWindow(9999);
   assert.equal(overlay.getLastTargetWindow(), 9999);
   overlay.setResponse("latest Porvoz output");
@@ -157,6 +164,47 @@ test("the response overlay exposes only response actions", () => {
   assert.match(overlayRenderer, /toggleCaptureSetting/);
   assert.match(preload, /porvoz:overlay-hover/);
   assert.match(app, /mimeType: audio\.type,\s+captureId/);
+});
+
+test("copy and close dismisses only after a successful copy and is disabled without output", async () => {
+  const elements = new Map();
+  let renderResponse;
+  let copied = false;
+  let dismissCount = 0;
+  const renderer = readFileSync(new URL("../public/status-overlay.js", import.meta.url), "utf8")
+    .replace(/^import .*;\r?\n/, "");
+  runInNewContext(renderer, {
+    document: {
+      querySelector(selector) {
+        if (!elements.has(selector)) elements.set(selector, {
+          handlers: {},
+          classList: { toggle() {} },
+          addEventListener(event, handler) { this.handlers[event] = handler; }
+        });
+        return elements.get(selector);
+      }
+    },
+    window: { porvozOverlay: {
+      onStatus() {},
+      onResponse(callback) { renderResponse = callback; },
+      onHide() {},
+      async copyResponse() { return copied; },
+      dismiss() { dismissCount += 1; }
+    } },
+    renderMarkdown() {},
+    clearTimeout,
+    setTimeout
+  });
+  const button = elements.get("#copy-close-response");
+  renderResponse({ open: true, text: "" });
+  assert.equal(button.disabled, true);
+  renderResponse({ open: true, text: "saved output" });
+  assert.equal(button.disabled, false);
+  await button.handlers.click();
+  assert.equal(dismissCount, 0);
+  copied = true;
+  await button.handlers.click();
+  assert.equal(dismissCount, 1);
 });
 
 test("web search response opens the panel for two seconds and hover keeps it open until dismissed", async () => {

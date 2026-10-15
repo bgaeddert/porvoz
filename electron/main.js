@@ -122,7 +122,7 @@ const hotkeyGesture = createHotkeyGesture({
   onRelease: stopHotkeyRecording,
   onDoubleTap: () => {
     statusOverlay?.setLastTargetWindow(captureTextInputTarget());
-    statusOverlay?.openResponse();
+    statusOverlay?.toggleResponse();
   }
 });
 let isCapturingHotkey = false;
