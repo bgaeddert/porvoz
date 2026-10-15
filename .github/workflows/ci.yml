@@ -52,4 +52,7 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test
+        # Electron downloads lazily; resolve it once before parallel test workers.
+        run: |
+          node -e "require('electron')"
+          npm test
